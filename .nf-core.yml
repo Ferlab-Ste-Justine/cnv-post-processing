@@ -4,29 +4,14 @@ nf_core_version: 3.2.0
 
 lint:
   files_unchanged:
-    - .github/CONTRIBUTING.md
-    - .github/CONTRIBUTING.md
-    - assets/sendmail_template.txt
-    - .prettierignore
-    - .prettierignore
-    - .prettierignore
-    - .prettierignore
-    - .github/CONTRIBUTING.md
-    - .github/CONTRIBUTING.md
-    - assets/sendmail_template.txt
-    - .prettierignore
-    - .prettierignore
-    - .prettierignore
-    - .prettierignore
-    - CODE_OF_CONDUCT.md
-    - assets/nf-core-cnv-post-processing_logo_light.png
-    - docs/images/nf-core-cnv-post-processing_logo_light.png
-    - docs/images/nf-core-cnv-post-processing_logo_dark.png
-    - .github/ISSUE_TEMPLATE/bug_report.yml
-    - .github/CONTRIBUTING.md
-    - .github/PULL_REQUEST_TEMPLATE.md
-    - assets/email_template.txt
     - docs/README.md
+    - .github/CONTRIBUTING.md
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - .github/workflows/linting.yml
+    - .prettierignore
+    - LICENSE
+
   nextflow_config:
     - manifest.name
     - manifest.homePage
@@ -34,29 +19,35 @@ lint:
     - validation.help.afterText
     - validation.summary.beforeText
     - validation.summary.afterText
+
   multiqc_config: false
+
   files_exist:
-    - conf/igenomes.config
-    - conf/igenomes_ignored.config
-    - assets/multiqc_config.yml
     - assets/email_template.html
-    - assets/sendmail_template.txt
     - assets/email_template.txt
-    - conf/igenomes.config
-    - conf/igenomes_ignored.config
     - assets/multiqc_config.yml
-    - assets/email_template.html
-    - assets/sendmail_template.txt
-    - assets/email_template.txt
-    - CODE_OF_CONDUCT.md
     - assets/nf-core-cnv-post-processing_logo_light.png
+    - assets/sendmail_template.txt
+    - CODE_OF_CONDUCT.md
+    - conf/igenomes.config
+    - conf/igenomes_ignored.config
     - docs/images/nf-core-cnv-post-processing_logo_light.png
     - docs/images/nf-core-cnv-post-processing_logo_dark.png
+    - .github/.dockstore.yml
+    - .github/ISSUE_TEMPLATE/bug_report.yml
     - .github/ISSUE_TEMPLATE/config.yml
+    - .github/ISSUE_TEMPLATE/feature_request.yml
     - .github/workflows/awstest.yml
     - .github/workflows/awsfulltest.yml
+    - .github/workflows/branch.yml
+    - .github/workflows/linting_comment.yml
+    - ro-crate-metadata.json
+
   readme:
     - nextflow_badge
+
+  actions_ci: false
+  pipeline_name_conventions: false
 
 template:
   org: Ferlab-Ste-Justine
