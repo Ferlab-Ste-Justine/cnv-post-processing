@@ -13,9 +13,9 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { CNV-POST-PROCESSING  } from './workflows/cnv-post-processing'
-include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_cnv-post-processing_pipeline'
-include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_cnv-post-processing_pipeline'
+include { CNV_POST_PROCESSING  } from './workflows/cnv_post_processing'
+include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     NAMED WORKFLOWS FOR PIPELINE
@@ -25,7 +25,7 @@ include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_cnv-
 //
 // WORKFLOW: Run main analysis pipeline depending on type of input
 //
-workflow FERLABSTEJUSTINE_CNV-POST-PROCESSING {
+workflow FERLABSTEJUSTINE_CNV_POST_PROCESSING {
 
     take:
     samplesheet // channel: samplesheet read in from --input
@@ -35,7 +35,7 @@ workflow FERLABSTEJUSTINE_CNV-POST-PROCESSING {
     //
     // WORKFLOW: Run pipeline
     //
-    CNV-POST-PROCESSING (
+    CNV_POST_PROCESSING (
         samplesheet
     )
 }
@@ -63,7 +63,7 @@ workflow {
     //
     // WORKFLOW: Run main workflow
     //
-    FERLABSTEJUSTINE_CNV-POST-PROCESSING (
+    FERLABSTEJUSTINE_CNV_POST_PROCESSING (
         PIPELINE_INITIALISATION.out.samplesheet
     )
     //
