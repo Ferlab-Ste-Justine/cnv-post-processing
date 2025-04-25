@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/Ferlab-Ste-Justine/cnv-post-processing/master/assets/schema_input.json",
+    "$id": "https://raw.githubusercontent.com/Ferlab-Ste-Justine/cnv-post-processing/main/assets/schema_input.json",
     "title": "Ferlab-Ste-Justine/cnv-post-processing pipeline - params.input schema",
     "description": "Schema for the file provided with params.input",
     "type": "array",
@@ -13,21 +13,27 @@
                 "errorMessage": "Sample name must be provided and cannot contain spaces",
                 "meta": ["id"]
             },
-            "fastq_1": {
+            "sequencingType": {
                 "type": "string",
-                "format": "file-path",
-                "exists": true,
-                "pattern": "^\\S+\\.f(ast)?q\\.gz$",
-                "errorMessage": "FastQ file for reads 1 must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+                "errorMessage": "SequencingType must either be 'WGS' or 'WES'",
+                "meta": ["sequencingType"],
+                "enum": ["WGS", "WES"]
             },
-            "fastq_2": {
+            "vcf": {
                 "type": "string",
                 "format": "file-path",
                 "exists": true,
-                "pattern": "^\\S+\\.f(ast)?q\\.gz$",
-                "errorMessage": "FastQ file for reads 2 cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+                "pattern":  "^\\S+\\.vcf(\\.gz)?$",
+                "errorMessage": "VCF file containing CNV calls must be provided and have a '.vcf' or '.vcf.gz' extension."
+            },
+            "pheno": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(yml|yaml|json){1}$",
+                "errorMessage": "Phenopacket file required by exomiser must be provided and have a '.yml', '.yaml', or '.json' extension."
             }
         },
-        "required": ["sample", "fastq_1"]
+        "required": ["sample", "sequencingType", "vcf", "pheno"]
     }
 }
