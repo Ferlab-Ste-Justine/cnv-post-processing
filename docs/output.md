@@ -6,13 +6,13 @@ This document describes the output produced by the pipeline.
 
 The directories listed below will be created in the results directory after the pipeline has finished. All paths are relative to the top-level results directory.
 
-<!-- TODO nf-core: Write this documentation describing your workflow's output -->
 
 ## Pipeline overview
 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes data using the following steps:
 
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
+- [Exomiser](#exomiser) - Run exomiser analysis
 
 ### Pipeline information
 
@@ -27,3 +27,22 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 </details>
 
 [Nextflow](https://www.nextflow.io/docs/latest/tracing.html) provides excellent functionality for generating various reports relevant to the running and execution of the pipeline. This will allow you to troubleshoot errors with the running of the pipeline, and also provide you with other information such as launch commands, run times and resource usage.
+
+### Exomiser
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `exomiser/`
+  - <SAMPLE_ID>.exomiser.genes.tsv
+  - <SAMPLE_ID>.exomiser.html
+  - <SAMPLE_ID>.exomiser.json
+  - <SAMPLE_ID>.exomiser.variants.tsv
+  - <SAMPLE_ID>.exomiser.vcf.gz
+  - <SAMPLE_ID>.exomiser.vcf.gz.tbi
+
+</details>
+
+The Exomiser analysis generates six reports, which are stored in the exomiser subfolder for each sample. Each report uses the sample identifier as a filename prefix for easy identification.
+
+For more details about these reports, refer to the [Exomiser documentation](https://exomiser.readthedocs.io/en/14.0.0/result_interpretation.html).
