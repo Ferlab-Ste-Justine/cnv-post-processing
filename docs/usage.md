@@ -4,61 +4,66 @@
 
 ## Introduction
 
-<!-- TODO nf-core: Add documentation about anything specific to running your pipeline. For general topics, please point to (and add to) the main nf-core website. -->
+
+The Ferlab-Ste-Justine/cnv-post-processing pipeline is designed for the post-processing of Copy Number Variants (CNVs). Currently, it integrates [Exomiser](https://exomiser.readthedocs.io/en/14.0.0/running.html) for variant prioritization. We might support additional tools and steps in the future.
+
+Exomiser requires clinical information for each sample, including details such as clinical signs, affected status, and gender. This information is provided in a separate file using the Phenopacket format. More details can be found in the samplesheet section.
 
 ## Samplesheet input
 
-You will need to create a samplesheet with information about the samples you would like to analyse before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row as shown in the examples below.
+You will need to create a samplesheet with information about the samples you would like to analyse before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 4 columns, and a header row as shown in the examples below.
 
 ```bash
 --input '[path to samplesheet file]'
 ```
 
-### Multiple runs of the same sample
+### Samplesheet file format
 
-The `sample` identifiers have to be the same when you have re-sequenced the same sample more than once e.g. to increase sequencing depth. The pipeline will concatenate the raw reads before performing any downstream analysis. Below is an example for the same sample sequenced across 3 lanes:
-
-```csv title="samplesheet.csv"
-sample,fastq_1,fastq_2
-CONTROL_REP1,AEG588A1_S1_L002_R1_001.fastq.gz,AEG588A1_S1_L002_R2_001.fastq.gz
-CONTROL_REP1,AEG588A1_S1_L003_R1_001.fastq.gz,AEG588A1_S1_L003_R2_001.fastq.gz
-CONTROL_REP1,AEG588A1_S1_L004_R1_001.fastq.gz,AEG588A1_S1_L004_R2_001.fastq.gz
-```
-
-### Full samplesheet
-
-The pipeline will auto-detect whether a sample is single- or paired-end using the information provided in the samplesheet. The samplesheet can have as many columns as you desire, however, there is a strict requirement for the first 3 columns to match those defined in the table below.
-
-A final samplesheet file consisting of both single- and paired-end data may look something like the one below. This is for 6 samples, where `TREATMENT_REP3` has been sequenced twice.
+Here is an example samplesheet file:
 
 ```csv title="samplesheet.csv"
-sample,fastq_1,fastq_2
-CONTROL_REP1,AEG588A1_S1_L002_R1_001.fastq.gz,AEG588A1_S1_L002_R2_001.fastq.gz
-CONTROL_REP2,AEG588A2_S2_L002_R1_001.fastq.gz,AEG588A2_S2_L002_R2_001.fastq.gz
-CONTROL_REP3,AEG588A3_S3_L002_R1_001.fastq.gz,AEG588A3_S3_L002_R2_001.fastq.gz
-TREATMENT_REP1,AEG588A4_S4_L003_R1_001.fastq.gz,
-TREATMENT_REP2,AEG588A5_S5_L003_R1_001.fastq.gz,
-TREATMENT_REP3,AEG588A6_S6_L003_R1_001.fastq.gz,
-TREATMENT_REP3,AEG588A6_S6_L004_R1_001.fastq.gz,
+sample,sequencingType,vcf,pheno
+NA07019,WES,data-test/vcf/NA07019.chr22.cnv.vcf.gz,data-test/pheno/NA07019.yml
+NA07022,WES,data-test/vcf/NA07022.chr22.cnv.vcf.gz,data-test/pheno/NA07022.yml
+NA07056,WGS,data-test/vcf/NA07056.chr22.cnv.vcf.gz,data-test/pheno/NA07056.yml
 ```
 
-| Column    | Description                                                                                                                                                                            |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sample`  | Custom sample name. This entry will be identical for multiple sequencing libraries/runs from the same sample. Spaces in sample names are automatically converted to underscores (`_`). |
-| `fastq_1` | Full path to FastQ file for Illumina short reads 1. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz".                                                             |
-| `fastq_2` | Full path to FastQ file for Illumina short reads 2. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz".                                                             |
+| Column           | Description                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `sample`         | Unique identifier for the sample being analyzed.                                                  |
+| `sequencingType` | Use `WES` for whole exome sequencing and `WGS` for whole genome sequencing                        |
+| `vcf`            | Path to the vcf file containing the CNV data. The file must have a `.vcf` or `.vcf.gz` extension. |
+| `pheno`          | Path to the phenotype file in Phenopacket format. Both `.yaml` and `.json` formats are supported. |
 
 An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
-## Running the pipeline
+### Phenopacket file example
 
-The typical command for running the pipeline is as follows:
+Here is an example phenopacket file, in yaml format:
 
-```bash
-nextflow run Ferlab-Ste-Justine/cnv-post-processing --input ./samplesheet.csv --outdir ./results  -profile docker
+```yaml title="NA07019_pheno.yml"
+---
+id: NA07019_FAMILY
+proband:
+  subject:
+    id: NA07019
+    sex: FEMALE
+  phenotypicFeatures:
+    - type:
+        id: HP:0001159
+        label: Syndactyly
 ```
 
-This will launch the pipeline with the `docker` configuration profile. See below for more information about profiles.
+Notes about the phenopacket file (`pheno` column):
+- It should include only sample-specific information. The pedigree section must either contain only the sample or be omitted entirely.
+- The sample identifier in the phenopacket file must match the sample identifier in the corresponding VCF file.
+
+## Running the pipeline
+
+Here is an example command to run the pipeline locally using the test profile with Docker:
+```bash
+nextflow run . -profile test,docker --outdir results
+```
 
 Note that the pipeline will create the following files in your working directory:
 
@@ -69,28 +74,19 @@ work                # Directory containing the nextflow working files
 # Other nextflow hidden files, eg. history of pipeline runs and old logs.
 ```
 
-If you wish to repeatedly use the same parameters for multiple runs, rather than specifying each flag in the command, you can specify these in a params file.
-
-Pipeline settings can be provided in a `yaml` or `json` file via `-params-file <file>`.
-
-> [!WARNING]
-> Do not use `-c <file>` to specify parameters as this will result in errors. Custom config files specified with `-c` must only be used for [tuning process resource specifications](https://nf-co.re/docs/usage/configuration#tuning-workflow-resources), other infrastructural tweaks (such as output directories), or module arguments (args).
-
-The above pipeline run specified with a params file in yaml format:
-
+Instead using profiles, you can also pass pipeline settings via `.config` files and parameter files.
+Here is an example command to run the pipeline in a production environment with a specific configuration and parameters:
 ```bash
-nextflow run Ferlab-Ste-Justine/cnv-post-processing -profile docker -params-file params.yaml
+nextflow -c application.config run Ferlab-Ste-Justine/cnv-post-processing \
+    -r v1.0.0 \
+    --input samplesheet.csv \
+    --outdir results \
+    -params-file params.json
 ```
 
-with:
+Refer to the [nextflow documentation](https://www.nextflow.io/docs/latest/config.html#configuration-file) for details on the supported syntax for .config files.
 
-```yaml title="params.yaml"
-input: './samplesheet.csv'
-outdir: './results/'
-<...>
-```
-
-You can also generate such `YAML`/`JSON` files via [nf-core/launch](https://nf-co.re/launch).
+For the [-params-file](https://www.nextflow.io/docs/latest/cli.html#pipeline-parameters) option, both `json` and `yaml` are supported. You can also generate such `YAML`/`JSON` files via [nf-core/launch](https://nf-co.re/launch).
 
 ### Updating the pipeline
 
@@ -119,6 +115,8 @@ To further assist in reproducibility, you can use share and reuse [parameter fil
 > These options are part of Nextflow and use a _single_ hyphen (pipeline parameters use a double-hyphen)
 
 ### `-profile`
+
+*NOTE: This section has been auto-generated by nf-core. The pipeline may not be compatible with all the profiles described in this section.*
 
 Use this parameter to choose a configuration profile. Profiles can give configuration presets for different compute environments.
 
@@ -183,14 +181,6 @@ To use a different container from the default container or conda environment spe
 A pipeline might not always support every possible argument or option of a particular tool used in pipeline. Fortunately, nf-core pipelines provide some freedom to users to insert additional parameters that the pipeline does not include by default.
 
 To learn how to provide additional arguments to a particular tool of the pipeline, please see the [customising tool arguments](https://nf-co.re/docs/usage/configuration#customising-tool-arguments) section of the nf-core website.
-
-### nf-core/configs
-
-In most cases, you will only need to create a custom config as a one-off but if you and others within your organisation are likely to be running nf-core pipelines regularly and need to use the same settings regularly it may be a good idea to request that your custom config file is uploaded to the `nf-core/configs` git repository. Before you do this please can you test that the config file works with your pipeline of choice using the `-c` parameter. You can then create a pull request to the `nf-core/configs` repository with the addition of your config file, associated documentation file (see examples in [`nf-core/configs/docs`](https://github.com/nf-core/configs/tree/master/docs)), and amending [`nfcore_custom.config`](https://github.com/nf-core/configs/blob/master/nfcore_custom.config) to include your custom profile.
-
-See the main [Nextflow documentation](https://www.nextflow.io/docs/latest/config.html) for more information about creating your own configuration files.
-
-If you have any questions or issues please send us a message on [Slack](https://nf-co.re/join/slack) on the [`#configs` channel](https://nfcore.slack.com/channels/configs).
 
 ## Running in the background
 
