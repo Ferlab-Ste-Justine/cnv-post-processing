@@ -11,7 +11,7 @@
                 "type": "string",
                 "pattern": "^\\S+$",
                 "errorMessage": "Sample name must be provided and cannot contain spaces",
-                "meta": ["id"]
+                "meta": ["id" , "sample"]
             },
             "sequencingType": {
                 "type": "string",
@@ -31,7 +31,8 @@
                 "format": "file-path",
                 "exists": true,
                 "pattern": "^\\S+\\.(yml|yaml|json){1}$",
-                "errorMessage": "Phenopacket file required by exomiser must be provided and have a '.yml', '.yaml', or '.json' extension."
+                "errorMessage": "Phenopacket file required by exomiser must be provided and have a '.yml', '.yaml', or '.json' extension.",
+                "meta": ["pheno"]
             }
         },
         "required": ["sample", "sequencingType", "vcf", "pheno"]

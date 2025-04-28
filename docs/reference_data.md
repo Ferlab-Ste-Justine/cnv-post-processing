@@ -60,9 +60,9 @@ There are typically multiple sections in the analysis file. To be compatible wit
 
 | Parameter name | Required? | Description |
 | --- | --- | --- |
-| `exomiser_data_dir` | _Optional_ | Path to the exomiser reference data directory |
-| `exomiser_genome` | _Optional_ | Genome assembly version to be used by exomiser(`hg19` or `hg38`) |
-| `exomiser_data_version` | _Optional_ | Exomiser data version (e.g., `2402`) |
+| `exomiser_data_dir` | _Required_ | Path to the exomiser reference data directory |
+| `exomiser_genome` | _Required_ | Genome assembly version to be used by exomiser(`hg19` or `hg38`) |
+| `exomiser_data_version` | _Required_ | Exomiser data version (e.g., `2402`) |
 | `exomiser_cadd_version` | _Optional_ | Version of the CADD data to be used by exomiser (e.g., `1.7`) |
 | `exomiser_cadd_indel_filename`|	_Optional_ | Filename of the exomiser CADD indel data file (e.g., `gnomad.genomes.r4.0.indel.tsv.gz`) |
 | `exomiser_cadd_snv_filename`|	_Optional_ | Filename of the exomiser CADD snv data file (e.g., `whole_genome_SNVs.tsv.gz`) |

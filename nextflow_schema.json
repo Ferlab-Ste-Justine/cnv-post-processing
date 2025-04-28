@@ -28,6 +28,11 @@
                     "format": "directory-path",
                     "description": "The output directory where the results will be saved. You have to use absolute paths to storage on Cloud infrastructure.",
                     "fa_icon": "fas fa-folder-open"
+                },
+                "publish_all": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Publish all intermediate files to the output directory."
                 }
             }
         },

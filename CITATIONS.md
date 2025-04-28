@@ -11,8 +11,7 @@
 ## Pipeline tools
 
 - [EXOMISER](https://exomiser.readthedocs.io/en/14.0.0/)
-> Cipriani V, Pontikos N, Arno G, et al. An Improved Phenotype-Driven Tool for Rare Mendelian Variant Prioritization: Benchmarking Exomiser on Real Patient Whole-Exome Data. Genes (Basel) 2020;11(4):460.
-
+> Smedley D, Jacobsen JO, Jäger M, Köhler S, Holtgrewe M et al., Next-generation diagnostics and disease-gene discovery with the Exomiser. Nature protocols 2015;10;12;2004-15. doi: 10.1038/nprot.2015.124. PubMed PMID: 26562621
 
 ## Software packaging/containerisation tools
 
