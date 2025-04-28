@@ -58,6 +58,22 @@ Notes about the phenopacket file (`pheno` column):
 - It should include only sample-specific information. The pedigree section must either contain only the sample or be omitted entirely.
 - The sample identifier in the phenopacket file must match the sample identifier in the corresponding VCF file.
 
+## Install reference data and prepare parameters file
+
+To run the pipeline, you need to configure the required reference data and provide the necessary pipeline parameters
+
+### Parameters File
+
+Pipeline parameters can be passed using a JSON or YAML file, referred to as a parameters file. Using a parameters file is highly recommended for reproducibility and ease of configuration.
+
+You can find more details about parameter files in the [nextflow documentation](https://www.nextflow.io/docs/latest/cli.html#pipeline-parameters). Additionally, the pipeline schema provides a complete list of available parameters and their descriptions.
+
+### Reference data
+
+The pipeline requires specific reference data to function correctly.
+Detailed instructions on the reference data, its structure, and how to configure the associated parameters can be found in the [reference_data.md](docs/reference_data.md) documentation.
+
+
 ## Running the pipeline
 
 Here is an example command to run the pipeline locally using the test profile with Docker:

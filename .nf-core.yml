@@ -19,6 +19,9 @@ lint:
     - validation.help.afterText
     - validation.summary.beforeText
     - validation.summary.afterText
+    - config_defaults:
+        - params.exomiser_analysis_wes # projectDir variable not rendered is causing mismatch with nextflow.config
+        - params.exomiser_analysis_wgs  # projectDir variable not rendered is causing mismatch with nextflow.config
 
   multiqc_config: false
 

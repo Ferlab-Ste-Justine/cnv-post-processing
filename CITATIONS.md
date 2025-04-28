@@ -10,6 +10,10 @@
 
 ## Pipeline tools
 
+- [EXOMISER](https://exomiser.readthedocs.io/en/14.0.0/)
+> Cipriani V, Pontikos N, Arno G, et al. An Improved Phenotype-Driven Tool for Rare Mendelian Variant Prioritization: Benchmarking Exomiser on Real Patient Whole-Exome Data. Genes (Basel) 2020;11(4):460.
+
+
 ## Software packaging/containerisation tools
 
 - [Anaconda](https://anaconda.com)
