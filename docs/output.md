@@ -4,8 +4,9 @@
 
 This document describes the output produced by the pipeline.
 
-The directories listed below will be created in the results directory after the pipeline has finished. All paths are relative to the top-level results directory.
+By default, the directories listed below will be created in the output directory specified by the `outdir` parameter after the pipeline has finished. All paths are relative to the root of this directory.
 
+For certain steps, it is possible to specify a completely separate output directory using dedicated parameters. Unless explicitly stated otherwise, this document assumes that the default results directory, as specified by the `outdir` parameter, is being used.
 
 ## Pipeline overview
 
@@ -46,3 +47,5 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 The Exomiser analysis generates six reports, which are stored in the exomiser subfolder for each sample. Each report uses the sample identifier as a filename prefix for easy identification.
 
 For more details about these reports, refer to the [Exomiser documentation](https://exomiser.readthedocs.io/en/14.0.0/result_interpretation.html).
+
+By default, exomiser output is saved in the `exomiser` subfolder within the main output directory. To save the output to a different location, use the `exomiser_outdir` parameter. In this case, the exomiser files will be written at the root of the specified location.
