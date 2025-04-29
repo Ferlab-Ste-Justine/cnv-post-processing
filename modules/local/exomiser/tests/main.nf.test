@@ -1,0 +1,136 @@
+nextflow_process {
+
+    name "Test Process EXOMISER"
+    script "../main.nf"
+    process "EXOMISER"
+
+    tag "modules"
+    tag "modules_"
+    tag "exomiser"
+
+    config "./nextflow.config"
+
+    test("Small1000GenomesChr22 - Stub mode") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [ [id: "NA07019"],
+                file( params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz'),
+                file( params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz.tbi'),
+                file( params.modules_testdata_base_path + '/pheno/NA07019.yml'),
+                file( params.modules_testdata_base_path + '/reference/exomiser/test_exomiser_analysis.yml')]
+                input[1] = file(params.modules_testdata_base_path + '/reference/exomiser')
+                input[2] = "hg38"
+                input[3] = "2402"
+                input[4] = [ file(params.modules_testdata_base_path + '/reference/exomiser/local/local_frequency_test_hg38.tsv.gz'), file(params.modules_testdata_base_path + '/reference/exomiser/local/local_frequency_test_hg38.tsv.gz.tbi')]
+                input[5] = ["1.3.1", "ReMM.v0.3.1.post1.hg38.tsv.gz"]
+                input[6] = ["1.7", "whole_genome_SNVs.tsv.gz", "gnomad.genomes.r4.0.indel.tsv.gz"]
+                """
+            }
+        }
+
+        then{
+
+            def expected_meta = [id: "NA07019"]
+            with(process.out) {
+                // vcf channel
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "NA07019.exomiser.vcf.gz"
+
+                // tbi channel
+                assert tbi.size() == 1
+                assert tbi.get(0)[0] == expected_meta
+                assert file(tbi.get(0)[1]).name == "NA07019.exomiser.vcf.gz.tbi"
+
+                // html channel
+                assert html.size() == 1
+                assert html.get(0)[0] == expected_meta
+                assert file(html.get(0)[1]).name == "NA07019.exomiser.html"
+
+                // json channel
+                assert json.size() == 1
+                assert json.get(0)[0] == expected_meta
+                assert file(json.get(0)[1]).name == "NA07019.exomiser.json"
+
+                // genetsv channel
+                assert genetsv.size() == 1
+                assert genetsv.get(0)[0] == expected_meta
+                assert file(genetsv.get(0)[1]).name == "NA07019.exomiser.genes.tsv"
+
+                // variantstsv channel
+                assert variantstsv.size() == 1
+                assert variantstsv.get(0)[0] == expected_meta
+                assert file(variantstsv.get(0)[1]).name == "NA07019.exomiser.variants.tsv"
+
+                // versions channel
+                assert snapshot(versions).match()
+            }
+        }
+    }
+
+    test("Small1000GenomesChr22 - Run process") {
+        when {
+            process {
+                """
+                input[0] = [ [id: "NA07019"],
+                file( params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz'),
+                file (params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz.tbi'),
+                file( params.modules_testdata_base_path + '/pheno/NA07019.yml'),
+                file ( params.modules_testdata_base_path + "/reference/exomiser/test_exomiser_analysis.yml")]
+                input[1] = file(params.modules_testdata_base_path + '/reference/exomiser')
+                input[2] = "hg38"
+                input[3] = "2402"
+                input[4] = [ file(params.modules_testdata_base_path + '/reference/exomiser/local/local_frequency_test_hg38.tsv.gz'), file(params.modules_testdata_base_path + '/reference/exomiser/local/local_frequency_test_hg38.tsv.gz.tbi')]
+                input[5] = ["1.3.1", "ReMM.v0.3.1.post1.hg38.tsv.gz"]
+                input[6] = ["1.7", "whole_genome_SNVs.tsv.gz", "gnomad.genomes.r4.0.indel.tsv.gz"]
+                """
+            }
+        }
+
+
+        then {
+            def expected_meta = [id: "NA07019"]
+            with(process.out) {
+                // vcf channel
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "NA07019.exomiser.vcf.gz"
+
+                // tbi channel
+                assert tbi.size() == 1
+                assert tbi.get(0)[0] == expected_meta
+                assert file(tbi.get(0)[1]).name == "NA07019.exomiser.vcf.gz.tbi"
+
+                // html channel
+                assert html.size() == 1
+                assert html.get(0)[0] == expected_meta
+                assert file(html.get(0)[1]).name == "NA07019.exomiser.html"
+
+                // json channel
+                assert json.size() == 1
+                assert json.get(0)[0] == expected_meta
+                assert file(json.get(0)[1]).name == "NA07019.exomiser.json"
+
+                // genetsv channel
+                assert genetsv.size() == 1
+                assert genetsv.get(0)[0] == expected_meta
+                assert file(genetsv.get(0)[1]).name == "NA07019.exomiser.genes.tsv"
+
+                // variantstsv channel
+                assert variantstsv.size() == 1
+                assert variantstsv.get(0)[0] == expected_meta
+                assert file(variantstsv.get(0)[1]).name == "NA07019.exomiser.variants.tsv"
+
+                // versions channel
+                assert snapshot(versions).match()
+            }
+        }
+    }
+
+
+
+}
