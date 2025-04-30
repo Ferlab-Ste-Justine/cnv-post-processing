@@ -104,6 +104,10 @@ Refer to the [nextflow documentation](https://www.nextflow.io/docs/latest/config
 
 For the [-params-file](https://www.nextflow.io/docs/latest/cli.html#pipeline-parameters) option, both `json` and `yaml` are supported. You can also generate such `YAML`/`JSON` files via [nf-core/launch](https://nf-co.re/launch).
 
+
+By default, all pipeline outputs are saved in the directory specified by the `--outdir` parameter. However, you can customize the output locations for specific steps using other parameters. For more details on that, see  [output.md](output.md).
+
+
 ### Updating the pipeline
 
 When you run the above command, Nextflow automatically pulls the pipeline code from GitHub and stores it as a cached version. When running the pipeline after this, it will always use the cached version if available - even if the pipeline has been updated since. To make sure that you're running the latest version of the pipeline, make sure that you regularly update the cached version of the pipeline:
@@ -124,6 +128,7 @@ To further assist in reproducibility, you can use share and reuse [parameter fil
 
 > [!TIP]
 > If you wish to share such profile (such as upload as supplementary material for academic publications), make sure to NOT include cluster specific paths to files, nor institutional specific profiles.
+
 
 ## Core Nextflow arguments
 
