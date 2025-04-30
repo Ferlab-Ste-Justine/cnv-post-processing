@@ -11,6 +11,7 @@ Initial release of Ferlab-Ste-Justine/cnv-post-processing, created with the [nf-
 - [#6](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/6) Add exomiser params
 - [#7](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/7) Add exomiser into the workflow
 - [#8](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/8) Add exomiser_outdir option
+- [#9](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/9) Add extra files in pipeline_info folder to improve reproducibility and traceability
 
 ### `Fixed`
 - [#10](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/10) Support sample id given as integer
