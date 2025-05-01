@@ -70,6 +70,10 @@ workflow PIPELINE_INITIALISATION {
         .map { samplesheet ->
             validateInputSamplesheet(samplesheet)
         }
+        .map {meta, vcf ->
+            def new_meta = meta.plus([id: meta.id.toString()])
+            [new_meta, vcf]
+        }
         .set { ch_samplesheet }
 
     emit:
