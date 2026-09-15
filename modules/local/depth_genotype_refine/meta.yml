@@ -1,0 +1,54 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "depth_genotype_refine"
+description: Resolve missing (./.) genotypes in a family cohort CNV VCF into explicit hom-ref calls where per-sample mosdepth-derived depth ratios support it
+keywords:
+  - cnv
+  - genotype refinement
+  - mosdepth
+  - pysam
+tools:
+  - "pysam":
+      description: "Python bindings for htslib, used here to rewrite genotypes with bin/refine_genotypes.py"
+      homepage: "https://github.com/pysam-developers/pysam"
+      documentation: "https://pysam.readthedocs.io/"
+      tool_dev_url: "https://github.com/pysam-developers/pysam"
+      licence: ["MIT"]
+      identifier: biotools:pysam
+
+input:
+  - - meta:
+        type: map
+        description: Groovy Map containing family information
+    - vcf:
+        type: file
+        description: Family-level multi-sample cohort CNV VCF
+        pattern: "*.{vcf.gz,vcf}"
+    - tbi:
+        type: file
+        description: Index of the input VCF
+        pattern: "*.{vcf.gz.tbi,vcf.tbi}"
+    - ratio_beds:
+        type: file
+        description: One "<sample>.ratio.bed" file per family member (from MOSDEPTH_RATIO); the sample name is parsed from each filename
+        pattern: "*.ratio.bed"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.refined.vcf.gz":
+          type: file
+          description: Family VCF with depth-confirmed missing genotypes rewritten to 0/0
+          pattern: "*.refined.vcf.gz"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

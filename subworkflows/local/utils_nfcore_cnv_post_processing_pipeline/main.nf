@@ -64,15 +64,32 @@ workflow PIPELINE_INITIALISATION {
     //
     // Create channel from input file provided through params.input
     //
+    // Samples are grouped by familyId so that downstream cohort-level steps (bcftools merge,
+    // truvari collapse, mosdepth, mendelian2, slivar) know each family's size upfront
+    // (needed for groupKey-based grouping) and so that a family's familyPed/familyPheno are
+    // validated identical across all of its rows before the main workflow body runs.
 
     Channel
         .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
         .map { samplesheet ->
             validateInputSamplesheet(samplesheet)
         }
-        .map {meta, vcf ->
-            def new_meta = meta.plus([id: meta.id.toString()])
-            [new_meta, vcf]
+        .map { meta, vcf, cram ->
+            [meta.familyId, [meta, vcf, cram]]
+        }
+        .tap { ch_sample_simple }
+        .groupTuple()
+        .map { familyId, items ->
+            validatePedFiles(familyId, items)
+            validatePhenopacketFiles(familyId, items)
+            validateJointCallerExclusivity(familyId, items)
+            [familyId, items.size()]
+        }
+        .combine(ch_sample_simple, by: 0)
+        .map { _familyId, sampleSize, item ->
+            def meta = item[0]
+            def new_meta = meta + [sampleSize: sampleSize, id: "${meta.familyId}.${meta.sample}".toString()]
+            [new_meta, item[1], item[2]]
         }
         .set { ch_samplesheet }
 
@@ -136,8 +153,47 @@ workflow PIPELINE_COMPLETION {
 // Validate channels from input samplesheet
 //
 def validateInputSamplesheet(input) {
-    // for now, no validation are needed, but this is where we would put it
+    def (meta, _vcf, _cram) = input
+    // caller='DRAGEN_JOINT' rows skip the per-sample normalize/collapse chain entirely (see
+    // workflows/cnv_post_processing.nf) -- exomiser (single-sample mode) reads its input straight
+    // from that chain's output, so a DRAGEN_JOINT row's 'pheno' would never actually be used by
+    // anything. Fail loudly here rather than silently ignoring it, which would otherwise look
+    // like a missing feature rather than a samplesheet mistake.
+    if (meta.caller == 'DRAGEN_JOINT' && meta.pheno) {
+        error("Sample '${meta.sample}' (family '${meta.familyId}'): caller='DRAGEN_JOINT' rows don't go through the per-sample chain exomiser (single-sample mode) reads from, so 'pheno' would silently never be used. Remove 'pheno' for this row (use 'familyPheno' for exomiser family mode instead).")
+    }
     return input
+}
+
+// All rows of the same family must reference the same familyPed value (or all omit it).
+// familyPed is optional overall (families without one skip the mendelian2/slivar steps),
+// but it must not be ambiguous within a family.
+def validatePedFiles(family_id, items) {
+    def ped_files = items.collect { entry -> entry[0].familyPed }.findAll { ped -> ped }.unique(false)
+    if (ped_files.size() > 1) {
+        error("Samples in the same family must reference the same familyPed value in the input samplesheet. Found ${ped_files} in family ${family_id}.")
+    }
+}
+
+// Same rule as validatePedFiles, for familyPheno (required for exomiser family mode).
+def validatePhenopacketFiles(family_id, items) {
+    def pheno_files = items.collect { entry -> entry[0].familyPheno }.findAll { pheno -> pheno }.unique(false)
+    if (pheno_files.size() > 1) {
+        error("Samples in the same family must reference the same familyPheno value in the input samplesheet. Found ${pheno_files} in family ${family_id}.")
+    }
+}
+
+// caller='DRAGEN_JOINT' means 'vcf' is already a family-level, jointly-called, multi-sample VCF
+// -- there's no per-sample VCF to normalize/collapse/merge, so a family using it doesn't fit the
+// one-row-per-sample shape the rest of the samplesheet assumes. Enforce that exactly one row
+// represents the whole family in that case, rather than silently processing only one of several
+// rows or mixing the two input shapes together.
+def validateJointCallerExclusivity(family_id, items) {
+    def callers = items.collect { entry -> entry[0].caller }
+    def joint_count = callers.count { caller -> caller == 'DRAGEN_JOINT' }
+    if (joint_count > 0 && items.size() > 1) {
+        error("Family ${family_id} has caller='DRAGEN_JOINT' but ${items.size()} rows -- a DRAGEN_JOINT family must have exactly one row (the joint VCF already contains every sample), and cannot mix joint and per-sample rows.")
+    }
 }
 
 

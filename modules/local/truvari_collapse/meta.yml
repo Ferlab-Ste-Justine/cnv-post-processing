@@ -1,0 +1,61 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "truvari_collapse"
+description: Collapse redundant/overlapping CNV records in a VCF using truvari, reused with different thresholds at both per-sample cleanup and cohort-level collapse stages
+keywords:
+  - cnv
+  - structural variants
+  - truvari
+tools:
+  - "truvari":
+      description: "Structural variant comparison and analysis toolkit"
+      homepage: "https://github.com/ACEnglish/truvari"
+      documentation: "https://github.com/ACEnglish/truvari/wiki"
+      tool_dev_url: "https://github.com/ACEnglish/truvari"
+      licence: ["MIT"]
+      identifier: biotools:truvari
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample or family information (this module is aliased and reused
+          at both per-sample and cohort/family level)
+    - vcf:
+        type: file
+        description: Sorted, indexed CNV VCF to collapse
+        pattern: "*.{vcf.gz,vcf}"
+    - tbi:
+        type: file
+        description: Index of the input VCF
+        pattern: "*.{vcf.gz.tbi,vcf.tbi}"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing sample or family information
+      - "*.collapsed.vcf.gz":
+          type: file
+          description: |
+            Collapsed CNV VCF. Not guaranteed coordinate-sorted or indexed -- pass through
+            BCFTOOLS_SORT_INDEX before anything that needs either.
+          pattern: "*.collapsed.vcf.gz"
+  - removed:
+      - meta:
+          type: map
+          description: Groovy Map containing sample or family information
+      - "*.removed.vcf.gz":
+          type: file
+          description: Records removed by the collapse (truvari's -c output)
+          pattern: "*.removed.vcf.gz"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

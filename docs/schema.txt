@@ -1,0 +1,92 @@
+                              samplesheet (--input)
+                                       │
+                    ┌──────────────────┴──────────────────┐
+                    │                                     │
+          caller = DRAGEN                         caller = DRAGEN_JOINT
+      (one row per SAMPLE)                        (one row per FAMILY —
+                    │                            vcf = joint, multi-sample VCF)
+                    │                                      │
+                    ▼                                      ▼
+         ┌─────────────────────┐              ┌─────────────────────────┐
+         │   NORMALIZE_CNV     │              │   NORMALIZE_CNV_JOINT   │
+         │   (per sample)      │              │   (per family)          │
+         │ - drop ALT="."      │              │ - drop ALT="."          │
+         │   (REF blocks)      │              │   (REF blocks)          │
+         │ - sort              │              │ - sort                  │
+         │ - split multiallelic│              │ - split multiallelic    │
+         └──────────┬──────────┘              │ - strip INFO/SVLEN      │
+                    │                         │   (DRAGEN joint-only    │
+                    ▼                         │   Number=. bug, breaks  │
+         ┌─────────────────────┐              │   Exomiser otherwise)   │
+         │TRUVARI_COLLAPSE_    │              └────────────┬────────────┘
+         │   PERSAMPLE         │                           │
+         │ (dedup within one   │                           ▼
+         │  sample's own calls)│              ┌─────────────────────────┐
+         └──────────┬──────────┘              │ BCFTOOLS_SORT_INDEX_    │
+                    │                         │      JOINT              │
+                    ▼                         └───────────────┬─────────┘
+         ┌─────────────────────┐    ┌─────────────────────┐   │
+         │BCFTOOLS_SORT_INDEX_ │    │EXOMISER_SINGLE      │   │
+         │   PERSAMPLE         │───►│(single sample mode) │   │
+         └──────────┬──────────┘    └─────────────────────┘   │
+                    │                                         │
+        [ group all of a family's                             │
+          samples together ]                                  │
+                    │                                         │
+                    ▼                                         │
+         ┌──────────────────────┐                             │
+         │   BCFTOOLS_MERGE     │                             │
+         │ (family-level union  │                             │
+         │  of per-sample calls)│                             │
+         └──────────┬───────────┘                             │
+                    │                                         │
+                    ▼                                         │
+         ┌─────────────────────┐                              │
+         │TRUVARI_COLLAPSE_    │                              │
+         │    COHORT           │                              │
+         │ (merge near-dupes   │                              │
+         │  across samples)    │                              │
+         └──────────┬──────────┘                              │
+                    │                                         │
+                    ▼                                         │
+         ┌─────────────────────┐                              │
+         │BCFTOOLS_SORT_INDEX_ │                              │
+         │    COHORT           │                              │
+         └──────────┬──────────┘                              │
+                    │                                         │
+                    ▼                                         │
+    ┌─────────────────────────────────────┐                   │
+    │ BAM_VCF_DEPTH_GENOTYPE_REFINEMENT   │                   │
+    │  (mosdepth, per family, needs cram) │                   │
+    │  - VCF_TO_BED                       │                   │
+    │  - MOSDEPTH_RATIO (per sample)      │                   │
+    │  - DEPTH_GENOTYPE_REFINE            │                   │
+    │  - BCFTOOLS_INDEX                   │                   │
+    │  resolves ./. → 0/0 where depth     │                   │
+    │  supports it (fixes the missing-    │                   │
+    │  genotype cost of post-hoc merging) │                   │
+    └───────────────┬─────────────────────┘                   │
+                    │                                         │
+                    └───────────────────┬─────────────────────┘
+                                        │                
+                         family-level VCF, ready for VEP
+                       (both input shapes converge HERE —
+                        downstream is 100% identical either way)
+                                        │
+                                        ▼
+                       ┌───────────────────────────────┐
+                       │   VCF_ANNOTATE_ENSEMBLVEP     │
+                       │   - ENSEMBLVEP_VEP            │
+                       │   - TABIX_TABIX               │
+                       └────────────────┬──────────────┘
+                                        │
+                     exomiser_start_from_vep ? VEP output : pre-VEP input
+                                        │
+                                        ▼
+                       ┌───────────────────────────────┐
+                       │      EXOMISER_WORKFLOW        │
+                       │   (family mode, needs         │
+                       │    familyPheno; skipped if    │
+                       │    not provided)              │
+                       └───────────────────────────────┘
+

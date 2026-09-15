@@ -1,4 +1,5 @@
-sample,sequencingType,vcf,pheno
-NA07019,WES,data-test/vcf/NA07019.chr22.cnv.vcf.gz,data-test/pheno/NA07019.yml
-NA07022,WES,data-test/vcf/NA07022.chr22.cnv.vcf.gz,data-test/pheno/NA07022.yml
-NA07056,WGS,data-test/vcf/NA07056.chr22.cnv.vcf.gz,data-test/pheno/NA07056.yml
+familyId,sample,sequencingType,caller,vcf,cram,familyPheno,familyPed
+CEPHTRIO,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
+CEPHTRIO,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,data-test/cram/NA12891.chr22.cram,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
+CEPHTRIO,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,data-test/cram/NA12892.chr22.cram,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
+CEPHTRIO_JOINT,CEPHTRIO_JOINT,WGS,DRAGEN_JOINT,data-test/vcf/CEPHTRIO.joint.cnv.vcf.gz,,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped

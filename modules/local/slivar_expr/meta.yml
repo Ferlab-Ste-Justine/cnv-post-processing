@@ -1,0 +1,60 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "slivar_expr"
+description: Classify CNV mode of inheritance (de novo / dominant / recessive / ambiguous / unknown) for any family shape (trios, duos, singletons, sibships) via slivar expr --family-expr
+keywords:
+  - cnv
+  - inheritance
+  - slivar
+  - mode-of-inheritance
+tools:
+  - "slivar":
+      description: "Variant expressions, annotation, and filtering"
+      homepage: "https://github.com/brentp/slivar"
+      documentation: "https://github.com/brentp/slivar/wiki"
+      tool_dev_url: "https://github.com/brentp/slivar"
+      licence: ["MIT"]
+      identifier: biotools:slivar
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing family information
+          e.g. [ id:'fam1' ]
+    - vcf:
+        type: file
+        description: Family-level, VEP-annotated CNV VCF
+        pattern: "*.{vcf.gz,vcf}"
+    - tbi:
+        type: file
+        description: Index of the VCF
+        pattern: "*.{tbi,csi}"
+    - ped:
+        type: file
+        description: PED file for the family (any shape -- trio, duo, singleton, sibship)
+        pattern: "*.ped"
+  - - js:
+        type: file
+        description: assets/cnv-slivar-functions.js -- the moi_cnv_*(fam) classification functions
+        pattern: "*.js"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.vcf.gz":
+          type: file
+          description: Input VCF with classification tags added (INFO/de_novo_candidate, dominant_inherited, recessive_candidate, candidate, ambiguous, unknown_cn -- each set to the list of sample(s) it applies to)
+          pattern: "*.vcf.gz"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

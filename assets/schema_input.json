@@ -7,11 +7,17 @@
     "items": {
         "type": "object",
         "properties": {
+            "familyId": {
+                "type": ["string", "integer"],
+                "pattern": "^\\S+$",
+                "errorMessage": "familyId must be provided and cannot contain spaces",
+                "meta": ["familyId"]
+            },
             "sample": {
                 "type": ["string", "integer"],
                 "pattern": "^\\S+$",
                 "errorMessage": "Sample name must be provided and cannot contain spaces",
-                "meta": ["id" , "sample"]
+                "meta": ["sample"]
             },
             "sequencingType": {
                 "type": "string",
@@ -19,22 +25,51 @@
                 "meta": ["sequencingType"],
                 "enum": ["WGS", "WES"]
             },
+            "caller": {
+                "type": "string",
+                "errorMessage": "caller must identify the tool that produced the CNV VCF (e.g. 'DRAGEN'). Only 'DRAGEN' and 'DRAGEN_JOINT' are currently supported by the normalization step. 'DRAGEN_JOINT' means 'vcf' is a DRAGEN jointly-called, family-level, multi-sample VCF (not a per-sample one) -- a family using it must have exactly one row, and cannot also have per-sample rows.",
+                "meta": ["caller"],
+                "enum": ["DRAGEN", "DRAGEN_JOINT", "GATK"]
+            },
             "vcf": {
                 "type": "string",
                 "format": "file-path",
                 "exists": true,
                 "pattern":  "^\\S+\\.vcf(\\.gz)?$",
-                "errorMessage": "VCF file containing CNV calls must be provided and have a '.vcf' or '.vcf.gz' extension."
+                "errorMessage": "VCF file containing CNV calls must be provided and have a '.vcf' or '.vcf.gz' extension. For caller='DRAGEN_JOINT', this is the family's jointly-called, multi-sample VCF rather than a per-sample one."
+            },
+            "cram": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(cram|bam)$",
+                "errorMessage": "Alignment file, if provided, must have a '.cram' or '.bam' extension. Required for the depth-based genotype-refinement step; samples without it skip that step. Not used for caller='DRAGEN_JOINT' rows -- joint calling doesn't have the post-hoc-merge missing-genotype problem that step exists to work around, so it's always skipped for those families."
             },
             "pheno": {
                 "type": "string",
                 "format": "file-path",
                 "exists": true,
                 "pattern": "^\\S+\\.(yml|yaml|json){1}$",
-                "errorMessage": "Phenopacket file required by exomiser must be provided and have a '.yml', '.yaml', or '.json' extension.",
+                "errorMessage": "Per-sample phenopacket file, if provided, must have a '.yml', '.yaml', or '.json' extension. Required for exomiser (single-sample mode); samples without it skip that step.",
                 "meta": ["pheno"]
+            },
+            "familyPheno": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(yml|yaml|json){1}$",
+                "errorMessage": "Phenopacket file, if provided, must have a '.yml', '.yaml', or '.json' extension and be identical across all rows of the same family. Required for exomiser (family mode); families without it skip that step.",
+                "meta": ["familyPheno"]
+            },
+            "familyPed": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.ped$",
+                "errorMessage": "PED file, if provided, must have a '.ped' extension and be identical across all rows of the same family. Required for the mendelian2 QC and slivar inheritance steps; families without it skip those steps.",
+                "meta": ["familyPed"]
             }
         },
-        "required": ["sample", "sequencingType", "vcf", "pheno"]
+        "required": ["familyId", "sample", "sequencingType", "caller", "vcf"]
     }
 }

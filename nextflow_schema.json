@@ -167,7 +167,7 @@
                     "description": "Path to the  exomiser data directory"
                 },
                 "exomiser_data_version": {
-                    "type": "string",
+                    "type": ["string", "integer"],
                     "description": "Exomiser data version"
                 },
                 "exomiser_genome": {
@@ -218,6 +218,79 @@
                     "description": "When specified, publishes the exomiser output to this folder",
                     "format": "directory-path",
                     "fa_icon": "fas fa-folder-open"
+                },
+                "exomiser_start_from_vep": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run exomiser off the VEP-annotated VCF instead of the pre-VEP depth-refined VCF.",
+                    "fa_icon": "fas fa-dna"
+                }
+            }
+        },
+        "reference_genome_options": {
+            "title": "Reference genome options",
+            "type": "object",
+            "description": "Reference genome FASTA shared by the pipeline steps that need it (mosdepth genotype refinement, VEP).",
+            "required": ["reference_fasta"],
+            "properties": {
+                "reference_fasta": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.fn?a(sta)?(\\.gz)?$",
+                    "description": "Path to the reference genome FASTA file (must match the assembly the input CRAMs/VCFs were aligned/called against, e.g. GRCh38).",
+                    "fa_icon": "fas fa-dna"
+                },
+                "reference_fasta_fai": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.fai$",
+                    "description": "Path to the .fai index of reference_fasta. Defaults to '<reference_fasta>.fai' if not specified.",
+                    "fa_icon": "fas fa-dna"
+                }
+            }
+        },
+        "vep_option": {
+            "title": "VEP options",
+            "type": "object",
+            "description": "Ensembl VEP annotation options.",
+            "required": ["vep_genome", "vep_cache_version", "vep_cache"],
+            "properties": {
+                "vep_genome": {
+                    "type": "string",
+                    "description": "Genome assembly to pass to VEP's --assembly (e.g. GRCh38).",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_species": {
+                    "type": "string",
+                    "default": "homo_sapiens",
+                    "description": "Species to pass to VEP's --species.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_cache_version": {
+                    "type": ["string", "integer"],
+                    "description": "VEP cache version to use (e.g. 111).",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_cache": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "exists": true,
+                    "description": "Path to a pre-installed VEP cache directory. Automatic cache download is not currently supported by this pipeline.",
+                    "fa_icon": "fas fa-folder-open"
+                },
+                "vep_annotation": {
+                    "type": "string",
+                    "enum": ["merged", "refseq"],
+                    "description": "VEP cache flavor: 'merged' (Ensembl+RefSeq, adds --mane --merged and MANE/RefSeq fields) or 'refseq' (adds --refseq). Leave unset to use the plain Ensembl cache.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_outdir": {
+                    "type": "string",
+                    "description": "When specified, publishes the VEP output to this folder",
+                    "format": "directory-path",
+                    "fa_icon": "fas fa-folder-open"
                 }
             }
         }
@@ -234,6 +307,12 @@
         },
         {
             "$ref": "#/$defs/exomiser_option"
+        },
+        {
+            "$ref": "#/$defs/reference_genome_options"
+        },
+        {
+            "$ref": "#/$defs/vep_option"
         }
     ]
 }
