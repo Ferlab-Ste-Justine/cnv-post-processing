@@ -22,6 +22,19 @@
 // Missing FORMAT/CN reads back as htslib's raw BCF int32-missing sentinel in slivar's JS binding,
 // not JS undefined/null -- confirmed directly. `< 0` catches that without hardcoding the
 // sentinel's exact value; real copy numbers are never negative.
+//
+// Called like this:
+// slivar expr \
+//    --vcf variants.trio_NA12878_91_92_joint.cnv.vep.vcf.gz \
+//    --ped trio_NA12878_91_92.ped \
+//    --js cnv-slivar-functions.js \
+//    --family-expr 'de_novo_candidate:moi_cnv_denovo(fam)' \
+//    --family-expr 'dominant_inherited:moi_cnv_dominant(fam)' \
+//    --family-expr 'recessive_candidate:moi_cnv_recessive(fam)' \
+//    --family-expr 'candidate:moi_cnv_candidate(fam)' \
+//    --family-expr 'ambiguous:moi_cnv_ambiguous(fam)' \
+//    --family-expr 'unknown_cn:moi_cnv_unknown_cn(fam)' \
+//    -o trio_NA12878_91_92_joint.cnv.slivar.vcf.gz
 
 function has_cn(sample) {
     return sample.CN >= 0
@@ -84,6 +97,7 @@ function cn_segregating_denovo(s) {
 }
 
 // --- dominant ---
+// dominant needs to see the trait passed down from an affected parent (vertical transmission, only one bad copy needed)
 // Unaffected => confirmed non-carrier (CN==2).
 // Affected   => a real carrier (CN!=2).
 // Note: same per-sample shape as de novo -- what distinguishes the two is the family-level gate
@@ -97,6 +111,7 @@ function cn_segregating_dominant(s) {
 }
 
 // --- recessive ---
+// recessive needs to see two unaffected parents each contributing half a "dose" that adds up to a full hit in the affected child (horizontal convergence, two bad copies needed)
 // Affected => a real carrier (CN!=2) -- a "double dose" event (e.g. CN=0 full deletion, or a
 //             symmetric CN=4 for a duplication scenario).
 // Unaffected parent => carries exactly HALF of every affected child's deviation, same direction

@@ -1,0 +1,56 @@
+1) de_novo_candidate: moi_cnv_denovo(fam)
+─────────────────────────────────────────
+moi_cnv_denovo(fam)
+└─ fam.every(cn_segregating_denovo)
+   └─ cn_segregating_denovo(s)      [once per family member s]
+      └─ has_cn(s)
+
+2) dominant_inherited: moi_cnv_dominant(fam)
+─────────────────────────────────────────
+moi_cnv_dominant(fam)
+├─ has_aff_parent(fam)              [family-level gate, loop over fam]
+└─ fam.every(cn_segregating_dominant)
+   └─ cn_segregating_dominant(s)    [once per family member s]
+      └─ has_cn(s)
+
+3) recessive_candidate: moi_cnv_recessive(fam)
+─────────────────────────────────────────
+moi_cnv_recessive(fam)
+├─ no_parents_in_fam(fam)           [family-level gate, loop over fam]
+└─ fam.every(cn_segregating_recessive)
+   └─ cn_segregating_recessive(s)   [once per family member s]
+      ├─ has_cn(s)
+      ├─ cn_deviation(s)
+      └─ if s.kids present, for each kid:
+         ├─ has_cn(kid)
+         └─ cn_deviation(kid)
+
+4) candidate: moi_cnv_candidate(fam)
+─────────────────────────────────────────
+moi_cnv_candidate(fam)
+├─ moi_cnv_recessive(fam)           [= entire tree #3 above]
+│  ├─ no_parents_in_fam(fam)
+│  └─ fam.every(cn_segregating_recessive)
+│     └─ cn_segregating_recessive(s)
+│        ├─ has_cn(s)
+│        ├─ cn_deviation(s)
+│        └─ has_cn(kid) / cn_deviation(kid)   [per affected kid]
+└─ all_affected_have_both_parents(fam)   [loop over fam]
+
+5) ambiguous: moi_cnv_ambiguous(fam)
+─────────────────────────────────────────
+moi_cnv_ambiguous(fam)
+├─ moi_cnv_unknown_cn(fam)          [= entire tree #6 below; short-circuits if true]
+│  └─ has_cn(s)                     [loop over fam, two passes]
+└─ for each s in fam (until match found):
+   └─ has_cn(s)
+      ├─ moi_cnv_denovo(fam)        [= entire tree #1]
+      ├─ moi_cnv_dominant(fam)      [= entire tree #2]
+      └─ moi_cnv_recessive(fam)     [= entire tree #3]
+
+6) unknown_cn: moi_cnv_unknown_cn(fam)
+─────────────────────────────────────────
+moi_cnv_unknown_cn(fam)
+└─ has_cn(s)   [loop over fam: pass 1 = affected members only,
+                pass 2 = all members, if pass 1 found a carrier]
+
