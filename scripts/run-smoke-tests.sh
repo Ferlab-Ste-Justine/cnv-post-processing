@@ -29,7 +29,7 @@ require docker
 
 if [ ! -d data-test ]; then
     echo "ERROR: data-test/ not found. Sync it first -- see CLAUDE.md's 'Test dataset' section:" >&2
-    echo "  aws s3 cp s3://ferlab-public-dataset/nextflow/Post-Processing-Pipeline/V7/data-test data-test --recursive" >&2
+    echo "  aws s3 cp s3://ferlab-public-dataset/nextflow/cnv-post-processing/V2/data-test data-test --recursive" >&2
     exit 1
 fi
 
@@ -46,11 +46,10 @@ nextflow run . -profile debug,test,docker --outdir ./results_debug
 step "[2/3] test profile -> ./results_test"
 nextflow run . -profile test,docker --outdir ./results_test
 
-step "[3/3] VEP merged-cache check (--tools vep --vep_annotation merged) -> ./results_merged_check"
+step "[3/3] VEP refseq-cache check (--tools vep --vep_annotation refseq) -> ./results_refseq_check"
 nextflow run . -profile test,docker \
-    --tools vep \
-    --vep_annotation merged \
-    --outdir results_merged_check
+    --vep_annotation refseq \
+    --outdir results_refseq_check
 
 echo
 echo "Smoke runs complete. Inspect ./results_debug, ./results_test, ./results_merged_check."

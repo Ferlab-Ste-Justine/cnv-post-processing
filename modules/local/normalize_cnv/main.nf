@@ -32,7 +32,7 @@ process NORMALIZE_CNV {
     // same session, so this only needs to apply where task.ext.strip_svlen is set (the
     // DRAGEN_JOINT path). SVLEN isn't needed downstream anyway -- VEP/Exomiser derive size from
     // POS/END/SVTYPE.
-    def strip_svlen = task.ext.strip_svlen ? '| bcftools annotate -x INFO/SVLEN' : ''
+    def strip_svlen = task.ext.strip_svlen ? '| bcftools annotate --no-version -x INFO/SVLEN' : ''
 
     // Only DRAGEN's CNV VCF conventions have been validated against this normalization step so
     // far (see /cephfs/jtrembla/projects/bioinfo-214-CNV-post-processing/preprocessing.sh). Fail
@@ -54,11 +54,16 @@ process NORMALIZE_CNV {
     #
     # DRAGEN CNV VCFs can also carry multiallelic <DEL>,<DUP> records at a single site, which
     # breaks downstream truvari comparisons unless split first.
-    bcftools view -e 'ALT="."' ${vcf} \\
+    # --no-version on every view/norm/annotate call below: bcftools appends a
+    # "##bcftools_<cmd>Command=...; Date=<now>" header line by default, which made every
+    # normalized VCF differ byte-for-byte between otherwise-identical runs (confirmed directly --
+    # broke nf-test's pipeline-level snapshot for reasons unrelated to any real content change).
+    # bcftools sort has no such flag because it never adds this header in the first place.
+    bcftools view --no-version -e 'ALT="."' ${vcf} \\
         | bcftools sort -O u \\
-        | bcftools norm -m -any -O u ${args} - \\
+        | bcftools norm --no-version -m -any -O u ${args} - \\
         ${strip_svlen} \\
-        | bcftools view -O z -o ${prefix}.normalized.vcf.gz -
+        | bcftools view --no-version -O z -o ${prefix}.normalized.vcf.gz -
 
     tabix -p vcf ${prefix}.normalized.vcf.gz
 

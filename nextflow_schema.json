@@ -203,13 +203,13 @@
                 },
                 "exomiser_local_frequency_path": {
                     "type": "string",
-                    "description": "Path to the local frequency data file",
+                    "description": "Path to the local frequency data file. The `.tbi` index is assumed to live alongside (`<path>.tbi`) unless `exomiser_local_frequency_index_path` is set explicitly.",
                     "format": "file-path",
                     "pattern": "^\\S+\\.tsv.gz$"
                 },
                 "exomiser_local_frequency_index_path": {
                     "type": "string",
-                    "description": "Path to the index of the local frequency data file",
+                    "description": "Optional override for the tabix index of the local frequency data file. Defaults to `<exomiser_local_frequency_path>.tbi`.",
                     "format": "file-path",
                     "pattern": "^\\S+\\.tbi$"
                 },
@@ -255,7 +255,7 @@
             "title": "VEP options",
             "type": "object",
             "description": "Ensembl VEP annotation options.",
-            "required": ["vep_genome", "vep_cache_version", "vep_cache"],
+            "required": ["vep_genome", "vep_cache_version"],
             "properties": {
                 "vep_genome": {
                     "type": "string",
@@ -270,14 +270,14 @@
                 },
                 "vep_cache_version": {
                     "type": ["string", "integer"],
-                    "description": "VEP cache version to use (e.g. 111).",
+                    "description": "VEP cache version to use (e.g. 114).",
                     "fa_icon": "fas fa-dna"
                 },
                 "vep_cache": {
                     "type": "string",
                     "format": "directory-path",
                     "exists": true,
-                    "description": "Path to a pre-installed VEP cache directory. Automatic cache download is not currently supported by this pipeline.",
+                    "description": "Path to a pre-installed VEP cache directory. Required unless `download_cache` is set to download it instead.",
                     "fa_icon": "fas fa-folder-open"
                 },
                 "vep_annotation": {
@@ -291,8 +291,30 @@
                     "description": "When specified, publishes the VEP output to this folder",
                     "format": "directory-path",
                     "fa_icon": "fas fa-folder-open"
+                },
+                "download_cache": {
+                    "type": "boolean",
+                    "description": "Whether to download the VEP cache (species/flavor/version/genome set via vep_species/vep_annotation/vep_cache_version/vep_genome) instead of using the one at vep_cache.",
+                    "fa_icon": "fas fa-download"
+                },
+                "outdir_cache": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Path where the downloaded VEP cache is published. Defaults to '${outdir}/cache' when unset.",
+                    "fa_icon": "fas fa-folder-open"
                 }
-            }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "not": {
+                            "properties": { "download_cache": { "const": true } },
+                            "required": ["download_cache"]
+                        }
+                    },
+                    "then": { "required": ["vep_cache"] }
+                }
+            ]
         }
     },
     "allOf": [

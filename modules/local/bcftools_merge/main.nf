@@ -26,9 +26,12 @@ process BCFTOOLS_MERGE {
     """
     #!/bin/bash -eo pipefail
 
-    bcftools merge -O u ${args} ${vcfs} \\
+    # --no-version on merge/norm: bcftools appends a "##bcftools_<cmd>Command=...; Date=<now>"
+    # header line by default, which breaks byte-for-byte reproducibility between otherwise
+    # identical runs -- see normalize_cnv/main.nf's own comment for how this was found.
+    bcftools merge --no-version -O u ${args} ${vcfs} \\
         | bcftools sort -O u - \\
-        | bcftools norm -m -any -O z -o ${prefix}.merged.vcf.gz -
+        | bcftools norm --no-version -m -any -O z -o ${prefix}.merged.vcf.gz -
 
     tabix -p vcf ${prefix}.merged.vcf.gz
 

@@ -45,6 +45,14 @@ lint:
   - .github/workflows/branch.yml
   - .github/workflows/linting_comment.yml
   - ro-crate-metadata.json
+  # nf-core's sharded nf-test CI matrix scaffolding -- this repo uses its own
+  # single-job .github/workflows/ci-nf-test.yml instead.
+  - .github/workflows/nf-test.yml
+  - .github/workflows/pr-comment.yml
+  - .github/actions/get-shards/action.yml
+  - .github/actions/nf-test/action.yml
+  # actual file lives at .github/CONTRIBUTING.md (already in files_unchanged above)
+  - docs/CONTRIBUTING.md
 
   readme:
   - nextflow_badge

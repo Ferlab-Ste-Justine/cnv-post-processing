@@ -1,5 +1,6 @@
-familyId,sample,sequencingType,caller,vcf,cram,familyPheno,familyPed
-CEPHTRIO,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
-CEPHTRIO,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,data-test/cram/NA12891.chr22.cram,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
-CEPHTRIO,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,data-test/cram/NA12892.chr22.cram,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
-CEPHTRIO_JOINT,CEPHTRIO_JOINT,WGS,DRAGEN_JOINT,data-test/vcf/CEPHTRIO.joint.cnv.vcf.gz,,data-test/pheno/CEPHTRIO.yml,data-test/ped/CEPHTRIO.ped
+familyId,sample,sequencingType,caller,vcf,cram,pheno,familyPheno,familyPed
+fam1,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+fam1,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,data-test/cram/NA12891.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+fam1,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,data-test/cram/NA12892.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+fam1_joint,NA12878_91_92,WGS,DRAGEN_JOINT,data-test/vcf/1463_NA12878_NA12891_NA12892.cnv.vcf.gz,,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+ind1,NA12878_ind,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,data-test/pheno/NA12878.yaml,,

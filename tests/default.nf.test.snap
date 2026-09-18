@@ -1,0 +1,122 @@
+{
+    "-profile test": {
+        "content": [
+            {
+                "BCFTOOLS_INDEX": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_MERGE": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_SORT_INDEX_COHORT": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_SORT_INDEX_JOINT": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_SORT_INDEX_PERSAMPLE": {
+                    "bcftools": "1.23.1"
+                },
+                "DEPTH_GENOTYPE_REFINE": {
+                    "pysam": "0.24.0"
+                },
+                "ENSEMBLVEP_VEP": {
+                    "ensemblvep": 114.2
+                },
+                "EXOMISER": {
+                    "exomiser": "14.0.0"
+                },
+                "EXOMISER_SINGLE": {
+                    "exomiser": "14.0.0"
+                },
+                "MOSDEPTH_RATIO": {
+                    "mosdepth": "0.3.11"
+                },
+                "NORMALIZE_CNV": {
+                    "bcftools": "1.23.1"
+                },
+                "NORMALIZE_CNV_JOINT": {
+                    "bcftools": "1.23.1"
+                },
+                "SLIVAR_EXPR": {
+                    "slivar": "0.3.1"
+                },
+                "TABIX_TABIX": {
+                    "tabix": 1.2
+                },
+                "TRUVARI_COLLAPSE_COHORT": {
+                    "truvari": "5.4.0"
+                },
+                "TRUVARI_COLLAPSE_PERSAMPLE": {
+                    "truvari": "5.4.0"
+                },
+                "VCF_TO_BED": {
+                    "bcftools": "1.23.1"
+                },
+                "Workflow": {
+                    "Ferlab-Ste-Justine/cnv-post-processing": "v1.0.0"
+                }
+            },
+            [
+                "depth_refined",
+                "depth_refined/fam1.refined.vcf.gz",
+                "depth_refined/fam1.refined.vcf.gz.tbi",
+                "depth_refined/ind1.refined.vcf.gz",
+                "depth_refined/ind1.refined.vcf.gz.tbi",
+                "ensemblvep",
+                "ensemblvep/variants.fam1.cnv.vep.vcf.gz",
+                "ensemblvep/variants.fam1.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.fam1_joint.cnv.vep.vcf.gz",
+                "ensemblvep/variants.fam1_joint.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.ind1.NA12878_ind.cnv.vep.vcf.gz",
+                "ensemblvep/variants.ind1.NA12878_ind.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.ind1.cnv.vep.vcf.gz",
+                "ensemblvep/variants.ind1.cnv.vep.vcf.gz.tbi",
+                "exomiser",
+                "exomiser/fam1.exomiser.genes.tsv",
+                "exomiser/fam1.exomiser.html",
+                "exomiser/fam1.exomiser.json",
+                "exomiser/fam1.exomiser.variants.tsv",
+                "exomiser/fam1.exomiser.vcf.gz",
+                "exomiser/fam1.exomiser.vcf.gz.tbi",
+                "exomiser/fam1_joint.exomiser.genes.tsv",
+                "exomiser/fam1_joint.exomiser.html",
+                "exomiser/fam1_joint.exomiser.json",
+                "exomiser/fam1_joint.exomiser.variants.tsv",
+                "exomiser/fam1_joint.exomiser.vcf.gz",
+                "exomiser/fam1_joint.exomiser.vcf.gz.tbi",
+                "exomiser/single_sample",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.genes.tsv",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.html",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.json",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.variants.tsv",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.vcf.gz",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.vcf.gz.tbi",
+                "joint",
+                "joint/fam1_joint.sorted.vcf.gz",
+                "joint/fam1_joint.sorted.vcf.gz.tbi",
+                "merged",
+                "merged/fam1.merged.vcf.gz",
+                "merged/fam1.merged.vcf.gz.tbi",
+                "pipeline_info",
+                "pipeline_info/cnv-post-processing_software_versions.yml",
+                "pipeline_info/configs",
+                "pipeline_info/configs/nextflow.config",
+                "pipeline_info/nextflow.log",
+                "slivar",
+                "slivar/fam1.cnv.slivar.vcf.gz",
+                "slivar/fam1_joint.cnv.slivar.vcf.gz",
+                "truvari",
+                "truvari/fam1.sorted.vcf.gz",
+                "truvari/fam1.sorted.vcf.gz.tbi",
+                "truvari/ind1.sorted.vcf.gz",
+                "truvari/ind1.sorted.vcf.gz.tbi"
+            ]
+        ],
+        "timestamp": "2026-09-18T17:32:06.107478296",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

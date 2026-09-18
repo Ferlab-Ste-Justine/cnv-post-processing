@@ -5,6 +5,11 @@
         "https://github.com/nf-core/modules.git": {
             "modules": {
                 "nf-core": {
+                    "ensemblvep/download": {
+                        "branch": "master",
+                        "git_sha": "6e3585d9ad20b41adc7d271009f8cb5e191ecab4",
+                        "installed_by": ["modules"]
+                    },
                     "ensemblvep/vep": {
                         "branch": "master",
                         "git_sha": "6e3585d9ad20b41adc7d271009f8cb5e191ecab4",

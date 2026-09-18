@@ -17,6 +17,8 @@ include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_JOINT     } from '../module
 include { BCFTOOLS_MERGE } from '../modules/local/bcftools_merge/main.nf'
 include { BAM_VCF_DEPTH_GENOTYPE_REFINEMENT } from '../subworkflows/local/bam_vcf_depth_genotype_refinement/main.nf'
 include { VCF_ANNOTATE_ENSEMBLVEP } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
+include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
+include { ENSEMBLVEP_DOWNLOAD } from '../modules/nf-core/ensemblvep/download/main.nf'
 include { SLIVAR_EXPR } from '../modules/local/slivar_expr/main.nf'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -78,7 +80,9 @@ workflow CNV_POST_PROCESSING {
 
     main:
     def exomiser_local_frequency_file = params.exomiser_local_frequency_path? file(params.exomiser_local_frequency_path) : []
-    def exomiser_local_frequency_index_file = params.exomiser_local_frequency_index_path? file(params.exomiser_local_frequency_index_path) : []
+    def exomiser_local_frequency_index_file = params.exomiser_local_frequency_index_path
+        ? file(params.exomiser_local_frequency_index_path)
+        : (params.exomiser_local_frequency_path ? file("${params.exomiser_local_frequency_path}.tbi") : [])
     def exomiser_data_dir = params.exomiser_data_dir? file(params.exomiser_data_dir) : []
     def exomiser_analysis_wes_path = params.exomiser_analysis_wes? file(params.exomiser_analysis_wes) : []
     def exomiser_analysis_wgs_path = params.exomiser_analysis_wgs? file(params.exomiser_analysis_wgs) : []
@@ -86,10 +90,29 @@ workflow CNV_POST_PROCESSING {
     def reference_fasta = file(params.reference_fasta)
     def reference_fasta_fai = params.reference_fasta_fai? file(params.reference_fasta_fai) : file("${params.reference_fasta}.fai")
 
-    def vep_cache = file(params.vep_cache)
     def slivar_js = file("${projectDir}/assets/cnv-slivar-functions.js")
 
     def ch_versions = Channel.empty()
+
+    //
+    // VEP cache: download it fresh via ENSEMBLVEP_DOWNLOAD when download_cache is set, otherwise
+    // use the pre-installed directory at vep_cache. vep_install's --SPECIES needs the cache
+    // flavor baked into the species name (e.g. "homo_sapiens_merged"), unlike VEP's own --species
+    // at annotation time, which always stays the plain species name (--merged/--refseq select the
+    // flavor there instead, see conf/modules.config's ENSEMBLVEP_VEP block) -- matches the sibling
+    // SNV pipeline's own vep_species_download (workflows/postprocessing.nf:91-100).
+    //
+    def vep_species_download = params.vep_annotation ? "${params.vep_species}_${params.vep_annotation}" : params.vep_species
+
+    def vep_cache
+    if (params.download_cache) {
+        def ch_ensemblvep_info = Channel.of([[id: "${params.vep_cache_version}_${params.vep_genome}"], params.vep_genome, vep_species_download, params.vep_cache_version])
+        ENSEMBLVEP_DOWNLOAD(ch_ensemblvep_info)
+        vep_cache = ENSEMBLVEP_DOWNLOAD.out.cache.collect().map { _meta, cache -> [cache] }.first()
+        ch_versions = ch_versions.mix(ENSEMBLVEP_DOWNLOAD.out.versions.first())
+    } else {
+        vep_cache = file(params.vep_cache)
+    }
 
     //
     // caller='DRAGEN_JOINT' rows are already a family-level, jointly-called, multi-sample VCF --
@@ -121,14 +144,39 @@ workflow CNV_POST_PROCESSING {
     ch_versions = ch_versions.mix(BCFTOOLS_SORT_INDEX_PERSAMPLE.out.versions)
 
     //
-    // STAGE 1b -- Exomiser (single-sample mode), on each sample's own cleaned per-sample VCF,
-    // pre-VEP -- matches this pipeline's original (pre-family-redesign) behavior. Independent of
-    // family mode below: every sample gets its own individual-level prioritization in addition to
-    // its family's joint one, using its own per-sample `pheno` (distinct from the family-level
-    // `familyPheno` exomiser (family mode) uses).
+    // STAGE 1b -- VEP annotation, single-sample route (meta.id = "familyId.sample"). Feeds
+    // EXOMISER_SINGLE below with a VEP-annotated VCF, mirroring the family-level VEP+Exomiser
+    // wiring (STAGE 4) but scoped to each sample's own cleaned per-sample VCF rather than the
+    // family-merged one. Unlike EXOMISER_WORKFLOW's exomiser_start_from_vep toggle, there's no
+    // pre-VEP option here -- EXOMISER_SINGLE always starts from VEP.
     //
-    def ch_exomiser_single_input = BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
-        .join(BCFTOOLS_SORT_INDEX_PERSAMPLE.out.tbi)
+    // Restricted to true solo samples (no familyPheno and no familyPed) -- a sample with either
+    // already gets its individual-level annotation/prioritization needs covered by the
+    // family-level route (STAGE 4+) below, so this route would otherwise be redundant for it.
+    //
+    def ch_persample_vep_input = BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
+        .filter { meta, _vcf -> !meta.familyPheno && !meta.familyPed }
+        .map { meta, vcf -> [meta, vcf, []] }
+
+    VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE(
+        ch_persample_vep_input,
+        [[id: 'reference'], reference_fasta],
+        params.vep_genome,
+        params.vep_species,
+        params.vep_cache_version,
+        vep_cache,
+        []
+    )
+    ch_versions = ch_versions.mix(VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE.out.versions)
+
+    //
+    // STAGE 1c -- Exomiser (single-sample mode), on each solo sample's own VEP-annotated
+    // per-sample VCF (same solo-only restriction as STAGE 1b above, since ch_exomiser_single_input
+    // derives from its output). Independent of family mode below, for the samples it does cover:
+    // uses its own per-sample `pheno` (distinct from the family-level `familyPheno` exomiser
+    // (family mode) uses).
+    //
+    def ch_exomiser_single_input = VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE.out.vcf_tbi
         .filter { meta, _vcf, _tbi ->
             if (!meta.pheno) {
                 log.warn("Skipping exomiser (single-sample mode) for sample '${meta.id}': no pheno (phenopacket) provided in the samplesheet.")

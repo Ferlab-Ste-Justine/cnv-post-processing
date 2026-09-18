@@ -1,0 +1,39 @@
+nextflow_pipeline {
+
+    name "Test pipeline"
+    script "../main.nf"
+    tag "pipeline"
+
+    test("-profile test") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            // stable_path: All files + folders in ${params.outdir}/ with a stable path (including file name)
+            def stable_path = getAllFilesFromDir(params.outdir, relative: true, includeDir: true, ignore: ['pipeline_info/*.{html,json,txt}'])
+            // No stable_content (full-file MD5) snapshot here, unlike the nf-core template's
+            // default -- confirmed directly that bcftools view/norm/merge/annotate append a
+            // "##bcftools_<cmd>Command=...; Date=<now>" header by default, which broke
+            // byte-for-byte reproducibility across otherwise-identical runs (fixed with
+            // --no-version across this repo's own bcftools modules regardless, since that's
+            // real reproducibility hygiene beyond just this test). VEP's own "##VEP=...
+            // time=..." provenance header and Exomiser's generated-timestamp HTML/VCF reports
+            // have no equivalent suppression flag. Matches the sibling SNV pipeline's own
+            // tests/default.nf.test, which hit this identical wall and settled on stable_path +
+            // workflow.success rather than full-content snapshotting.
+            assert workflow.success
+            assertAll(
+                { assert snapshot(
+                    // pipeline versions.yml file, from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
+                    // All stable path name, with a relative path
+                    stable_path
+                ).match() }
+            )
+        }
+    }
+}

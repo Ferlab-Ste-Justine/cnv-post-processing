@@ -17,10 +17,10 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = [ [id: "NA07019"],
-                file( params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz'),
-                file( params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz.tbi'),
-                file( params.modules_testdata_base_path + '/pheno/NA07019.yml'),
+                input[0] = [ [id: "NA12878"],
+                file( params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz'),
+                file( params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz.tbi'),
+                file( params.modules_testdata_base_path + '/pheno/NA12878.yaml'),
                 file( params.modules_testdata_base_path + '/reference/exomiser/test_exomiser_analysis.yml')]
                 input[1] = file(params.modules_testdata_base_path + '/reference/exomiser')
                 input[2] = "hg38"
@@ -34,37 +34,37 @@ nextflow_process {
 
         then{
 
-            def expected_meta = [id: "NA07019"]
+            def expected_meta = [id: "NA12878"]
             with(process.out) {
                 // vcf channel
                 assert vcf.size() == 1
                 assert vcf.get(0)[0] == expected_meta
-                assert file(vcf.get(0)[1]).name == "NA07019.exomiser.vcf.gz"
+                assert file(vcf.get(0)[1]).name == "NA12878.exomiser.vcf.gz"
 
                 // tbi channel
                 assert tbi.size() == 1
                 assert tbi.get(0)[0] == expected_meta
-                assert file(tbi.get(0)[1]).name == "NA07019.exomiser.vcf.gz.tbi"
+                assert file(tbi.get(0)[1]).name == "NA12878.exomiser.vcf.gz.tbi"
 
                 // html channel
                 assert html.size() == 1
                 assert html.get(0)[0] == expected_meta
-                assert file(html.get(0)[1]).name == "NA07019.exomiser.html"
+                assert file(html.get(0)[1]).name == "NA12878.exomiser.html"
 
                 // json channel
                 assert json.size() == 1
                 assert json.get(0)[0] == expected_meta
-                assert file(json.get(0)[1]).name == "NA07019.exomiser.json"
+                assert file(json.get(0)[1]).name == "NA12878.exomiser.json"
 
                 // genetsv channel
                 assert genetsv.size() == 1
                 assert genetsv.get(0)[0] == expected_meta
-                assert file(genetsv.get(0)[1]).name == "NA07019.exomiser.genes.tsv"
+                assert file(genetsv.get(0)[1]).name == "NA12878.exomiser.genes.tsv"
 
                 // variantstsv channel
                 assert variantstsv.size() == 1
                 assert variantstsv.get(0)[0] == expected_meta
-                assert file(variantstsv.get(0)[1]).name == "NA07019.exomiser.variants.tsv"
+                assert file(variantstsv.get(0)[1]).name == "NA12878.exomiser.variants.tsv"
 
                 // versions channel
                 assert snapshot(versions).match()
@@ -76,10 +76,10 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = [ [id: "NA07019"],
-                file( params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz'),
-                file (params.modules_testdata_base_path + '/vcf/NA07019.chr22.cnv.vcf.gz.tbi'),
-                file( params.modules_testdata_base_path + '/pheno/NA07019.yml'),
+                input[0] = [ [id: "NA12878"],
+                file( params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz'),
+                file (params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz.tbi'),
+                file( params.modules_testdata_base_path + '/pheno/NA12878.yaml'),
                 file ( params.modules_testdata_base_path + "/reference/exomiser/test_exomiser_analysis.yml")]
                 input[1] = file(params.modules_testdata_base_path + '/reference/exomiser')
                 input[2] = "hg38"
@@ -93,37 +93,37 @@ nextflow_process {
 
 
         then {
-            def expected_meta = [id: "NA07019"]
+            def expected_meta = [id: "NA12878"]
             with(process.out) {
                 // vcf channel
                 assert vcf.size() == 1
                 assert vcf.get(0)[0] == expected_meta
-                assert file(vcf.get(0)[1]).name == "NA07019.exomiser.vcf.gz"
+                assert file(vcf.get(0)[1]).name == "NA12878.exomiser.vcf.gz"
 
                 // tbi channel
                 assert tbi.size() == 1
                 assert tbi.get(0)[0] == expected_meta
-                assert file(tbi.get(0)[1]).name == "NA07019.exomiser.vcf.gz.tbi"
+                assert file(tbi.get(0)[1]).name == "NA12878.exomiser.vcf.gz.tbi"
 
                 // html channel
                 assert html.size() == 1
                 assert html.get(0)[0] == expected_meta
-                assert file(html.get(0)[1]).name == "NA07019.exomiser.html"
+                assert file(html.get(0)[1]).name == "NA12878.exomiser.html"
 
                 // json channel
                 assert json.size() == 1
                 assert json.get(0)[0] == expected_meta
-                assert file(json.get(0)[1]).name == "NA07019.exomiser.json"
+                assert file(json.get(0)[1]).name == "NA12878.exomiser.json"
 
                 // genetsv channel
                 assert genetsv.size() == 1
                 assert genetsv.get(0)[0] == expected_meta
-                assert file(genetsv.get(0)[1]).name == "NA07019.exomiser.genes.tsv"
+                assert file(genetsv.get(0)[1]).name == "NA12878.exomiser.genes.tsv"
 
                 // variantstsv channel
                 assert variantstsv.size() == 1
                 assert variantstsv.get(0)[0] == expected_meta
-                assert file(variantstsv.get(0)[1]).name == "NA07019.exomiser.variants.tsv"
+                assert file(variantstsv.get(0)[1]).name == "NA12878.exomiser.variants.tsv"
 
                 // versions channel
                 assert snapshot(versions).match()
