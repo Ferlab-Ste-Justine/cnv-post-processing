@@ -61,8 +61,6 @@
                 "depth_refined",
                 "depth_refined/fam1.refined.vcf.gz",
                 "depth_refined/fam1.refined.vcf.gz.tbi",
-                "depth_refined/ind1.refined.vcf.gz",
-                "depth_refined/ind1.refined.vcf.gz.tbi",
                 "ensemblvep",
                 "ensemblvep/variants.fam1.cnv.vep.vcf.gz",
                 "ensemblvep/variants.fam1.cnv.vep.vcf.gz.tbi",
@@ -70,8 +68,6 @@
                 "ensemblvep/variants.fam1_joint.cnv.vep.vcf.gz.tbi",
                 "ensemblvep/variants.ind1.NA12878_ind.cnv.vep.vcf.gz",
                 "ensemblvep/variants.ind1.NA12878_ind.cnv.vep.vcf.gz.tbi",
-                "ensemblvep/variants.ind1.cnv.vep.vcf.gz",
-                "ensemblvep/variants.ind1.cnv.vep.vcf.gz.tbi",
                 "exomiser",
                 "exomiser/fam1.exomiser.genes.tsv",
                 "exomiser/fam1.exomiser.html",
@@ -108,12 +104,10 @@
                 "slivar/fam1_joint.cnv.slivar.vcf.gz",
                 "truvari",
                 "truvari/fam1.sorted.vcf.gz",
-                "truvari/fam1.sorted.vcf.gz.tbi",
-                "truvari/ind1.sorted.vcf.gz",
-                "truvari/ind1.sorted.vcf.gz.tbi"
+                "truvari/fam1.sorted.vcf.gz.tbi"
             ]
         ],
-        "timestamp": "2026-09-18T17:32:06.107478296",
+        "timestamp": "2026-09-18T19:40:45.642498159",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"

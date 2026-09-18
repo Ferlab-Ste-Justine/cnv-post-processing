@@ -216,6 +216,16 @@ workflow CNV_POST_PROCESSING {
             family_meta = family_meta + [id: family_meta.familyId, samples: metas.collect { it.sample }]
             [family_meta, vcfs.flatten(), tbis.flatten()]
         }
+        .filter { meta, _vcfs, _tbis ->
+            // A true family of one (sampleSize==1, no familyPed/familyPheno) has nothing for the
+            // family-level route (merge/cohort-collapse/refine/VEP/exomiser/slivar) to add over
+            // the persample route above (STAGE 1b/1c) -- same gate that route already uses.
+            // Dropped here rather than left to fall out downstream so it doesn't pay for a second
+            // VEP annotation of the same sample's CNVs for no benefit. A documented singleton
+            // (sampleSize==1 but with a real familyPed/familyPheno) still goes through the "solo"
+            // branch below unaffected.
+            !(meta.sampleSize == 1 && !meta.familyPed && !meta.familyPheno)
+        }
         .branch { meta, vcfs, tbis ->
             solo: meta.sampleSize == 1
                 return [meta, vcfs[0], tbis[0]]
@@ -243,9 +253,17 @@ workflow CNV_POST_PROCESSING {
     // never attempts refinement for them regardless of what's in the cram-channel -- but the
     // cram-channel itself is still built from the persample branch only, for clarity.
     //
+    // True solos (sampleSize==1, no familyPed/familyPheno) are excluded here too, same predicate
+    // as the ch_grouped_by_family filter above: they never reach BCFTOOLS_SORT_INDEX_COHORT.out
+    // (their family route was dropped entirely), so leaving their cram in this channel would hand
+    // BAM_VCF_DEPTH_GENOTYPE_REFINEMENT a family id with a cram-count but no matching family VCF --
+    // an orphan its internal `join(..., remainder: true)` doesn't shape-pad correctly, which
+    // crashes downstream with a MissingMethodException instead of a clean skip.
+    //
     BAM_VCF_DEPTH_GENOTYPE_REFINEMENT(
         BCFTOOLS_SORT_INDEX_COHORT.out.vcf.join(BCFTOOLS_SORT_INDEX_COHORT.out.tbi),
         ch_samplesheet_branched.persample
+            .filter { meta, _vcf, _cram -> !(meta.sampleSize == 1 && !meta.familyPed && !meta.familyPheno) }
             .filter { meta, _vcf, cram ->
                 if (!cram) {
                     log.warn("Skipping depth-based genotype refinement for sample '${meta.id}': no cram (alignment file) provided in the samplesheet.")
