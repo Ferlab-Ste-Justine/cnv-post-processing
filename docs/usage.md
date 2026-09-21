@@ -4,13 +4,13 @@
 
 ## Introduction
 
-The Ferlab-Ste-Justine/cnv-post-processing pipeline is designed for the post-processing of Copy Number Variants (CNVs). Currently, it integrates [Exomiser](https://exomiser.readthedocs.io/en/14.0.0/running.html) for variant prioritization. We might support additional tools and steps in the future.
+The Ferlab-Ste-Justine/cnv-post-processing pipeline post-processes Copy Number Variant (CNV) calls, from per-sample VCFs to family-level, annotated and prioritized results: normalization and redundant-call collapsing ([truvari](https://github.com/ACEnglish/truvari)), family-level merging, depth-based genotype refinement ([mosdepth](https://github.com/brentp/mosdepth)), annotation with [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html), prioritization with [Exomiser](https://exomiser.readthedocs.io/en/14.0.0/running.html), and mode-of-inheritance classification with [slivar](https://github.com/brentp/slivar). Standalone samples with no family or pedigree information get their own lightweight VEP + Exomiser route. We might support additional tools and steps in the future.
 
-Exomiser requires clinical information for each sample, including details such as clinical signs, affected status, and gender. This information is provided in a separate file using the Phenopacket format. More details can be found in the samplesheet section.
+Exomiser requires clinical information for each sample or family, including details such as clinical signs, affected status, and gender. This information is provided in a separate file using the Phenopacket format. slivar's mode-of-inheritance classification requires a pedigree (PED) file. More details can be found in the samplesheet section.
 
 ## Samplesheet input
 
-You will need to create a samplesheet with information about the samples you would like to analyse before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 4 columns, and a header row as shown in the examples below.
+You will need to create a samplesheet with information about the samples you would like to analyse before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with a header row as shown in the examples below.
 
 ```bash
 --input '[path to samplesheet file]'
@@ -18,26 +18,35 @@ You will need to create a samplesheet with information about the samples you wou
 
 ### Samplesheet file format
 
-Here is an example samplesheet file:
+Here is an example samplesheet file, covering a trio (`fam1`), the same trio supplied as an already jointly-called VCF (`fam1_joint`), and a standalone sample (`ind1`):
 
 ```csv title="samplesheet.csv"
-sample,sequencingType,vcf,pheno
-NA07019,WES,data-test/vcf/NA07019.chr22.cnv.vcf.gz,data-test/pheno/NA07019.yml
-NA07022,WES,data-test/vcf/NA07022.chr22.cnv.vcf.gz,data-test/pheno/NA07022.yml
-NA07056,WGS,data-test/vcf/NA07056.chr22.cnv.vcf.gz,data-test/pheno/NA07056.yml
+familyId,sample,sequencingType,caller,vcf,cram,pheno,familyPheno,familyPed
+fam1,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+fam1,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,data-test/cram/NA12891.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+fam1,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,data-test/cram/NA12892.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+fam1_joint,NA12878_91_92,WGS,DRAGEN_JOINT,data-test/vcf/1463_NA12878_NA12891_NA12892.cnv.vcf.gz,,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+ind1,NA12878_ind,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,data-test/pheno/NA12878.yaml,,
 ```
 
-| Column           | Description                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| `sample`         | Unique identifier for the sample being analyzed.                                                  |
-| `sequencingType` | Use `WES` for whole exome sequencing and `WGS` for whole genome sequencing                        |
-| `vcf`            | Path to the vcf file containing the CNV data. The file must have a `.vcf` or `.vcf.gz` extension. |
-| `pheno`          | Path to the phenotype file in Phenopacket format. Both `.yaml` and `.json` formats are supported. |
+| Column           | Required? | Description                                                                                                                                                                                             |
+| ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `familyId`       | Required  | Identifier grouping the samples that make up a family. A standalone sample with no relatives still needs a `familyId` (its own, used by no other row).                                                 |
+| `sample`         | Required  | Unique identifier for the sample being analyzed.                                                                                                                                                         |
+| `sequencingType` | Required  | Use `WES` for whole exome sequencing and `WGS` for whole genome sequencing.                                                                                                                              |
+| `caller`         | Required  | Identifies the tool that produced the CNV VCF. Only `DRAGEN` and `DRAGEN_JOINT` are currently supported by the normalization step. `DRAGEN_JOINT` means `vcf` is a DRAGEN jointly-called, multi-sample VCF for the whole family rather than a per-sample one -- a family using it must have exactly one row, and cannot also have per-sample rows. |
+| `vcf`            | Required  | Path to the vcf file containing the CNV data. The file must have a `.vcf` or `.vcf.gz` extension.                                                                                                        |
+| `cram`           | Optional  | Path to the sample's alignment file (`.cram` or `.bam`). Enables the depth-based genotype-refinement step for that sample; a family is only refined if every one of its samples has a cram. Not used for `DRAGEN_JOINT` rows.                                                                          |
+| `pheno`          | Optional  | Path to a per-sample phenotype file in Phenopacket format (`.yaml`/`.yml`/`.json`). Enables Exomiser in single-sample mode for that sample.                                                             |
+| `familyPheno`    | Optional  | Path to a phenopacket file, identical across every row of the same family. Enables Exomiser in family mode.                                                                                             |
+| `familyPed`      | Optional  | Path to a PED file (`.ped`), identical across every row of the same family. Enables slivar mode-of-inheritance classification.                                                                          |
 
 An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
 The identifier provided in the `sample` column in the samplesheet can differ from the sample identifier in the input vcf file.
 However, it must be unique to the sample, as it determines the output file names.
+
+A sample with neither `familyPed` nor `familyPheno` and no other family members (`familyId` used by no other row) is treated as a true standalone sample: it's routed through its own per-sample VEP + Exomiser (single-sample mode) steps instead of the family-level route, since the family-level route (merge, cohort collapse, depth refinement, family-level VEP/Exomiser, slivar) would have nothing to add for it.
 
 ### Phenopacket file example
 
@@ -56,10 +65,14 @@ proband:
         label: Syndactyly
 ```
 
-Notes about the phenopacket file (`pheno` column):
+Notes about the phenopacket file (`pheno`/`familyPheno` columns):
 
-- It should include only sample-specific information. The pedigree section must either contain only the sample or be omitted entirely.
-- The sample identifier in the phenopacket file must match the sample identifier in the corresponding VCF file.
+- It should include only sample-specific (`pheno`) or family-specific (`familyPheno`) information. The pedigree section must either contain only the sample(s) it covers or be omitted entirely.
+- The sample identifier(s) in the phenopacket file must match the sample identifier(s) in the corresponding VCF file.
+
+### PED file (`familyPed`)
+
+A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must match those in the samplesheet's `sample` column.
 
 ## Install reference data and prepare parameters file
 
