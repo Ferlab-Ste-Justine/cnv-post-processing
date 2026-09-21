@@ -3,6 +3,43 @@
 
 Reference files must be correctly downloaded and specified through pipeline parameters. This document provides a comprehensive list of the required reference files and explains how to set the pipeline parameters appropriately.
 
+## Reference genome
+
+A reference genome FASTA is required, shared by two unrelated steps: depth-based genotype refinement ([mosdepth](https://github.com/brentp/mosdepth), which reads it to compute per-site depth) and VEP annotation (which can use it for reference-based checks alongside the cache). It must match the assembly the input CRAMs and VCFs were aligned/called against (e.g. GRCh38) -- there's no mechanism in the pipeline that checks this for you.
+
+- `reference_fasta`: Path to the reference genome FASTA file.
+- `reference_fasta_fai`: Path to the `.fai` index of `reference_fasta`. Optional -- defaults to `<reference_fasta>.fai` if not specified.
+
+No `.dict` file is needed; only the FASTA and its `.fai` index.
+
+## VEP reference data
+
+VEP annotation needs a cache directory, provided one of two ways:
+
+- **Pre-installed** (default): set `vep_cache` to the path of an existing cache directory, and skip `download_cache`.
+- **Downloaded fresh at pipeline start**: set `download_cache = true`. The pipeline downloads the cache itself (via `vep_install`, `ENSEMBLVEP_DOWNLOAD`) using `vep_species`, `vep_annotation`, `vep_cache_version` and `vep_genome`, and uses it directly for that same run -- no need to set `vep_cache` in this case. The downloaded cache is also published, by default under `<outdir>/cache/` (override with `outdir_cache`), so it can be reused as a pre-installed cache (`vep_cache`) on a later run without re-downloading.
+
+Either way, the cache directory must follow VEP's own layout, one subfolder per species/flavor and cache version + assembly:
+
+```
+<vep_cache>/
+  <vep_species>/
+    <vep_cache_version>_<vep_genome>/
+  <vep_species>_merged/
+    <vep_cache_version>_<vep_genome>/
+  <vep_species>_refseq/
+    <vep_cache_version>_<vep_genome>/
+```
+
+For example, with `vep_species=homo_sapiens`, `vep_cache_version=114`, `vep_genome=GRCh38`, and `vep_annotation=merged`, the pipeline expects `<vep_cache>/homo_sapiens_merged/114_GRCh38/`.
+
+- `vep_genome`: Genome assembly to pass to VEP's `--assembly` (e.g. `GRCh38`). Must match `reference_fasta`.
+- `vep_species`: Species to pass to VEP's `--species`. Defaults to `homo_sapiens`.
+- `vep_cache_version`: VEP cache version to use (e.g. `114`).
+- `vep_annotation`: VEP cache flavor -- `merged` (Ensembl+RefSeq, adds `--mane --merged` and MANE/RefSeq fields to the annotation) or `refseq` (adds `--refseq`). Leave unset to use a plain Ensembl cache.
+- `vep_cache`: Path to a pre-installed VEP cache directory, laid out as above. Required unless `download_cache` is set.
+- `download_cache`: Whether to download the VEP cache instead of using a pre-installed one.
+- `outdir_cache`: Where the downloaded cache is published. Defaults to `<outdir>/cache/` when unset.
 
 ## Exomiser reference data
 
@@ -60,6 +97,15 @@ There are typically multiple sections in the analysis file. To be compatible wit
 
 | Parameter name | Required? | Description |
 | --- | --- | --- |
+| `reference_fasta` | _Required_ | Path to the reference genome FASTA file, shared by depth-based genotype refinement and VEP |
+| `reference_fasta_fai` | _Optional_ | Path to the `.fai` index of `reference_fasta`. Defaults to `<reference_fasta>.fai` |
+| `vep_genome` | _Required_ | Genome assembly to pass to VEP's `--assembly` (e.g. `GRCh38`) |
+| `vep_species` | _Optional_ | Species to pass to VEP's `--species`. Defaults to `homo_sapiens` |
+| `vep_cache_version` | _Required_ | VEP cache version to use (e.g. `114`) |
+| `vep_cache` | _Required unless `download_cache`_ | Path to a pre-installed VEP cache directory |
+| `vep_annotation` | _Optional_ | VEP cache flavor: `merged` or `refseq`. Unset uses a plain Ensembl cache |
+| `download_cache` | _Optional_ | Download the VEP cache instead of using a pre-installed one |
+| `outdir_cache` | _Optional_ | Where the downloaded VEP cache is published. Defaults to `<outdir>/cache/` |
 | `exomiser_data_dir` | _Required_ | Path to the exomiser reference data directory |
 | `exomiser_genome` | _Required_ | Genome assembly version to be used by exomiser(`hg19` or `hg38`) |
 | `exomiser_data_version` | _Required_ | Exomiser data version (e.g., `2402`) |
