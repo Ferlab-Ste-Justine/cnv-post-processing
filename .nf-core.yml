@@ -19,6 +19,10 @@ lint:
   - validation.help.afterText
   - validation.summary.beforeText
   - validation.summary.afterText
+  # the nf-core/configs includeConfig lines are deliberately commented out in nextflow.config
+  # (see the comment there) so no external config/profile is ever auto-loaded from a remote
+  # source -- this check expects them present and would otherwise always fail here.
+  - custom_config
   - config_defaults:
     - params.exomiser_analysis_wes     # projectDir variable not rendered is causing mismatch with nextflow.config
     - params.exomiser_analysis_wgs      # projectDir variable not rendered is causing mismatch with nextflow.config
