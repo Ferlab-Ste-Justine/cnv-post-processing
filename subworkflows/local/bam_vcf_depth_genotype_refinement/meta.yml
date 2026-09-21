@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
+name: bam_vcf_depth_genotype_refinement
+description: |
+  Depth-based CNV genotype refinement: fans a family-level, cohort-collapsed CNV VCF back out to
+  one mosdepth run per sample (against the family's shared candidate-site BED, using that
+  sample's own cram), computes each sample's per-site depth ratio, then rewrites missing (./.)
+  genotypes at those sites into either an explicit hom-ref call (when depth confirms it) or
+  leaves them missing. Only refines a family when every one of its samples has a cram; other
+  families pass through unrefined.
+keywords:
+  - cnv
+  - genotype-refinement
+  - depth
+  - mosdepth
+components:
+  - vcf/to/bed
+  - mosdepth/ratio
+  - depth/genotype/refine
+  - bcftools/index
+input:
+  - ch_family_vcf:
+      type: tuple
+      description: |
+        Family-level, cohort-collapsed CNV VCF
+        Structure: [ val(meta), path(vcf), path(tbi) ] -- meta has id:familyId, samples:[s1,s2,...]
+  - ch_sample_cram:
+      type: tuple
+      description: |
+        Per-sample alignment file, pre-filtered to samples that have a cram in the samplesheet
+        Structure: [ val(meta), path(cram), path(crai) ] -- meta has id:sample, family:familyId
+  - ch_fasta:
+      type: file
+      description: Reference genome FASTA file
+      pattern: "*.{fa,fasta,fna}"
+  - ch_fasta_fai:
+      type: file
+      description: FASTA index of ch_fasta
+      pattern: "*.fai"
+output:
+  - vcf:
+      type: tuple
+      description: |
+        The family-level VCF, genotype-refined where every sample had a cram, or the original
+        cohort-collapsed VCF otherwise
+        Structure: [ val(meta), path(vcf), path(tbi) ]
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"
