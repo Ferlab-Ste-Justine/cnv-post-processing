@@ -48,10 +48,21 @@ workflow PIPELINE_INITIALISATION {
     //
     // Validate parameters and generate parameter summary to stdout
     //
+    // help/help_full/show_hidden/cli_typecast are new required inputs as of the synced
+    // subworkflow version (2026-09) -- this pipeline has never wired up a --help CLI flag, so
+    // they're passed as false/empty here to keep that unchanged rather than adding the feature
+    // as a side effect of the sync.
     UTILS_NFSCHEMA_PLUGIN (
         workflow,
         validate_params,
-        null
+        null,
+        false,
+        false,
+        false,
+        "",
+        "",
+        "nextflow run . -profile <docker/singularity/...> --input samplesheet.csv --outdir <OUTDIR>",
+        false
     )
 
     //
