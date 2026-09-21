@@ -10,8 +10,29 @@
 
 ## Pipeline tools
 
+- [BCFtools](https://samtools.github.io/bcftools/)
+
+> Danecek P, Bonfield JK, Liddle J, Marshall J, Ohan V, Pollard MO, Whitwham A, Keane T, McCarthy SA, Davies RM, Li H. Twelve years of SAMtools and BCFtools. Gigascience. 2021 Feb 16;10(2):giab008. doi: 10.1093/gigascience/giab008. PubMed PMID: 33590861.
+
+- [Truvari](https://github.com/ACEnglish/truvari)
+
+> English AC, Menon VK, Gibbs RA, Metcalf GA, Sedlazeck FJ. Truvari: refined structural variant comparison preserves allelic diversity. Genome Biol. 2022 Dec 27;23(1):271. doi: 10.1186/s13059-022-02840-6. PubMed PMID: 36575487.
+
+- [mosdepth](https://github.com/brentp/mosdepth)
+
+> Pedersen BS, Quinlan AR. Mosdepth: quick coverage calculation for genomes and exomes. Bioinformatics. 2018 Mar 1;34(5):867-868. doi: 10.1093/bioinformatics/btx699. PubMed PMID: 29096012.
+
+- [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html)
+
+> McLaren W, Gil L, Hunt SE, Riat HS, Ritchie GR, Thormann A, Flicek P, Cunningham F. The Ensembl Variant Effect Predictor. Genome Biol. 2016 Jun 6;17(1):122. doi: 10.1186/s13059-016-0974-4. PubMed PMID: 27268795.
+
 - [EXOMISER](https://exomiser.readthedocs.io/en/14.0.0/)
+
 > Smedley D, Jacobsen JO, Jäger M, Köhler S, Holtgrewe M et al., Next-generation diagnostics and disease-gene discovery with the Exomiser. Nature protocols 2015;10;12;2004-15. doi: 10.1038/nprot.2015.124. PubMed PMID: 26562621
+
+- [slivar](https://github.com/brentp/slivar)
+
+> Pedersen BS, Brown JM, Dashnow H, Xiao C, Kesharwani AK, Byrska-Bishop M, Belyeu J, Tejomurtula A, Winder A, Miller A, Zwierstra M, Bento G, Yang X, Wetterstrand K, Karolchik D, Green RC, Pastinen T, Quinlan AR. Effective variant filtering and expected candidate variant yield in studies of rare human disease. NPJ Genom Med. 2021 Jul 15;6(1):60. doi: 10.1038/s41525-021-00227-3. PubMed PMID: 34267211.
 
 ## Software packaging/containerisation tools
 
