@@ -37,11 +37,14 @@ route applicable to it, decided per-row/per-family purely from which optional co
    supplied as an already jointly-called `caller=DRAGEN_JOINT` multi-sample VCF skip merge+collapse
    entirely (lightweight prep only: drop non-variant records, split multiallelics) and rejoin at
    step 4
-3. `BAM_VCF_DEPTH_GENOTYPE_REFINEMENT` (mosdepth-based) — only if *every* sample in the family has
+3. `BAM_VCF_DEPTH_GENOTYPE_REFINEMENT` (mosdepth-based) — only if _every_ sample in the family has
    a `cram`; partial coverage skips refinement for the whole family with a warning
 4. `VCF_ANNOTATE_ENSEMBLVEP`, family-level
 5. `EXOMISER_WORKFLOW` — only for families with `familyPheno`
-6. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`
+6. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`. Its
+   output is the pipeline's last file, so it's the only stage that gets an explicit indexing step
+   of its own (`BCFTOOLS_INDEX_SLIVAR`) rather than relying on a downstream stage to need/produce
+   one.
 
 **Solo route** (true singletons: `sampleSize==1`, no `familyPed`, no `familyPheno` — the family
 route would add nothing over this for them, so they're dropped from `ch_grouped_by_family`
@@ -123,14 +126,37 @@ nf-test test modules/local/exomiser
 
 nf-core upstream module/subworkflow tests are excluded via the `ignore` glob in `nf-test.config`.
 `scripts/run-test-suite.sh` bundles the pre-push gate: nf-test dry-run, full nf-test suite, and
-`nf-core pipelines lint --release`.
+`nf-core pipelines lint --release`. All 10 local modules (`modules/local/*`) have their own module
+test under `modules/local/<name>/tests/`.
+
+**nf-test gotchas** (both hit, and fixed, while writing `modules/local/truvari_collapse/tests/`;
+every other module test in this repo already avoids both, whether by luck or a previous author
+already having learned this):
+
+- A param set via a config file (e.g. `params.modules_testdata_base_path`) resolves fine in a
+  test's `when` block but can come back `null` in its `then` block, throwing a
+  `NullPointerException` -- a known nf-test bug (askimed/nf-test#288), not something to work around
+  with `params { ... }` reassignment (doesn't help, same issue). Never reference `params.*` inside
+  a `then` block -- use `${projectDir}`-relative paths instead (works reliably in both `when` and
+  `then`).
+- Calling `.linesGzip` from _inside_ a `with(process.out) { ... }` closure throws
+  `NullPointerException: Cannot invoke "GZIPInputStream.close()" because "gzip" is null` --
+  confirmed via a real `--debug` stack trace straight into
+  `com.askimed.nf.test.lang.extensions.GlobalMethods.with(...)` wrapping the failing
+  `PathExtension.getLinesGzip(...)` call. This isn't about which path is being read or whether the
+  channel reference is bare vs fully-qualified (both fail identically) -- it's `with()` itself:
+  being inside that closure at all breaks `.linesGzip`. Close `with(process.out) { }` right after
+  the ordinary `.size()`/meta/filename assertions, then do every `.linesGzip` read afterward in
+  plain `then` scope using fully-qualified `process.out.vcf...` (exactly the structure
+  `modules/local/bcftools_sort_index/tests/main.nf.test` and `bcftools_index`'s already use).
 
 ### Linting
 
 CI lint workflow: `.github/workflows/linting.yml` (nf-core lint + prettier/whitespace pre-commit
-checks). Run locally with:
+checks, config in `.pre-commit-config.yaml`). Run locally with:
 
 ```bash
+pre-commit run --all-files
 nf-core pipelines lint --release
 ```
 
@@ -169,7 +195,7 @@ A few patterns and gotchas worth knowing before editing:
   `cram`) are dropped and `id` resets to the family level, keeping a `samples: [...]` list for
   fanning back out later (e.g. depth-refinement's per-sample mosdepth runs).
 - **The solo/family split is a filter, not just a branch.** True solos are dropped from
-  `ch_grouped_by_family` entirely (a `.filter{...}` in `workflows/cnv_post_processing.nf`) *before*
+  `ch_grouped_by_family` entirely (a `.filter{...}` in `workflows/cnv_post_processing.nf`) _before_
   the `.branch{ solo / family }` that follows. Any other channel built from
   `ch_samplesheet_branched.persample` for a family-level step (e.g. the depth-refinement cram
   channel) needs that same exclusion applied independently — otherwise it hands that subworkflow a
