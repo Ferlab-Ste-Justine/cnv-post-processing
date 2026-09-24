@@ -15,6 +15,7 @@ include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_PERSAMPLE } from '../module
 include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_COHORT    } from '../modules/local/bcftools_sort_index/main.nf'
 include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_JOINT     } from '../modules/local/bcftools_sort_index/main.nf'
 include { BCFTOOLS_MERGE } from '../modules/local/bcftools_merge/main.nf'
+include { BCFTOOLS_INDEX as BCFTOOLS_INDEX_SLIVAR } from '../modules/local/bcftools_index/main.nf'
 include { BAM_VCF_DEPTH_GENOTYPE_REFINEMENT } from '../subworkflows/local/bam_vcf_depth_genotype_refinement/main.nf'
 include { VCF_ANNOTATE_ENSEMBLVEP } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
 include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
@@ -372,6 +373,13 @@ workflow CNV_POST_PROCESSING {
 
     SLIVAR_EXPR(ch_slivar_input, slivar_js)
     ch_versions = ch_versions.mix(SLIVAR_EXPR.out.versions)
+
+    // Slivar's own output isn't indexed -- this is the pipeline's last file, so index it here
+    // rather than leave that as a manual step for whoever consumes it next. Rewriting INFO tags
+    // doesn't reorder records, so this is a plain re-index, not a re-sort (same reasoning as
+    // BCFTOOLS_INDEX's other use after DEPTH_GENOTYPE_REFINE).
+    BCFTOOLS_INDEX_SLIVAR(SLIVAR_EXPR.out.vcf)
+    ch_versions = ch_versions.mix(BCFTOOLS_INDEX_SLIVAR.out.versions)
 
     //
     // Collate and save software versions

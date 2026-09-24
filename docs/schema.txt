@@ -26,14 +26,14 @@
                     │                         │      JOINT              │
                     ▼                         └───────────────┬─────────┘
          ┌─────────────────────┐    ┌─────────────────────┐   │
-         │BCFTOOLS_SORT_INDEX_ │    │EXOMISER_SINGLE      │   │
-         │   PERSAMPLE         │───►│(single sample mode) │   │
-         └──────────┬──────────┘    └─────────────────────┘   │
-                    │                                         │
-        [ group all of a family's                             │
-          samples together ]                                  │
-                    │                                         │
-                    ▼                                         │
+         │BCFTOOLS_SORT_INDEX_ │    │        VEP          │   │
+         │   PERSAMPLE         │───►│                     │   │
+         └──────────┬──────────┘    └─────────┬───────────┘   │
+                    │                         ▼               │
+        [ group all of a family's   ┌─────────────────────┐   │
+          samples together ]        │EXOMISER_SINGLE      │   │
+                    │               │(single sample mode) │   │
+                    ▼               └─────────────────────┘   │
          ┌──────────────────────┐                             │
          │   BCFTOOLS_MERGE     │                             │
          │ (family-level union  │                             │
@@ -68,25 +68,26 @@
     └───────────────┬─────────────────────┘                   │
                     │                                         │
                     └───────────────────┬─────────────────────┘
-                                        │                
+                                        │
                          family-level VCF, ready for VEP
                        (both input shapes converge HERE —
                         downstream is 100% identical either way)
                                         │
                                         ▼
-                       ┌───────────────────────────────┐
-                       │   VCF_ANNOTATE_ENSEMBLVEP     │
-                       │   - ENSEMBLVEP_VEP            │
-                       │   - TABIX_TABIX               │
-                       └────────────────┬──────────────┘
-                                        │
-                     exomiser_start_from_vep ? VEP output : pre-VEP input
-                                        │
+                        ┌───────────────────────────────┐
+                        │   VCF_ANNOTATE_ENSEMBLVEP     │
+                        │   - ENSEMBLVEP_VEP            │
+                        │   - TABIX_TABIX               │
+                        └───────────────┬───────────────┘
                                         ▼
-                       ┌───────────────────────────────┐
-                       │      EXOMISER_WORKFLOW        │
-                       │   (family mode, needs         │
-                       │    familyPheno; skipped if    │
-                       │    not provided)              │
-                       └───────────────────────────────┘
-
+                        ┌───────────────────────────────┐
+                        │      EXOMISER_WORKFLOW        │
+                        │   (family mode, needs         │
+                        │    familyPheno; skipped if    │
+                        │    not provided)              │
+                        └───────────────┬───────────────┘
+                                        ▼
+                             ┌─────────────────────┐
+                             │        SLIVAR       │
+                             │                     │
+                             └─────────────────────┘

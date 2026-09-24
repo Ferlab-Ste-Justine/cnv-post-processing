@@ -5,6 +5,9 @@
                 "BCFTOOLS_INDEX": {
                     "bcftools": "1.23.1"
                 },
+                "BCFTOOLS_INDEX_SLIVAR": {
+                    "bcftools": "1.23.1"
+                },
                 "BCFTOOLS_MERGE": {
                     "bcftools": "1.23.1"
                 },
@@ -101,13 +104,15 @@
                 "pipeline_info/nextflow.log",
                 "slivar",
                 "slivar/fam1.cnv.slivar.vcf.gz",
+                "slivar/fam1.cnv.slivar.vcf.gz.tbi",
                 "slivar/fam1_joint.cnv.slivar.vcf.gz",
+                "slivar/fam1_joint.cnv.slivar.vcf.gz.tbi",
                 "truvari",
                 "truvari/fam1.sorted.vcf.gz",
                 "truvari/fam1.sorted.vcf.gz.tbi"
             ]
         ],
-        "timestamp": "2026-09-18T19:40:45.642498159",
+        "timestamp": "2026-09-23T17:17:08.533471779",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"
