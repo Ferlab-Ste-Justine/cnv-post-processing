@@ -1,0 +1,82 @@
+nextflow_process {
+
+    name "Test Process BCFTOOLS_MERGE"
+    script "../main.nf"
+    process "BCFTOOLS_MERGE"
+
+    tag "modules"
+    tag "modules_"
+    tag "bcftools_merge"
+
+    config "./nextflow.config"
+
+    // Real trio: the same NA12878/NA12891/NA12892 per-sample DRAGEN CNV VCFs (chr22) used
+    // elsewhere in this repo's test fixtures, merged as one family. Real data is preferred here
+    // over hand-crafted fixtures because the module's own logic (merge -> sort -> norm -m -any)
+    // has no family-shape-dependent branches worth isolating with toy edge cases -- unlike
+    // slivar_expr, there's nothing here that needs a specific hand-picked pedigree/genotype
+    // scenario to exercise.
+    test("NA12878/NA12891/NA12892 trio - merge into one family VCF") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "fam1"],
+                    [
+                        file(params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12891.chr22.cnv.vcf.gz'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12892.chr22.cnv.vcf.gz')
+                    ],
+                    [
+                        file(params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz.tbi'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12891.chr22.cnv.vcf.gz.tbi'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12892.chr22.cnv.vcf.gz.tbi')
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "fam1"]
+
+            // vcf channel
+            assert process.out.vcf.size() == 1
+            assert process.out.vcf.get(0)[0] == expected_meta
+            assert file(process.out.vcf.get(0)[1]).name == "fam1.merged.vcf.gz"
+
+            // tbi channel
+            assert process.out.tbi.size() == 1
+            assert process.out.tbi.get(0)[0] == expected_meta
+            assert file(process.out.tbi.get(0)[1]).name == "fam1.merged.vcf.gz.tbi"
+
+            // Real-output content checks -- merge can only add sites via union across samples
+            // (never remove any), so the merged site count must be >= the largest single input's
+            // site count. bcftools norm -m -any afterward can in principle re-split/re-group
+            // multiallelic records, so this is checked against the actual merged output rather
+            // than assumed to equal a simple union count.
+            def mergedLines = path(process.out.vcf.get(0)[1]).linesGzip
+            def mergedHeaderFields = mergedLines.find { it.startsWith("#CHROM") }.tokenize("\t")
+            def mergedSamples = mergedHeaderFields.drop(9)
+            assert mergedSamples.size() == 3
+            assert mergedSamples as Set == ["NA12878", "NA12891", "NA12892"] as Set
+
+            def mergedSiteCount = mergedLines.findAll { !it.startsWith("#") }.size()
+
+            def inputSiteCounts = [
+                'NA12878.chr22.cnv.vcf.gz',
+                'NA12891.chr22.cnv.vcf.gz',
+                'NA12892.chr22.cnv.vcf.gz'
+            ].collect { name ->
+                path("${projectDir}/data-test/vcf/${name}").linesGzip.findAll { !it.startsWith("#") }.size()
+            }
+            assert mergedSiteCount >= inputSiteCounts.max()
+
+            // versions channel
+            assert snapshot(process.out.versions).match()
+        }
+    }
+}

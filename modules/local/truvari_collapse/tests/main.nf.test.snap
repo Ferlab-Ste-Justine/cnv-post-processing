@@ -1,0 +1,26 @@
+{
+    "NA12878.chr22 real per-sample CNV calls (persample thresholds) -- nothing to collapse": {
+        "content": [
+            [
+                "versions.yml:md5,915277410a8c8cf8e798eff00330f0b2"
+            ]
+        ],
+        "timestamp": "2026-09-24T13:44:39.930301303",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    },
+    "toy_overlap: two near-identical overlapping DUP calls actually collapse (persample thresholds)": {
+        "content": [
+            [
+                "versions.yml:md5,915277410a8c8cf8e798eff00330f0b2"
+            ]
+        ],
+        "timestamp": "2026-09-24T13:44:48.859812438",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

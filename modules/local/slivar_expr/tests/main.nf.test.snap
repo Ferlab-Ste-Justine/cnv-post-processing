@@ -1,0 +1,14 @@
+{
+    "famA: de novo / recessive / ambiguous / unknown_cn (shared unaffected-parents pedigree)": {
+        "content": [
+            [
+                "versions.yml:md5,1e6a9360a7d60cfb3a3319c1edcfca92"
+            ]
+        ],
+        "timestamp": "2026-09-23T15:17:51.282515336",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}
