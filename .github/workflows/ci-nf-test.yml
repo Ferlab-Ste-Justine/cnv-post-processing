@@ -22,7 +22,7 @@ jobs:
       - name: Check out pipeline code
         uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
         with:
-          fetch-depth: 2  # Fetch enough history to detect changed files for nf-test
+          fetch-depth: 2 # Fetch enough history to detect changed files for nf-test
 
       - name: Copy test data from S3
         run: | # the s3 client is already installed in the ubuntu-latest image
