@@ -35,7 +35,7 @@
                 "type": "string",
                 "format": "file-path",
                 "exists": true,
-                "pattern":  "^\\S+\\.vcf(\\.gz)?$",
+                "pattern": "^\\S+\\.vcf(\\.gz)?$",
                 "errorMessage": "VCF file containing CNV calls must be provided and have a '.vcf' or '.vcf.gz' extension. For caller='DRAGEN_JOINT', this is the family's jointly-called, multi-sample VCF rather than a per-sample one."
             },
             "cram": {

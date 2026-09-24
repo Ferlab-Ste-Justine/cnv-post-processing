@@ -20,11 +20,13 @@ This schema was done using [inkscape](https://inkscape.org/) with the good prati
 ## Usage
 
 Run the pipeline locally using the test profile with Docker:
+
 ```bash
 nextflow run . -profile test,docker --outdir results
 ```
 
 Run the pipeline in a production environment with a specific configuration and parameters:
+
 ```bash
 nextflow -c application.config run Ferlab-Ste-Justine/cnv-post-processing \
     -r v1.0.0 \
@@ -34,9 +36,9 @@ nextflow -c application.config run Ferlab-Ste-Justine/cnv-post-processing \
 ```
 
 For more details, see:
+
 - [docs/usage.md](docs/usage.md) for instructions on how to run the pipeline, including input requirements and examples
 - [docs/reference_data.md](docs/reference_data.md) for information about the reference data required by the pipeline
-
 
 ## Credits
 
