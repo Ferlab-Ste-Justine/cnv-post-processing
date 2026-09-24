@@ -1,0 +1,152 @@
+nextflow_process {
+
+    name "Test Process NORMALIZE_CNV"
+    script "../main.nf"
+    process "NORMALIZE_CNV"
+
+    tag "modules"
+    tag "modules_"
+    tag "normalize_cnv"
+
+    // Real DRAGEN per-sample CNV VCF, chr22, from the S3-synced data-test/ dataset (see
+    // modules/local/exomiser/tests/main.nf.test and modules/local/slivar_expr/tests/main.nf.test
+    // for this repo's two other module-test precedents). Confirmed directly (see the "Verified
+    // against real tool output" note on each test below) to contain 19 non-variant ALT="."
+    // records (DRAGEN REF segmentation blocks) and 22 real CNV calls (12 <DEL>, 10 <DUP>), and no
+    // multiallelic sites at all -- so this file alone can prove the ALT="." drop but not the
+    // multiallelic split; the DRAGEN_JOINT test below covers that with a file that actually has
+    // multiallelic <DEL>,<DUP> sites.
+    test("DRAGEN per-sample VCF - drops ALT=\".\" ref-blocks, keeps real CNV calls") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "NA12878", caller: "DRAGEN" ],
+                    file("${projectDir}/data-test/vcf/NA12878.chr22.cnv.vcf.gz")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [ id: "NA12878", caller: "DRAGEN" ]
+
+            with(process.out) {
+                // vcf channel
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "NA12878.normalized.vcf.gz"
+
+                // tbi channel
+                assert tbi.size() == 1
+                assert tbi.get(0)[0] == expected_meta
+                assert file(tbi.get(0)[1]).name == "NA12878.normalized.vcf.gz.tbi"
+            }
+
+            // Verified against real bcftools 1.23.1 output via nf-test's own real (non-stub) run
+            // of this exact process against this exact input file: 41 input records (19 ALT="."
+            // + 12 <DEL> + 10 <DUP>) become exactly these 22 output records, none of them
+            // ALT="." and none multiallelic.
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 22
+
+            def alts = lines.collect { it.split("\t")[4] }
+            assert alts.every { it != "." }
+            assert alts.every { !it.contains(",") }
+            assert alts.count { it == "<DEL>" } == 12
+            assert alts.count { it == "<DUP>" } == 10
+
+            assert snapshot(process.out.versions).match()
+        }
+    }
+
+    // The module's own caller guard (see its script: block comment) fails loudly for any caller
+    // other than DRAGEN/DRAGEN_JOINT rather than silently applying possibly-wrong assumptions.
+    // Asserted via `process.failed` + `process.errorReport`, nf-test's documented way to check a
+    // process FAILED (https://www.nf-test.com/docs/testcases/nextflow_process/) -- NOT
+    // `process.success == false`, which conflates a real failure with e.g. a `when:` skip and
+    // would pass this test even if the guard were silently deleted from the module.
+    test("unsupported caller (GATK) fails with the module's own guard error") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "someSample", caller: "GATK" ],
+                    file("${projectDir}/data-test/vcf/NA12878.chr22.cnv.vcf.gz")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("NORMALIZE_CNV: caller 'GATK' is not yet supported")
+        }
+    }
+
+    // DRAGEN_JOINT reuses this same process (see workflows/cnv_post_processing.nf's
+    // `NORMALIZE_CNV as NORMALIZE_CNV_JOINT` alias) against real jointly-called, multi-sample
+    // DRAGEN output, which -- unlike the per-sample files above -- genuinely contains
+    // multiallelic <DEL>,<DUP> sites, so this is the test that actually exercises `bcftools norm
+    // -m -any`'s splitting behaviour. It also sets task.ext.strip_svlen (real pipeline wiring:
+    // conf/modules.config's `withName: NORMALIZE_CNV_JOINT { ext.strip_svlen = true }`) via this
+    // test's own scoped `config "./nextflow_strip_svlen.config"` -- confirmed by the SVLEN
+    // assertion below actually passing only when that config is picked up.
+    test("DRAGEN_JOINT multi-sample VCF - splits multiallelic sites, strips SVLEN") {
+
+        config "./nextflow_strip_svlen.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "1463_NA12878_NA12891_NA12892", caller: "DRAGEN_JOINT" ],
+                    file("${projectDir}/data-test/vcf/1463_NA12878_NA12891_NA12892.cnv.vcf.gz")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [ id: "1463_NA12878_NA12891_NA12892", caller: "DRAGEN_JOINT" ]
+
+            with(process.out) {
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "1463_NA12878_NA12891_NA12892.normalized.vcf.gz"
+
+                assert tbi.size() == 1
+                assert tbi.get(0)[0] == expected_meta
+                assert file(tbi.get(0)[1]).name == "1463_NA12878_NA12891_NA12892.normalized.vcf.gz.tbi"
+            }
+
+            // Verified against real bcftools 1.23.1 output the same way as the test above: the
+            // input has 2532 records (1283 ALT="." + 1055 <DEL> + 184 <DUP> + 10 multiallelic
+            // <DEL>,<DUP>). Dropping the 1283 ALT="." records and splitting the 10 multiallelic
+            // sites into 20 biallelic records each yields exactly these 1259 output records
+            // (1055+10=1065 <DEL>, 184+10=194 <DUP>), none of them ALT="." and none still
+            // multiallelic.
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 1259
+
+            def alts = lines.collect { it.split("\t")[4] }
+            assert alts.every { it != "." }
+            assert alts.every { !it.contains(",") }
+            assert alts.count { it == "<DEL>" } == 1065
+            assert alts.count { it == "<DUP>" } == 194
+
+            // task.ext.strip_svlen drops INFO/SVLEN entirely -- confirmed against real output: no
+            // record's INFO field carries an SVLEN key at all once this is applied.
+            def infos = lines.collect { it.split("\t")[7] }
+            assert infos.every { !it.tokenize(';').any { kv -> kv.startsWith("SVLEN=") } }
+
+            assert snapshot(process.out.versions).match()
+        }
+    }
+}

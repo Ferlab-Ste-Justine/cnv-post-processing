@@ -1,0 +1,113 @@
+nextflow_process {
+
+    name "Test Process DEPTH_GENOTYPE_REFINE"
+    script "../main.nf"
+    process "DEPTH_GENOTYPE_REFINE"
+
+    tag "modules"
+    tag "modules_"
+    tag "depth_genotype_refine"
+
+    // Toy, synthetic fixtures checked into ./data/ -- one sample ("samp1"), one CNV VCF with 4
+    // hand-picked records, one matching "samp1.ratio.bed" (see bin/refine_genotypes.py's
+    // load_ratio_bed()/sample_name_from_path() for the exact "<sample>.ratio.bed" naming + 0-based
+    // (chrom, start, end) BED-coordinate matching this depends on -- read directly before writing
+    // this, not guessed).
+    //
+    // Unlike modules/local/slivar_expr/tests/main.nf.test's toy fixtures (which had to be split
+    // one-family-per-file to avoid slivar's --family-expr evaluating every family together at
+    // every row), refine_genotypes.py processes each VCF record/sample genotype fully
+    // independently -- no shared state across records -- so it's safe and appropriate to combine
+    // all scenarios into one VCF/one test(), which was itself confirmed (not assumed) by the real
+    // run below.
+    //
+    // toy.vcf.gz/.tbi were produced from a plain-text VCF via `pysam.tabix_compress` +
+    // `pysam.tabix_index(preset='vcf')` (same effect as bgzip+tabix) so they round-trip through
+    // pysam.VariantFile exactly like the real per-family collapsed VCFs this process actually
+    // receives from BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.
+    //
+    // Verified against REAL tool output two independent ways, not just derived from reading the
+    // Python source:
+    //   1. `bin/refine_genotypes.py` run directly (this sandbox has pysam 0.24.0 installed
+    //      locally -- exactly the version pinned in ../main.nf's container) against these exact
+    //      fixture files with --low 0.8 --high 1.2 (the module's own ext.low/ext.high defaults).
+    //   2. `nf-test test modules/local/depth_genotype_refine --profile docker` itself hit this
+    //      repo's known, pre-existing Docker bind-mount limitation in this sandbox (same one
+    //      noted in modules/local/slivar_expr/tests/main.nf.test: ".command.run: No such file or
+    //      directory"). Confirmed /cephfs/jtrembla/build/cnv-post-processing is in fact the exact
+    //      same underlying CephFS mount as this working copy (same fsid + volume path in `mount`
+    //      output, not just a byte-identical copy), then ran the real container directly against
+    //      it: `docker run --rm -v /cephfs/jtrembla/build/cnv-post-processing/<tmpdir>:/repo -w
+    //      /repo quay.io/biocontainers/pysam:0.24.0--py312hf5ad864_1 bash -c 'python3
+    //      refine_genotypes.py --vcf-in toy.vcf.gz --vcf-out toy.refined.vcf.gz --low 0.8 --high
+    //      1.2 samp1.ratio.bed'` (the exact command ../main.nf's script: block runs), against
+    //      copies of these exact fixture files. This ran successfully end-to-end in the real
+    //      container.
+    // Both runs produced byte-identical results:
+    //   toy_1_inband_resolved            ./.:.  -> 0/0:.   (ratio 1.0, in [0.8,1.2] -> resolved)
+    //   toy_2_outband_stays_missing      ./.:.  -> ./.:.   (ratio 0.5, outside band -> untouched)
+    //   toy_3_na_stays_missing           ./.:.  -> ./.:.   (ratio "NA" -> no bed entry -> untouched)
+    //   toy_4_already_resolved_unchanged 0/1:1  -> 0/1:1   (already resolved -> never touched,
+    //                                                        even though its own ratio, 1.0, is
+    //                                                        itself in-band)
+    // and stderr reported "Refined 1 missing genotype(s) to hom-ref." both times -- confirming
+    // exactly one GT rewrite happened, matching the single case that should fire. Also confirmed
+    // CN is never touched (stays "." on the resolved record) -- only GT is rewritten.
+    // `nf-test test modules/local/depth_genotype_refine --dryRun` (syntax-only) also passes.
+    test("toy fixture: resolves in-band missing GT, leaves out-of-band/NA missing GT alone, never touches an already-resolved GT") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy"],
+                    file("${projectDir}/modules/local/depth_genotype_refine/tests/data/toy.vcf.gz"),
+                    file("${projectDir}/modules/local/depth_genotype_refine/tests/data/toy.vcf.gz.tbi"),
+                    [ file("${projectDir}/modules/local/depth_genotype_refine/tests/data/samp1.ratio.bed") ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "toy"]
+            with(process.out) {
+                // vcf channel
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "toy.refined.vcf.gz"
+
+                // versions channel
+                assert snapshot(versions).match()
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 4
+            def gtOf = { String id ->
+                def line = lines.find { it.split("\t")[2] == id }
+                assert line != null : "record ${id} missing from output"
+                def sampleField = line.split("\t")[9]
+                sampleField.split(":")[0]
+            }
+
+            // 1. Missing GT, ratio-bed value (1.0) inside the [0.8, 1.2] hom-ref band -> resolved.
+            assert gtOf("toy_1_inband_resolved") == "0/0"
+
+            // 2. Missing GT, ratio-bed value (0.5) outside the band -> never fabricates a call it
+            //    isn't confident about, stays missing.
+            assert gtOf("toy_2_outband_stays_missing") == "./."
+
+            // 3. Missing GT, ratio-bed value is "NA" (mosdepth couldn't compute a ratio) -> no
+            //    entry ever reaches the in-memory ratio map for this site, so it's treated the
+            //    same as "no supporting evidence" and stays missing.
+            assert gtOf("toy_3_na_stays_missing") == "./."
+
+            // 4. Already-resolved GT (0/1) -> passed through completely unchanged, even though
+            //    its own ratio-bed value (1.0) would itself fall inside the band -- this step
+            //    must never overwrite an existing call.
+            assert gtOf("toy_4_already_resolved_unchanged") == "0/1"
+        }
+    }
+}

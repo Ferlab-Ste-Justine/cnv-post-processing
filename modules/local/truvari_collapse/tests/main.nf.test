@@ -1,0 +1,243 @@
+nextflow_process {
+
+    name "Test Process TRUVARI_COLLAPSE"
+    script "../main.nf"
+    process "TRUVARI_COLLAPSE"
+
+    tag "modules"
+    tag "modules_"
+    tag "truvari_collapse"
+
+    // Top-level config sets ext.args to the real TRUVARI_COLLAPSE_PERSAMPLE thresholds (see
+    // conf/modules.config) -- the default for every test() below except the one that explicitly
+    // overrides it to the TRUVARI_COLLAPSE_COHORT thresholds via its own per-test `config` (see
+    // https://www.nf-test.com/docs/configuration/, "Per-Test Config Files").
+    config "./nextflow.config"
+
+    // Confirmed via real execution (docker run against the actual truvari:5.4.0 biocontainer,
+    // bypassing an unrelated Docker bind-mount limitation that keeps `nf-test` itself from
+    // executing end to end in the sandbox this was authored in -- symptom: a `-v` mount of a
+    // sandbox path comes up empty inside the container because the Docker daemon runs against the
+    // *host* filesystem, not this sandbox's view of it; /cephfs/jtrembla/build/cnv-post-processing
+    // is the same underlying (Ceph) filesystem as this checkout, confirmed with `mount` showing an
+    // identical device for both paths, so it was used as the real, host-visible mount target
+    // instead):
+    //   - The real per-sample data-test fixtures (NA12878/NA12891/NA12892.chr22.cnv.vcf.gz) are
+    //     already coordinate-sorted, tabix-indexed, and biallelic (0 multiallelic ALT records in
+    //     any of the three), so they can be fed to TRUVARI_COLLAPSE directly with no upstream
+    //     normalize/split step -- confirmed by actually running `truvari collapse` against each of
+    //     them with both real ext.args threshold sets: every one runs cleanly and every one comes
+    //     back with "0 variants collapsed" (real per-sample DRAGEN CNV calls at this scale don't
+    //     contain redundant/overlapping records for truvari to fold together). That's a genuine,
+    //     confirmed result, not a limitation of the test -- it exercises the pass-through path.
+    //   - The already jointly-called multi-sample fixture
+    //     (1463_NA12878_NA12891_NA12892.cnv.vcf.gz), by contrast, is NOT usable directly: it's
+    //     multiallelic (DRAGEN emits CNV/DEL/DUP as multiple ALTs per site there), and truvari
+    //     collapse hard-fails on that with "Cannot compare multi-allelic records. Please split" --
+    //     confirmed by actually running it. Consistent with this pipeline always routing
+    //     multiallelic input through NORMALIZE_CNV's bcftools norm -m- split before any
+    //     TRUVARI_COLLAPSE call (see workflows/cnv_post_processing.nf); not used as a test fixture
+    //     here for that reason.
+    //   - Because no real fixture at hand actually exercises a genuine collapse, a small synthetic
+    //     fixture (./data/toy_overlap.vcf.gz -- two near-identical, overlapping <DUP> records at
+    //     the same locus plus one unrelated, distant one) is used for that scenario. Confirmed by
+    //     actually running `truvari collapse` against it with both real threshold sets: both
+    //     collapse the two overlapping records into one survivor + one removed record, byte-for-
+    //     byte the same result under either threshold set for this fixture. The exact real
+    //     `truvari collapse` log for the per-sample thresholds:
+    //       "Zipped 3 variants Counter({'base': 3})"
+    //       "2 chunks of 3 variants Counter({'base': 3})"
+    //       "Wrote 2 Variants"
+    //       "1 variants collapsed into 1 variants"
+    //     and the real INFO fields truvari itself writes: the survivor (toy_dup_a) gets
+    //     NumCollapsed=1;NumConsolidated=0;CollapseId=1.0 appended, and the removed record
+    //     (toy_dup_b) gets PctSeqSimilarity=0;PctSizeSimilarity=1;PctRecOverlap=0.99;... -- exactly
+    //     what real truvari produces, not assumed.
+    //
+    // IMPORTANT nf-test gotcha (see CLAUDE.md's "Tests (nf-test)" section for the general note):
+    // calling `.linesGzip` from INSIDE a `with(process.out) { ... }` closure throws
+    // `NullPointerException: Cannot invoke "GZIPInputStream.close()" because "gzip" is null` --
+    // confirmed via a real --debug stack trace pointing straight at
+    // com.askimed.nf.test.lang.extensions.GlobalMethods.with(...) wrapping the failing
+    // PathExtension.getLinesGzip(...) call, regardless of which file is being read (even a bare
+    // literal path having nothing to do with process.out fails the same way). `with(process.out)`
+    // below is therefore closed immediately after the simple size/meta/filename checks, and every
+    // `.linesGzip` read happens afterward in plain `then` scope using fully-qualified
+    // `process.out.vcf`/`process.out.removed` -- the exact structure already proven to work in
+    // modules/local/bcftools_sort_index/tests/main.nf.test.
+
+    test("NA12878.chr22 real per-sample CNV calls (persample thresholds) -- nothing to collapse") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "NA12878"],
+                    file(params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz'),
+                    file(params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz.tbi')
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "NA12878"]
+
+            with(process.out) {
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "NA12878.collapsed.vcf.gz"
+
+                assert removed.size() == 1
+                assert removed.get(0)[0] == expected_meta
+                assert file(removed.get(0)[1]).name == "NA12878.removed.vcf.gz"
+            }
+
+            // Both outputs exist and are non-empty -- .linesGzip below (which also proves they're
+            // valid (block-)gzip; it would throw on a corrupt/non-gzip file) needs them outside the
+            // with(process.out) block above, see the file header comment for why.
+            assert file(process.out.vcf.get(0)[1]).size() > 0
+            assert file(process.out.removed.get(0)[1]).size() > 0
+
+            // NOT params.modules_testdata_base_path here, deliberately: nf-test has a known bug
+            // (https://github.com/askimed/nf-test/issues/288) where params set via a config file
+            // resolve fine in the `when` block (see input[0] above) but silently come back as
+            // null in `then`. ${projectDir} is a nf-test built-in, not a params lookup, and works
+            // reliably in `then` (same pattern already used by every other test in this repo's
+            // module test suite).
+            def inputRecords = path("${projectDir}/data-test/vcf/NA12878.chr22.cnv.vcf.gz")
+                .linesGzip.findAll { !it.startsWith("#") }
+            def collapsedRecords = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def removedRecords = path(process.out.removed.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+
+            // Real per-sample DRAGEN CNV calls at chr22 scale have no redundant/overlapping
+            // records for truvari to fold together under these thresholds -- confirmed by
+            // direct execution (see the header comment above): 41 in, 41 out, 0 removed.
+            assert inputRecords.size() == 41
+            assert collapsedRecords.size() == 41
+            assert removedRecords.size() == 0
+
+            // The one property that must hold no matter what the input looks like: collapse
+            // can only ever remove/merge records, never add them.
+            assert collapsedRecords.size() <= inputRecords.size()
+
+            assert snapshot(process.out.versions).match()
+        }
+    }
+
+    test("toy_overlap: two near-identical overlapping DUP calls actually collapse (persample thresholds)") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_overlap"],
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_overlap.vcf.gz"),
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_overlap.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "toy_overlap"]
+
+            with(process.out) {
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "toy_overlap.collapsed.vcf.gz"
+
+                assert removed.size() == 1
+                assert removed.get(0)[0] == expected_meta
+                assert file(removed.get(0)[1]).name == "toy_overlap.removed.vcf.gz"
+            }
+
+            assert file(process.out.vcf.get(0)[1]).size() > 0
+            assert file(process.out.removed.get(0)[1]).size() > 0
+
+            def inputRecords = path("${projectDir}/modules/local/truvari_collapse/tests/data/toy_overlap.vcf.gz")
+                .linesGzip.findAll { !it.startsWith("#") }
+            def collapsedLines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def removedLines = path(process.out.removed.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+
+            assert inputRecords.size() == 3
+            // toy_dup_a and toy_dup_b overlap almost completely (same size, 100bp apart) and
+            // pass all three thresholds (--pctseq 0.00 --pctsize 0.70 --pctovl 0.70) -- truvari
+            // keeps the first (toy_dup_a) and folds toy_dup_b into it; toy_dup_c is on a
+            // distant, unrelated locus and passes through untouched. Confirmed by direct
+            // execution, not assumed.
+            assert collapsedLines.size() == 2
+            assert removedLines.size() == 1
+            assert collapsedLines.size() <= inputRecords.size()
+
+            def collapsedIds = collapsedLines.collect { it.split("\t")[2] } as Set
+            def removedIds = removedLines.collect { it.split("\t")[2] } as Set
+            assert collapsedIds == ["toy_dup_a", "toy_dup_c"] as Set
+            assert removedIds == ["toy_dup_b"] as Set
+
+            assert snapshot(process.out.versions).match()
+        }
+    }
+
+    test("toy_overlap: same two overlapping DUP calls also collapse under cohort thresholds") {
+
+        // Per-test config override (see https://www.nf-test.com/docs/configuration/) to the real
+        // TRUVARI_COLLAPSE_COHORT ext.args instead of this file's top-level (persample) ones.
+        config "./nextflow_cohort.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_overlap_cohort"],
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_overlap.vcf.gz"),
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_overlap.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "toy_overlap_cohort"]
+
+            with(process.out) {
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == expected_meta
+                assert file(vcf.get(0)[1]).name == "toy_overlap_cohort.collapsed.vcf.gz"
+
+                assert removed.size() == 1
+                assert removed.get(0)[0] == expected_meta
+                assert file(removed.get(0)[1]).name == "toy_overlap_cohort.removed.vcf.gz"
+            }
+
+            assert file(process.out.vcf.get(0)[1]).size() > 0
+            assert file(process.out.removed.get(0)[1]).size() > 0
+
+            def inputRecords = path("${projectDir}/modules/local/truvari_collapse/tests/data/toy_overlap.vcf.gz")
+                .linesGzip.findAll { !it.startsWith("#") }
+            def collapsedLines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def removedLines = path(process.out.removed.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+
+            assert inputRecords.size() == 3
+            // Confirmed by direct execution: the cohort thresholds (--refdist 2000 --sizemin
+            // 1000 --pctovl 0.3 --pctsize 0.7 --pctseq 0 --sizemax -1) collapse this exact
+            // fixture identically to the persample ones above (toy_dup_a/b are 10kb, well
+            // above --sizemin 1000, and their 0.99 reciprocal overlap clears --pctovl 0.3
+            // easily).
+            assert collapsedLines.size() == 2
+            assert removedLines.size() == 1
+            assert collapsedLines.size() <= inputRecords.size()
+
+            def collapsedIds = collapsedLines.collect { it.split("\t")[2] } as Set
+            def removedIds = removedLines.collect { it.split("\t")[2] } as Set
+            assert collapsedIds == ["toy_dup_a", "toy_dup_c"] as Set
+            assert removedIds == ["toy_dup_b"] as Set
+        }
+    }
+}

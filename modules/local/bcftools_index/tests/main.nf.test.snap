@@ -1,0 +1,14 @@
+{
+    "NA12878.chr22 real per-sample CNV VCF -- passes VCF through untouched, produces a valid tabix index": {
+        "content": [
+            [
+                "versions.yml:md5,b04d4a8a213f062f553fb4d28bdf4d71"
+            ]
+        ],
+        "timestamp": "2026-09-23T17:59:26.389376362",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}
