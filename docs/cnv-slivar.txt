@@ -54,3 +54,41 @@ moi_cnv_unknown_cn(fam)
 └─ has_cn(s)   [loop over fam: pass 1 = affected members only,
                 pass 2 = all members, if pass 1 found a carrier]
 
+cn_po_origin(s) is shared by trees #7-#9 below: null when s isn't a carrier kid with both
+parents callable, else cn_po_resolve(s.CN, mom_hap, dad_hap).
+   ├─ has_cn(s)
+   ├─ has_cn(s.mom) / has_cn(s.dad)
+   └─ cn_haplotypes(s.mom.CN) / cn_haplotypes(s.dad.CN)
+
+7) parent_of_origin_maternal: moi_cnv_po_maternal(fam)
+─────────────────────────────────────────
+moi_cnv_po_maternal(fam)
+├─ fam.every(cn_segregating_po_maternal)
+│  └─ cn_segregating_po_maternal(s)   [once per family member s; vacuously true
+│                                      when cn_po_origin(s) == null]
+│     └─ cn_po_origin(s) == "maternal" || == "both"
+└─ fam.some(...)                      [family-level gate: at least one member must have
+                                       actually resolved to "maternal" or "both"]
+   └─ cn_po_origin(s) == "maternal" || == "both"
+
+8) parent_of_origin_paternal: moi_cnv_po_paternal(fam)
+─────────────────────────────────────────
+moi_cnv_po_paternal(fam)
+├─ fam.every(cn_segregating_po_paternal)
+│  └─ cn_segregating_po_paternal(s)   [once per family member s; vacuously true
+│                                      when cn_po_origin(s) == null]
+│     └─ cn_po_origin(s) == "paternal" || == "both"
+└─ fam.some(...)                      [family-level gate: at least one member must have
+                                       actually resolved to "paternal" or "both"]
+   └─ cn_po_origin(s) == "paternal" || == "both"
+
+9) parent_of_origin_ambiguous: moi_cnv_po_ambiguous(fam)
+─────────────────────────────────────────
+moi_cnv_po_ambiguous(fam)
+├─ fam.every(cn_segregating_po_ambiguous)
+│  └─ cn_segregating_po_ambiguous(s)  [once per family member s; vacuously true
+│                                      when cn_po_origin(s) == null]
+│     └─ cn_po_origin(s) == "ambiguous"
+└─ fam.some(...)                      [family-level gate: at least one member must have
+                                       actually resolved to "ambiguous"]
+   └─ cn_po_origin(s) == "ambiguous"

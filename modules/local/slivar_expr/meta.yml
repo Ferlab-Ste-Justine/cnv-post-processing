@@ -1,7 +1,7 @@
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
 name: "slivar_expr"
-description: Classify CNV mode of inheritance (de novo / dominant / recessive / ambiguous / unknown) for any family shape (trios, duos, singletons, sibships) via slivar expr --family-expr
+description: Classify CNV mode of inheritance (de novo / dominant / recessive / ambiguous / unknown) and confident parent-of-origin (maternal / paternal / ambiguous) for any family shape (trios, duos, singletons, sibships) via slivar expr --family-expr
 keywords:
   - cnv
   - inheritance
@@ -46,7 +46,7 @@ output:
           description: Groovy Map containing family information
       - "*.vcf.gz":
           type: file
-          description: Input VCF with classification tags added (INFO/de_novo_candidate, dominant_inherited, recessive_candidate, candidate, ambiguous, unknown_cn -- each set to the list of sample(s) it applies to)
+          description: Input VCF with classification tags added (INFO/de_novo_candidate, dominant_inherited, recessive_candidate, candidate, ambiguous, unknown_cn, parent_of_origin_maternal, parent_of_origin_paternal, parent_of_origin_ambiguous -- each set to the list of sample(s) it applies to)
           pattern: "*.vcf.gz"
   - versions:
       - "versions.yml":

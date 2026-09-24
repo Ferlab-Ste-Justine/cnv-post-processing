@@ -88,7 +88,7 @@ By default, exomiser output is saved in the `exomiser` subfolder within the main
 <summary>Output files</summary>
 
 - `slivar/`
-  - `<familyId>.cnv.slivar.vcf.gz`: the family-level, VEP-annotated CNV VCF with mode-of-inheritance tags added to `INFO` by [slivar](https://github.com/brentp/slivar) (`de_novo_candidate`, `dominant_inherited`, `recessive_candidate`, `candidate`, `ambiguous`, `unknown_cn`). Only produced for families with a `familyPed` in the samplesheet.
+  - `<familyId>.cnv.slivar.vcf.gz`, `<familyId>.cnv.slivar.vcf.gz.tbi`: the family-level, VEP-annotated CNV VCF with mode-of-inheritance tags added to `INFO` by [slivar](https://github.com/brentp/slivar) (`de_novo_candidate`, `dominant_inherited`, `recessive_candidate`, `candidate`, `ambiguous`, `unknown_cn`, `parent_of_origin_maternal`, `parent_of_origin_paternal`, `parent_of_origin_ambiguous`). This is the pipeline's last file, indexed here since nothing downstream does it otherwise. Only produced for families with a `familyPed` in the samplesheet.
 
 </details>
 
