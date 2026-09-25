@@ -34,7 +34,7 @@ nextflow_process {
     // and testing set membership -- NOT by substring search -- because several of the 9 real tag
     // names are substrings of each other (e.g. "candidate" is a substring of both
     // "de_novo_candidate" and "recessive_candidate"; "ambiguous" is a substring of
-    // "parent_of_origin_ambiguous"), which a naive `.contains("tag=")` check would false-positive
+    // "po_ambiguous"), which a naive `.contains("tag=")` check would false-positive
     // on. The exact same tiny helper is repeated in each test() block below rather than factored
     // out to a shared top-level def, since nf-test's documented way to share Groovy code across
     // test() blocks is a class under a repo-level lib/ folder (this repo doesn't have one), not a
@@ -77,7 +77,7 @@ nextflow_process {
             def ALL_TAGS = [
                 "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
                 "ambiguous", "unknown_cn",
-                "parent_of_origin_maternal", "parent_of_origin_paternal", "parent_of_origin_ambiguous"
+                "po_mother", "po_father", "po_ambiguous"
             ]
             def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
             def check = { String info, List wantTrue ->
@@ -90,7 +90,7 @@ nextflow_process {
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
             check(byId["famA_1_denovo"], ["de_novo_candidate"])
-            check(byId["famA_3_recessive"], ["recessive_candidate", "parent_of_origin_maternal", "parent_of_origin_paternal"])
+            check(byId["famA_3_recessive"], ["recessive_candidate", "po_mother", "po_father"])
             check(byId["famA_5_ambiguous"], ["ambiguous"])
             check(byId["famA_6_unknown_cn"], ["unknown_cn"])
 
@@ -120,7 +120,7 @@ nextflow_process {
             def ALL_TAGS = [
                 "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
                 "ambiguous", "unknown_cn",
-                "parent_of_origin_maternal", "parent_of_origin_paternal", "parent_of_origin_ambiguous"
+                "po_mother", "po_father", "po_ambiguous"
             ]
             def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
 
@@ -128,7 +128,7 @@ nextflow_process {
             assert lines.size() == 1
             def info = lines[0].split("\t")[7]
             def present = tagsOf(info)
-            def wantTrue = ["dominant_inherited", "parent_of_origin_maternal"]
+            def wantTrue = ["dominant_inherited", "po_mother"]
             ALL_TAGS.each { tag -> assert present.contains(tag) == wantTrue.contains(tag) : "expected ${tag}=${wantTrue.contains(tag)} but INFO was: ${info}" }
         }
     }
@@ -155,7 +155,7 @@ nextflow_process {
             def ALL_TAGS = [
                 "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
                 "ambiguous", "unknown_cn",
-                "parent_of_origin_maternal", "parent_of_origin_paternal", "parent_of_origin_ambiguous"
+                "po_mother", "po_father", "po_ambiguous"
             ]
             def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
 
@@ -192,7 +192,7 @@ nextflow_process {
             def ALL_TAGS = [
                 "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
                 "ambiguous", "unknown_cn",
-                "parent_of_origin_maternal", "parent_of_origin_paternal", "parent_of_origin_ambiguous"
+                "po_mother", "po_father", "po_ambiguous"
             ]
             def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
             def check = { String info, List wantTrue ->
@@ -204,9 +204,9 @@ nextflow_process {
             assert lines.size() == 3
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famD_7_po_maternal"], ["parent_of_origin_maternal"])
-            check(byId["famD_8_po_paternal"], ["parent_of_origin_paternal"])
-            check(byId["famD_9_po_ambiguous"], ["parent_of_origin_ambiguous"])
+            check(byId["famD_7_po_maternal"], ["po_mother"])
+            check(byId["famD_8_po_paternal"], ["po_father"])
+            check(byId["famD_9_po_ambiguous"], ["po_ambiguous"])
         }
     }
 }

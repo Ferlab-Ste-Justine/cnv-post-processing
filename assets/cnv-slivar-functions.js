@@ -34,9 +34,9 @@
 //    --family-expr 'candidate:moi_cnv_candidate(fam)' \
 //    --family-expr 'ambiguous:moi_cnv_ambiguous(fam)' \
 //    --family-expr 'unknown_cn:moi_cnv_unknown_cn(fam)' \
-//    --family-expr 'parent_of_origin_maternal:moi_cnv_po_maternal(fam)' \
-//    --family-expr 'parent_of_origin_paternal:moi_cnv_po_paternal(fam)' \
-//    --family-expr 'parent_of_origin_ambiguous:moi_cnv_po_ambiguous(fam)' \
+//    --family-expr 'po_mother:po_mother(fam)' \
+//    --family-expr 'po_father:po_father(fam)' \
+//    --family-expr 'po_ambiguous:po_ambiguous(fam)' \
 //    -o trio_NA12878_91_92_joint.cnv.slivar.vcf.gz
 
 function has_cn(sample) {
@@ -295,7 +295,7 @@ function cn_po_origin(s) {
 // it never blocks fam.every(...) for other, qualifying family members (e.g. siblings, or the
 // parents themselves), matching how has_cn()/("mom" in s) gate other per-sample checks in this
 // file. Because vacuous passes make fam.every(...) alone satisfiable by a family with no
-// resolvable member at all, moi_cnv_po_maternal/paternal/ambiguous below additionally require
+// resolvable member at all, po_mother/po_father/po_ambiguous below additionally require
 // fam.some(...) member to have actually resolved to that origin -- mirroring how moi_cnv_dominant
 // and moi_cnv_recessive pair fam.every(...) with a family-level structural gate
 // (has_aff_parent/no_parents_in_fam) rather than relying on fam.every(...) alone.
@@ -318,7 +318,7 @@ function cn_segregating_po_ambiguous(s) {
   return origin == null || origin == "ambiguous";
 }
 
-function moi_cnv_po_maternal(fam) {
+function po_mother(fam) {
   return (
     fam.every(cn_segregating_po_maternal) &&
     fam.some(function (s) {
@@ -328,7 +328,7 @@ function moi_cnv_po_maternal(fam) {
   );
 }
 
-function moi_cnv_po_paternal(fam) {
+function po_father(fam) {
   return (
     fam.every(cn_segregating_po_paternal) &&
     fam.some(function (s) {
@@ -338,7 +338,7 @@ function moi_cnv_po_paternal(fam) {
   );
 }
 
-function moi_cnv_po_ambiguous(fam) {
+function po_ambiguous(fam) {
   return (
     fam.every(cn_segregating_po_ambiguous) &&
     fam.some(function (s) {

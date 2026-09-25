@@ -46,7 +46,7 @@ output:
           description: Groovy Map containing family information
       - "*.vcf.gz":
           type: file
-          description: Input VCF with classification tags added (INFO/de_novo_candidate, dominant_inherited, recessive_candidate, candidate, ambiguous, unknown_cn, parent_of_origin_maternal, parent_of_origin_paternal, parent_of_origin_ambiguous -- each set to the list of sample(s) it applies to)
+          description: Input VCF with classification tags added (INFO/de_novo_candidate, dominant_inherited, recessive_candidate, candidate, ambiguous, unknown_cn, po_mother, po_father, po_ambiguous -- each set to the list of sample(s) it applies to)
           pattern: "*.vcf.gz"
   - versions:
       - "versions.yml":

@@ -60,9 +60,9 @@ parents callable, else cn_po_resolve(s.CN, mom_hap, dad_hap).
    ├─ has_cn(s.mom) / has_cn(s.dad)
    └─ cn_haplotypes(s.mom.CN) / cn_haplotypes(s.dad.CN)
 
-7) parent_of_origin_maternal: moi_cnv_po_maternal(fam)
+7) po_mother: po_mother(fam)
 ─────────────────────────────────────────
-moi_cnv_po_maternal(fam)
+po_mother(fam)
 ├─ fam.every(cn_segregating_po_maternal)
 │  └─ cn_segregating_po_maternal(s)   [once per family member s; vacuously true
 │                                      when cn_po_origin(s) == null]
@@ -71,9 +71,9 @@ moi_cnv_po_maternal(fam)
                                        actually resolved to "maternal" or "both"]
    └─ cn_po_origin(s) == "maternal" || == "both"
 
-8) parent_of_origin_paternal: moi_cnv_po_paternal(fam)
+8) po_father: po_father(fam)
 ─────────────────────────────────────────
-moi_cnv_po_paternal(fam)
+po_father(fam)
 ├─ fam.every(cn_segregating_po_paternal)
 │  └─ cn_segregating_po_paternal(s)   [once per family member s; vacuously true
 │                                      when cn_po_origin(s) == null]
@@ -82,9 +82,9 @@ moi_cnv_po_paternal(fam)
                                        actually resolved to "paternal" or "both"]
    └─ cn_po_origin(s) == "paternal" || == "both"
 
-9) parent_of_origin_ambiguous: moi_cnv_po_ambiguous(fam)
+9) po_ambiguous: po_ambiguous(fam)
 ─────────────────────────────────────────
-moi_cnv_po_ambiguous(fam)
+po_ambiguous(fam)
 ├─ fam.every(cn_segregating_po_ambiguous)
 │  └─ cn_segregating_po_ambiguous(s)  [once per family member s; vacuously true
 │                                      when cn_po_origin(s) == null]
