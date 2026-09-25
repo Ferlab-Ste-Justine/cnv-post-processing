@@ -43,10 +43,6 @@ output:
         The family-level VCF, genotype-refined where every sample had a cram, or the original
         cohort-collapsed VCF otherwise
         Structure: [ val(meta), path(vcf), path(tbi) ]
-  - versions:
-      type: file
-      description: File containing software versions
-      pattern: "versions.yml"
 authors:
   - "@ferlab"
 maintainers:

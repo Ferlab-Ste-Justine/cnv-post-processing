@@ -24,7 +24,7 @@ process EXOMISER {
     tuple val(meta), path("*json")           , optional:true, emit: json
     tuple val(meta), path("*genes.tsv")      , optional:true, emit: genetsv
     tuple val(meta), path("*variants.tsv")   , optional:true, emit: variantstsv
-    path("versions.yml")            , emit: versions
+    path("versions.yml")            , emit: versions, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

@@ -19,9 +19,12 @@ reuses that one's pinned `vcf_annotate_ensemblvep` subworkflow commits and mirro
 mode-of-inheritance architecture (per-sample segregation predicates + family-shape structural
 gates), adapted for copy-number genotypes (`FORMAT/CN` instead of `GT`/`AD`/`GQ`).
 
-Nextflow version range: `!>=23.10.1` (`manifest.nextflowVersion` in `nextflow.config`). CI
-(`.github/workflows/ci-nf-test.yml`) matrixes `23.10.1`, `24.10.5`, and `latest-stable` — a real
-constraint in practice, see "Pinned dependencies" below.
+Nextflow version range: `!>=24.10.5, <26.0.0` (`manifest.nextflowVersion` in `nextflow.config`;
+fleet-wide decision, 23.10.1 dropped because topic-channel version collection needs >=24.04.0).
+CI (`.github/workflows/ci-nf-test.yml`, `.github/workflows/ci.yml`) matrixes `24.10.5` and
+`25.10.4`; `ci-nf-test.yml` also runs `latest-everything` as a non-blocking
+(`continue-on-error`) forward-compat canary that may legitimately fail against the `<26.0.0` cap.
+The 24.10.5 floor is a real constraint in practice, see "Pinned dependencies" below.
 
 ## High-level pipeline flow
 
@@ -82,7 +85,7 @@ Typical invocation (from the README):
 
 ```bash
 nextflow -c application.config run Ferlab-Ste-Justine/cnv-post-processing \
-    -r v1.0.0 \
+    -r v2.0.0 \
     --input samplesheet.csv \
     --outdir results \
     -params-file params.json
@@ -212,9 +215,21 @@ A few patterns and gotchas worth knowing before editing:
   the freshly-vendored `ensemblvep/vep` doesn't compile under Nextflow 24.10.5 ("Variable prefix
   already defined in the process scope"), confirmed directly. `utils_nextflow_pipeline` is
   similarly held back (its latest commit references `nextflow.script.types.VersionNumber`, which
-  doesn't exist under Nextflow 24.10.5 either) until a decision is made to bump the pipeline's
-  supported Nextflow version — see `git log` on `subworkflows/nf-core/utils_nextflow_pipeline/` for
-  context when that happens.
+  doesn't exist under Nextflow 24.10.5 either). The fleet's Nextflow-version decision has since
+  been made (floor `24.10.5`, see top of this file), and since that floor still lacks both, these
+  pins stay until the floor moves again — see `git log` on
+  `subworkflows/nf-core/utils_nextflow_pipeline/` for context when that happens.
+- **Software versions collection uses topic channels.** Every local module emits
+  `path("versions.yml"), emit: versions, topic: versions`, and `CNV_POST_PROCESSING` collates
+  `channel.topic("versions")` once at the end (harmonized with `quality-control-pipeline`).
+  `main.nf` sets `nextflow.preview.topic = true` only when `nextflow.version < 25.04.0` — it's
+  version-guarded because topics are GA from 25.04.0 and setting the flag unconditionally is a
+  hard error on Nextflow >=25.10. The `emit: versions` is kept alongside the topic for the module
+  tests: nf-test's module wrapper never runs `main.nf`, so the topic is inert there and the tests
+  read `process.out.versions`. `ch_versions` now only carries the three pinned nf-core components
+  that predate topics (`ENSEMBLVEP_DOWNLOAD`, `VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE`,
+  `VCF_ANNOTATE_ENSEMBLVEP`), mixed in manually. New local processes must add `topic: versions`,
+  not a `ch_versions.mix()` line.
 - **Per-process resources** live in `nextflow.config` / `conf/base.config` under
   `process { withLabel/withName: ... }`; per-process publish paths and `ext.args` are in
   `conf/modules.config` (one exception: the Exomiser container is pinned directly in

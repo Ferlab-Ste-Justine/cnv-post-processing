@@ -5,6 +5,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### `Changed`
+
+- Pipeline version bumped to 2.0.0 (`manifest.version`, `.nf-core.yml`)
+- Local-module software version collection moved to Nextflow topic channels (`topic: versions`, collated via `channel.topic("versions")`); only the pinned nf-core VEP components are still mixed into `ch_versions` manually
+- CI Nextflow matrix is now 24.10.5 and 25.10.4, plus a non-blocking `latest-everything` canary in the nf-test workflow
+
+### `Dependencies`
+
+- Supported Nextflow range is now `>=24.10.5, <26.0.0` (23.10.1 dropped)
+
 ## v1.0.0 - 2025-05-01
 
 Initial release of Ferlab-Ste-Justine/cnv-post-processing, created with the [nf-core](https://nf-co.re/) template.

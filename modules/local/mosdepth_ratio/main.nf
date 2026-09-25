@@ -15,7 +15,7 @@ process MOSDEPTH_RATIO {
 
     output:
     tuple val(meta), path("*.ratio.bed") , emit: ratio_bed
-    path("versions.yml")                 , emit: versions
+    path("versions.yml")                 , emit: versions, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

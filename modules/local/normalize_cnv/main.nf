@@ -14,7 +14,7 @@ process NORMALIZE_CNV {
     output:
     tuple val(meta), path("*.normalized.vcf.gz")     , emit: vcf
     tuple val(meta), path("*.normalized.vcf.gz.tbi") , emit: tbi
-    path("versions.yml")                             , emit: versions
+    path("versions.yml")                             , emit: versions, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

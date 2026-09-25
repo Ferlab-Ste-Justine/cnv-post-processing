@@ -13,7 +13,7 @@ process DEPTH_GENOTYPE_REFINE {
 
     output:
     tuple val(meta), path("*.refined.vcf.gz") , emit: vcf
-    path("versions.yml")                      , emit: versions
+    path("versions.yml")                      , emit: versions, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

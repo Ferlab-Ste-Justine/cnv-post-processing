@@ -57,7 +57,7 @@
                     "bcftools": "1.23.1"
                 },
                 "Workflow": {
-                    "Ferlab-Ste-Justine/cnv-post-processing": "v1.0.0"
+                    "Ferlab-Ste-Justine/cnv-post-processing": "v2.0.0"
                 }
             },
             [
@@ -112,7 +112,7 @@
                 "truvari/fam1.sorted.vcf.gz.tbi"
             ]
         ],
-        "timestamp": "2026-09-23T17:17:08.533471779",
+        "timestamp": "2026-09-24T15:36:09.152161608",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"

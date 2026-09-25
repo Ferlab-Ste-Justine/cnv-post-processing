@@ -111,7 +111,7 @@ Here is an example command to run the pipeline in a production environment with 
 
 ```bash
 nextflow -c application.config run Ferlab-Ste-Justine/cnv-post-processing \
-    -r v1.0.0 \
+    -r v2.0.0 \
     --input samplesheet.csv \
     --outdir results \
     -params-file params.json

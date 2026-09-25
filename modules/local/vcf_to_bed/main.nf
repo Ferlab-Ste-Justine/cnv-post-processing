@@ -13,7 +13,7 @@ process VCF_TO_BED {
 
     output:
     tuple val(meta), path("*.bed") , emit: bed
-    path("versions.yml")           , emit: versions
+    path("versions.yml")           , emit: versions, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

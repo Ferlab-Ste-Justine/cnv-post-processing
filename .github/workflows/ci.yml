@@ -28,8 +28,7 @@ jobs:
       matrix:
         NXF_VER:
           - 24.10.5
-          - 23.10.1
-          - latest-stable
+          - 25.10.4
         profile:
           - "docker"
         test_name:
