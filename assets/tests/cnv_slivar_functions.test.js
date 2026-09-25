@@ -63,9 +63,9 @@ const ALL_TAGS = [
   "candidate",
   "ambiguous",
   "unknown_cn",
-  "parent_of_origin_maternal",
-  "parent_of_origin_paternal",
-  "parent_of_origin_ambiguous",
+  "po_mother",
+  "po_father",
+  "po_ambiguous",
 ];
 
 function evalTags(fam) {
@@ -76,9 +76,9 @@ function evalTags(fam) {
     candidate: moi_cnv_candidate(fam),
     ambiguous: moi_cnv_ambiguous(fam),
     unknown_cn: moi_cnv_unknown_cn(fam),
-    parent_of_origin_maternal: moi_cnv_po_maternal(fam),
-    parent_of_origin_paternal: moi_cnv_po_paternal(fam),
-    parent_of_origin_ambiguous: moi_cnv_po_ambiguous(fam),
+    po_mother: po_mother(fam),
+    po_father: po_father(fam),
+    po_ambiguous: po_ambiguous(fam),
   };
 }
 
@@ -100,14 +100,14 @@ const SCENARIOS = [
     fam: trio(sample(3, true), sample(2, false), sample(3, true)),
     // A dominant-inherited CNV is *also* a resolvable parent-of-origin case -- these two tags
     // describe the same real event from two different angles, not a conflict.
-    expectTrue: ["dominant_inherited", "parent_of_origin_maternal"],
+    expectTrue: ["dominant_inherited", "po_mother"],
   },
   {
     name: "3. Recessive (complete trio): unaffected CN=1 carrier parents, affected CN=0 kid",
     fam: trio(sample(1, false), sample(1, false), sample(0, true)),
     // Both parents independently transmitted their deleted haplotype -- a real, correct
     // "both" parent-of-origin outcome alongside recessive segregation.
-    expectTrue: ["recessive_candidate", "parent_of_origin_maternal", "parent_of_origin_paternal"],
+    expectTrue: ["recessive_candidate", "po_mother", "po_father"],
   },
   {
     name: "4. Candidate (recessive pattern, incomplete trio): unaffected CN=1 carrier mom, affected CN=0 kid, no dad in the pedigree at all",
@@ -129,17 +129,17 @@ const SCENARIOS = [
   {
     name: "7. Parent-of-origin, maternal only (all unaffected -- PO is independent of affected status): CN=1 carrier mom, CN=2 dad, CN=1 kid",
     fam: trio(sample(1, false), sample(2, false), sample(1, false)),
-    expectTrue: ["parent_of_origin_maternal"],
+    expectTrue: ["po_mother"],
   },
   {
     name: "8. Parent-of-origin, paternal only: CN=2 mom, CN=1 carrier dad, CN=1 kid",
     fam: trio(sample(2, false), sample(1, false), sample(1, false)),
-    expectTrue: ["parent_of_origin_paternal"],
+    expectTrue: ["po_father"],
   },
   {
     name: '9. Parent-of-origin, genuinely ambiguous: both parents CN=3 carriers, kid also CN=3 (the tied "middle" case -- either parent could have transmitted)',
     fam: trio(sample(3, false), sample(3, false), sample(3, false)),
-    expectTrue: ["parent_of_origin_ambiguous"],
+    expectTrue: ["po_ambiguous"],
   },
 ];
 

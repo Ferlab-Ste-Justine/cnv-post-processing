@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI Nextflow matrix is now 24.10.5 and 25.10.4, plus a non-blocking `latest-everything` canary in the nf-test workflow
 - CI: every GitHub Action is pinned to a full commit SHA (release tag in a trailing comment), reusing Post-processing-Pipeline's SHAs where it pins the same action; `commit_lint.yml`'s `actions/checkout` moved from v2 to v4.2.2 in the process. The lint job is also pinned to Nextflow 24.10.5 instead of whatever release is latest
 - [#XXX](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/XXX) BIOINFO-232: `EXOMISER` (and its `EXOMISER_SINGLE` alias) now uses the official `docker.io/exomiser/exomiser-cli:14.0.0-bash` image instead of the custom `ferlabcrsj/exomiser:2.8.1` one. The exomiser version reported in `versions.yml` is now read from the image's `exomiser-core` jar filename instead of a baked-in `/EXOMISER_VERSION.txt`, and the image's `/bin/bash` entrypoint is cleared for both processes in the `docker` and `podman` profiles.
+- slivar parent-of-origin tags renamed: INFO `parent_of_origin_maternal`/`parent_of_origin_paternal`/`parent_of_origin_ambiguous` are now `po_mother`/`po_father`/`po_ambiguous`, and their functions in `assets/cnv-slivar-functions.js` (`moi_cnv_po_maternal`/`moi_cnv_po_paternal`/`moi_cnv_po_ambiguous`) carry the same names. Update any downstream filter on the old INFO keys
 
 ### `Fixed`
 
