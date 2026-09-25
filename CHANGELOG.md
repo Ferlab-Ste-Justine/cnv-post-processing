@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pipeline version bumped to 2.0.0 (`manifest.version`, `.nf-core.yml`)
 - Local-module software version collection moved to Nextflow topic channels (`topic: versions`, collated via `channel.topic("versions")`); only the pinned nf-core VEP components are still mixed into `ch_versions` manually
 - CI Nextflow matrix is now 24.10.5 and 25.10.4, plus a non-blocking `latest-everything` canary in the nf-test workflow
+- CI: every GitHub Action is pinned to a full commit SHA (release tag in a trailing comment), reusing Post-processing-Pipeline's SHAs where it pins the same action; `commit_lint.yml`'s `actions/checkout` moved from v2 to v4.2.2 in the process. The lint job is also pinned to Nextflow 24.10.5 instead of whatever release is latest
+
+### `Fixed`
+
+- `conf/modules.config`'s VEP `ext.args` no longer fails to parse under Nextflow's strict config syntax (the default from 26.04, "Variable declarations cannot be mixed with config statements"); its local variables now live inside an `ext.args` closure. Resolved args are unchanged for all three cache flavors
 
 ### `Dependencies`
 
