@@ -34,8 +34,6 @@ workflow BAM_VCF_DEPTH_GENOTYPE_REFINEMENT {
     ch_fasta_fai   // path: reference genome fasta index
 
     main:
-    def ch_versions = Channel.empty()
-
     //
     // Only refine families where every sample has a cram
     //
@@ -65,7 +63,6 @@ workflow BAM_VCF_DEPTH_GENOTYPE_REFINEMENT {
     // Candidate site regions (shared across a family's samples), once per family
     //
     VCF_TO_BED(ch_family_branched.refine)
-    ch_versions = ch_versions.mix(VCF_TO_BED.out.versions)
 
     //
     // Fan-out: family sites BED x per-sample cram -> N per-sample mosdepth runs. Each family has
@@ -83,7 +80,6 @@ workflow BAM_VCF_DEPTH_GENOTYPE_REFINEMENT {
         .map { sample_meta, bed, cram, crai -> [sample_meta, cram, crai, bed] }
 
     MOSDEPTH_RATIO(ch_mosdepth_input, ch_fasta, ch_fasta_fai)
-    ch_versions = ch_versions.mix(MOSDEPTH_RATIO.out.versions)
 
     //
     // Fan-in: gather every sample's ratio BED for a family alongside that family's VCF
@@ -99,16 +95,13 @@ workflow BAM_VCF_DEPTH_GENOTYPE_REFINEMENT {
         .map { _family, meta, vcf, tbi, beds -> [meta, vcf, tbi, beds] }
 
     DEPTH_GENOTYPE_REFINE(ch_refine_input)
-    ch_versions = ch_versions.mix(DEPTH_GENOTYPE_REFINE.out.versions)
 
     // Rewriting genotypes doesn't reorder records, so this is a plain re-index, not a re-sort.
     BCFTOOLS_INDEX(DEPTH_GENOTYPE_REFINE.out.vcf)
-    ch_versions = ch_versions.mix(BCFTOOLS_INDEX.out.versions)
 
     def ch_output = BCFTOOLS_INDEX.out.vcf_tbi
         .mix(ch_family_branched.skip)
 
     emit:
-    vcf      = ch_output // [meta, vcf, tbi] -- refined where possible, original cohort VCF otherwise
-    versions = ch_versions
+    vcf = ch_output // [meta, vcf, tbi] -- refined where possible, original cohort VCF otherwise
 }

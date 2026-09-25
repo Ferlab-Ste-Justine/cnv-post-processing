@@ -44,7 +44,6 @@ workflow EXOMISER_WORKFLOW {
     cadd_indel_filename
 
     main:
-    def ch_versions = Channel.empty()
     // Family mode: ch_input is family-level (multi-sample VCF + family-level phenopacket),
     // matching the sibling SNV pipeline's EXOMISER wiring (workflows/postprocessing.nf:308-357).
     def ch_input_for_exomiser = ch_input
@@ -68,10 +67,6 @@ workflow EXOMISER_WORKFLOW {
         remm_version? [remm_version, remm_filename] : ["", ""],
         cadd_version? [cadd_version, cadd_snv_filename, cadd_indel_filename] : ["", "", ""]
     )
-    ch_versions = ch_versions.mix(EXOMISER.out.versions)
-
-    emit:
-    versions=ch_versions
 }
 
 workflow CNV_POST_PROCESSING {
@@ -93,6 +88,8 @@ workflow CNV_POST_PROCESSING {
 
     def slivar_js = file("${projectDir}/assets/cnv-slivar-functions.js")
 
+    // Only carries the pinned nf-core components (which predate topic channels); every local
+    // module reports its versions.yml via the `versions` topic instead (collated at the end).
     def ch_versions = Channel.empty()
 
     //
@@ -135,14 +132,11 @@ workflow CNV_POST_PROCESSING {
     // STAGE 1 -- Per-sample normalize + truvari collapse (meta.id = "familyId.sample")
     //
     NORMALIZE_CNV(ch_samplesheet_branched.persample.map { meta, vcf, _cram -> [meta, vcf] })
-    ch_versions = ch_versions.mix(NORMALIZE_CNV.out.versions)
 
     TRUVARI_COLLAPSE_PERSAMPLE(NORMALIZE_CNV.out.vcf.join(NORMALIZE_CNV.out.tbi))
-    ch_versions = ch_versions.mix(TRUVARI_COLLAPSE_PERSAMPLE.out.versions)
 
     // truvari collapse's output isn't guaranteed sorted/indexed -- see BCFTOOLS_SORT_INDEX
     BCFTOOLS_SORT_INDEX_PERSAMPLE(TRUVARI_COLLAPSE_PERSAMPLE.out.vcf)
-    ch_versions = ch_versions.mix(BCFTOOLS_SORT_INDEX_PERSAMPLE.out.versions)
 
     //
     // STAGE 1b -- VEP annotation, single-sample route (meta.id = "familyId.sample"). Feeds
@@ -200,7 +194,6 @@ workflow CNV_POST_PROCESSING {
         params.exomiser_remm_version ? [params.exomiser_remm_version, params.exomiser_remm_filename] : ["", ""],
         params.exomiser_cadd_version ? [params.exomiser_cadd_version, params.exomiser_cadd_snv_filename, params.exomiser_cadd_indel_filename] : ["", "", ""]
     )
-    ch_versions = ch_versions.mix(EXOMISER_SINGLE.out.versions)
 
     //
     // STAGE 2 -- Family merge + cohort truvari collapse (fan-in: meta.id "familyId.sample" -> familyId)
@@ -235,18 +228,15 @@ workflow CNV_POST_PROCESSING {
         }
 
     BCFTOOLS_MERGE(ch_grouped_by_family.family)
-    ch_versions = ch_versions.mix(BCFTOOLS_MERGE.out.versions)
 
     def ch_family_vcf = BCFTOOLS_MERGE.out.vcf
         .join(BCFTOOLS_MERGE.out.tbi)
         .mix(ch_grouped_by_family.solo)
 
     TRUVARI_COLLAPSE_COHORT(ch_family_vcf)
-    ch_versions = ch_versions.mix(TRUVARI_COLLAPSE_COHORT.out.versions)
 
     // truvari collapse's output isn't guaranteed sorted/indexed -- see BCFTOOLS_SORT_INDEX
     BCFTOOLS_SORT_INDEX_COHORT(TRUVARI_COLLAPSE_COHORT.out.vcf)
-    ch_versions = ch_versions.mix(BCFTOOLS_SORT_INDEX_COHORT.out.versions)
 
     //
     // STAGE 3 -- Depth-based genotype refinement (mosdepth), family-level. Joint families never
@@ -280,7 +270,6 @@ workflow CNV_POST_PROCESSING {
         reference_fasta,
         reference_fasta_fai
     )
-    ch_versions = ch_versions.mix(BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.versions)
 
     //
     // STAGE 3b -- Joint-called families: lightweight prep only (drop non-variant records, split
@@ -298,10 +287,8 @@ workflow CNV_POST_PROCESSING {
         }
 
     NORMALIZE_CNV_JOINT(ch_joint_family_meta)
-    ch_versions = ch_versions.mix(NORMALIZE_CNV_JOINT.out.versions)
 
     BCFTOOLS_SORT_INDEX_JOINT(NORMALIZE_CNV_JOINT.out.vcf)
-    ch_versions = ch_versions.mix(BCFTOOLS_SORT_INDEX_JOINT.out.versions)
 
     def ch_family_vcf_for_vep = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
         .mix(BCFTOOLS_SORT_INDEX_JOINT.out.vcf.join(BCFTOOLS_SORT_INDEX_JOINT.out.tbi))
@@ -350,7 +337,6 @@ workflow CNV_POST_PROCESSING {
         params.exomiser_cadd_snv_filename,
         params.exomiser_cadd_indel_filename
     )
-    ch_versions = ch_versions.mix(EXOMISER_WORKFLOW.out.versions)
 
     //
     // STAGE 6 -- Slivar mode-of-inheritance classification, on the VEP-annotated family VCF.
@@ -372,25 +358,40 @@ workflow CNV_POST_PROCESSING {
         .map { meta, vcf, tbi -> [meta, vcf, tbi, file(meta.familyPed)] }
 
     SLIVAR_EXPR(ch_slivar_input, slivar_js)
-    ch_versions = ch_versions.mix(SLIVAR_EXPR.out.versions)
 
     // Slivar's own output isn't indexed -- this is the pipeline's last file, so index it here
     // rather than leave that as a manual step for whoever consumes it next. Rewriting INFO tags
     // doesn't reorder records, so this is a plain re-index, not a re-sort (same reasoning as
     // BCFTOOLS_INDEX's other use after DEPTH_GENOTYPE_REFINE).
     BCFTOOLS_INDEX_SLIVAR(SLIVAR_EXPR.out.vcf)
-    ch_versions = ch_versions.mix(BCFTOOLS_INDEX_SLIVAR.out.versions)
 
     //
     // Collate and save software versions
     //
-    softwareVersionsToYAML(ch_versions)
+    topic_versions = channel.topic("versions")
+        .distinct()
+        .branch { entry ->
+            versions_file: entry instanceof Path
+            versions_tuple: true
+        }
+
+    def topic_versions_string = topic_versions.versions_tuple
+        .map { process, tool, version ->
+            [ process[process.lastIndexOf(':')+1..-1], "  ${tool}: ${version}" ]
+        }
+        .groupTuple(by:0)
+        .map { process, tool_versions ->
+            tool_versions.unique().sort()
+            "${process}:\n${tool_versions.join('\n')}"
+        }
+    ch_collated_versions = softwareVersionsToYAML(ch_versions.mix(topic_versions.versions_file))
+        .mix(topic_versions_string)
         .collectFile(
             storeDir: "${params.outdir}/pipeline_info",
             name:  'cnv-post-processing_software_'  + 'versions.yml',
             sort: true,
             newLine: true
-        ).set { ch_collated_versions }
+        )
 
 
     emit:

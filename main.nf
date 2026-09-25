@@ -13,6 +13,13 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
+// Enable Nextflow preview features
+// (version-guarded: topics are GA from 25.04.0, and setting this flag unconditionally is a hard error on Nextflow >=25.10)
+def version_25_04 = new nextflow.util.VersionNumber('25.04.0')
+if (nextflow.version < version_25_04) {
+    nextflow.preview.topic = true
+}
+
 include { CNV_POST_PROCESSING  } from './workflows/cnv_post_processing'
 include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'

@@ -17,7 +17,7 @@ process TRUVARI_COLLAPSE {
     output:
     tuple val(meta), path("*.collapsed.vcf.gz") , emit: vcf
     tuple val(meta), path("*.removed.vcf.gz")   , emit: removed
-    path("versions.yml")                        , emit: versions
+    path("versions.yml")                        , emit: versions, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

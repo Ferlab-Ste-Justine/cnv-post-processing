@@ -15,9 +15,11 @@ jobs:
     strategy:
       matrix:
         NXF_VER:
-          - "23.10.1"
           - "24.10.5"
-          - "latest-stable"
+          - "25.10.4"
+          # Non-blocking forward-compat canary (see continue-on-error below): may legitimately
+          # fail against manifest.nextflowVersion's <26.0.0 cap.
+          - "latest-everything"
     steps:
       - name: Check out pipeline code
         uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
@@ -45,6 +47,7 @@ jobs:
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
 
       - name: Run nf-test
+        continue-on-error: ${{ matrix.NXF_VER == 'latest-everything' }}
         run: |
           nf-test test \
             --ci \
