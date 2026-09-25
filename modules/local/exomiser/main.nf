@@ -5,8 +5,10 @@ process EXOMISER {
     // Commenting this out because Conda is not supported at the moment.
     // conda "${moduleDir}/environment.yml"
 
-    // We use a custom docker image for this module (should match exomiser 14.0.0)
-    container 'registry.hub.docker.com/ferlabcrsj/exomiser:2.8.1'
+    // Official exomiser image. Explicitly qualified with docker.io/ so nextflow.config's global
+    // `docker.registry = 'quay.io'` doesn't rewrite it into a quay.io reference that doesn't exist.
+    // Its ENTRYPOINT ["/bin/bash"] is cleared in nextflow.config's docker/podman profiles.
+    container 'docker.io/exomiser/exomiser-cli:14.0.0-bash'
 
     input:
     tuple val(meta), path(vcf_file), path(index_file), path(pheno_file), path(analysis_file)
@@ -82,7 +84,7 @@ process EXOMISER {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        "exomiser": "\$(cat /EXOMISER_VERSION.txt)"
+        "exomiser": "\$(basename /app/libs/exomiser-core-*.jar .jar | cut -d- -f3-)"
     END_VERSIONS
     """
 
@@ -109,7 +111,7 @@ process EXOMISER {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        "exomiser": "\$(cat /EXOMISER_VERSION.txt)"
+        "exomiser": "\$(basename /app/libs/exomiser-core-*.jar .jar | cut -d- -f3-)"
     END_VERSIONS
     """
 }

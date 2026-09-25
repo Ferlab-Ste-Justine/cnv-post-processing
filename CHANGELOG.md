@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local-module software version collection moved to Nextflow topic channels (`topic: versions`, collated via `channel.topic("versions")`); only the pinned nf-core VEP components are still mixed into `ch_versions` manually
 - CI Nextflow matrix is now 24.10.5 and 25.10.4, plus a non-blocking `latest-everything` canary in the nf-test workflow
 - CI: every GitHub Action is pinned to a full commit SHA (release tag in a trailing comment), reusing Post-processing-Pipeline's SHAs where it pins the same action; `commit_lint.yml`'s `actions/checkout` moved from v2 to v4.2.2 in the process. The lint job is also pinned to Nextflow 24.10.5 instead of whatever release is latest
+- [#XXX](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/XXX) BIOINFO-232: `EXOMISER` (and its `EXOMISER_SINGLE` alias) now uses the official `docker.io/exomiser/exomiser-cli:14.0.0-bash` image instead of the custom `ferlabcrsj/exomiser:2.8.1` one. The exomiser version reported in `versions.yml` is now read from the image's `exomiser-core` jar filename instead of a baked-in `/EXOMISER_VERSION.txt`, and the image's `/bin/bash` entrypoint is cleared for both processes in the `docker` and `podman` profiles.
 
 ### `Fixed`
 
