@@ -31,6 +31,17 @@ indent_style = unset
 [*.{py,md}]
 indent_style = unset
 
+# keep verbatim license text as-is
+[LICENSE]
+indent_size = unset
+indent_style = unset
+
+# hand-aligned ASCII/box-drawing diagrams (docs/schema.txt, docs/cnv-slivar.txt): their
+# indentation is part of the drawing, not code indentation
+[/docs/*.txt]
+indent_size = unset
+indent_style = unset
+
 # ignore ro-crate metadata files
 [**/ro-crate-metadata.json]
 insert_final_newline = unset
