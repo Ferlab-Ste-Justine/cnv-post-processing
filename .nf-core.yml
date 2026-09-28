@@ -1,6 +1,6 @@
 repository_type: pipeline
 
-nf_core_version: 3.2.0
+nf_core_version: 4.1.0
 
 lint:
   files_unchanged:
@@ -49,12 +49,7 @@ lint:
     - .github/workflows/branch.yml
     - .github/workflows/linting_comment.yml
     - ro-crate-metadata.json
-    # nf-core's sharded nf-test CI matrix scaffolding -- this repo uses its own
-    # single-job .github/workflows/ci-nf-test.yml instead.
-    - .github/workflows/nf-test.yml
-    - .github/workflows/pr-comment.yml
-    - .github/actions/get-shards/action.yml
-    - .github/actions/nf-test/action.yml
+    - .github/workflows/pr-comment.yml # No PR comment bot in this repo
     # actual file lives at .github/CONTRIBUTING.md (already in files_unchanged above)
     - docs/CONTRIBUTING.md
 

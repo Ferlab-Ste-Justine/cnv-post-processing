@@ -21,8 +21,8 @@ gates), adapted for copy-number genotypes (`FORMAT/CN` instead of `GT`/`AD`/`GQ`
 
 Nextflow version range: `!>=24.10.5, <26.0.0` (`manifest.nextflowVersion` in `nextflow.config`;
 fleet-wide decision, 23.10.1 dropped because topic-channel version collection needs >=24.04.0).
-CI (`.github/workflows/ci-nf-test.yml`, `.github/workflows/ci.yml`) matrixes `24.10.5` and
-`25.10.4`; `ci-nf-test.yml` also runs `latest-everything` as a non-blocking
+CI (`.github/workflows/nf-test.yml`, `.github/workflows/ci-full-run.yml`) matrixes `24.10.5` and
+`25.10.4`; `nf-test.yml` also runs `latest-everything` as a non-blocking
 (`continue-on-error`) forward-compat canary that may legitimately fail against the `<26.0.0` cap.
 The 24.10.5 floor is a real constraint in practice, see "Pinned dependencies" below.
 
@@ -104,6 +104,10 @@ aws s3 cp s3://ferlab-public-dataset/nextflow/cnv-post-processing/V2/data-test d
 `DRAGEN_JOINT` multi-sample VCF (`fam1_joint`), and a true standalone sample (`ind1`) — exercising
 the family route, the joint-caller shortcut, and the solo route in a single test run.
 
+In CI, `nf-test.yml` and `ci-full-run.yml` both download it through the
+`.github/actions/copy-test-data` composite action, the only place CI defines the S3 path. When the
+dataset version changes, update it there, in `scripts/run-smoke-tests.sh`, and here.
+
 ### Test profile
 
 ```bash
@@ -155,8 +159,16 @@ already having learned this):
 
 ### Linting
 
-CI lint workflow: `.github/workflows/linting.yml` (nf-core lint + prettier/whitespace pre-commit
-checks, config in `.pre-commit-config.yaml`). Run locally with:
+CI workflows live in `.github/workflows/`, harmonized with Post-processing-Pipeline (the fleet
+reference): `linting.yml` (pre-commit + nf-core lint; plain lint on PRs to other branches,
+`--release` lint on PRs to `main`), `nf-test.yml` (nf-core's sharded design: `nf-test-changes`
+counts the tests affected since `HEAD^` and splits them into at most 2 shards, each shard runs on
+every matrixed Nextflow version through the composite actions in `.github/actions/`, and
+`confirm-pass` gives one result excluding `latest-everything`; releases and manual runs test
+everything), `ci-full-run.yml` (a plain `nextflow run . -profile test,docker`, which doesn't depend
+on nf-test's change detection), and `commit_lint.yml`. Files the nf-core template defines keep
+their nf-core names (lint only recognizes those); this repo's own workflows get a `ci-` prefix.
+Run lint locally with:
 
 ```bash
 pre-commit run --all-files
