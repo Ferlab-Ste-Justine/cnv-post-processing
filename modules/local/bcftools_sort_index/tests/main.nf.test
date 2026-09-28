@@ -18,7 +18,7 @@ nextflow_process {
     //
     // Neither of those can be checked from nf-test's own JVM-side assertions alone: this sandbox
     // (and, more importantly, the GitHub Actions ubuntu-latest CI runner this pipeline's own
-    // ci-nf-test.yml workflow runs on -- see .github/workflows/ci-nf-test.yml) has no bcftools or
+    // nf-test.yml workflow runs on -- see .github/workflows/nf-test.yml) has no bcftools or
     // tabix binary on the host itself, only inside the module's own container. So `bcftoolsView`
     // below shells out to `docker run` against the exact same pinned bcftools image the module
     // itself uses (already a docker dependency this pipeline requires anyway, and already pulled
