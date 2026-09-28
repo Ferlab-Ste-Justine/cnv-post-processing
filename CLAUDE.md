@@ -166,7 +166,10 @@ counts the tests affected since `HEAD^` and splits them into at most 2 shards, e
 every matrixed Nextflow version through the composite actions in `.github/actions/`, and
 `confirm-pass` gives one result excluding `latest-everything`; releases and manual runs test
 everything), `ci-full-run.yml` (a plain `nextflow run . -profile test,docker`, which doesn't depend
-on nf-test's change detection), and `commit_lint.yml`. Files the nf-core template defines keep
+on nf-test's change detection), `ci-pr-title-lint.yml` (the PR title must look like
+`<type>: <TICKET-123> <description>`, as in Post-processing-Pipeline) and `commit_lint.yml` (Ferlab's
+`action-commit-lint`, still the required check on `main`; its removal is pending, see
+`docs/journal.md`). Files the nf-core template defines keep
 their nf-core names (lint only recognizes those); this repo's own workflows get a `ci-` prefix.
 Run lint locally with:
 
