@@ -132,8 +132,9 @@ nf-test test modules/local/exomiser
 ```
 
 nf-core upstream module/subworkflow tests are excluded via the `ignore` glob in `nf-test.config`.
-`scripts/run-test-suite.sh` bundles the pre-push gate: nf-test dry-run, full nf-test suite, and
-`nf-core pipelines lint --release`. All 10 local modules (`modules/local/*`) have their own module
+`scripts/run-test-suite.sh` bundles the pre-push gate, harmonized with Post-processing-Pipeline's:
+nf-core CLI version pin check, pre-commit, the slivar JS unit tests, a `-preview` launch under the
+declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 10 local modules (`modules/local/*`) have their own module
 test under `modules/local/<name>/tests/`.
 
 **nf-test gotchas** (both hit, and fixed, while writing `modules/local/truvari_collapse/tests/`;
