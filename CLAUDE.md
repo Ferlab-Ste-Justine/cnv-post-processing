@@ -66,7 +66,7 @@ for the nf-core-style graphic (the PNG predates the slivar stage).
 main.nf                                    # Entry point — PIPELINE_INITIALISATION, CNV_POST_PROCESSING, PIPELINE_COMPLETION
 nextflow.config                            # Params, profiles, per-process resources, manifest
 nextflow_schema.json                       # Authoritative parameter schema (use this, not the README)
-nf-test.config                             # nf-test runner config (profile "test,docker")
+nf-test.config                             # nf-test runner config (default profile "test"; add docker via --profile)
 workflows/cnv_post_processing.nf           # Main CNV_POST_PROCESSING workflow (both routes above) + EXOMISER_WORKFLOW
 subworkflows/local/                        # bam_vcf_depth_genotype_refinement, utils_nfcore_cnv_post_processing_pipeline
 subworkflows/nf-core/                      # utils_nextflow_pipeline, utils_nfcore_pipeline, utils_nfschema_plugin, vcf_annotate_ensemblvep
