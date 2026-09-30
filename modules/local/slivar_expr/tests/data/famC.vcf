@@ -1,0 +1,7 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000000>
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	famC_mom	famC_kid
+chr1	2000	famC_4_candidate	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/1:1	0/1:0
