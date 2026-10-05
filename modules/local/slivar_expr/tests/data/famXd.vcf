@@ -1,0 +1,13 @@
+##fileformat=VCFv4.2
+##contig=<ID=chrX,length=156040895>
+##contig=<ID=chrY,length=57227415>
+##contig=<ID=chrM,length=16569>
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	famXd_mom	famXd_dad	famXd_daughter
+chrX	57696089	famXd_X7_de_novo	N	<DEL>	50	PASS	SVTYPE=CNV;END=57697146	GT:CN	0/0:2	0:1	0/1:1
+chrX	101800269	famXd_X8_inherited_paternal	N	<DUP>	50	PASS	SVTYPE=CNV;END=101813341	GT:CN	0/0:2	1:2	0/1:3
+chrX	124154722	famXd_X9_inherited_maternal	N	<DEL>	50	PASS	SVTYPE=CNV;END=124158375	GT:CN	0/1:1	0:1	0/1:1
+chrY	10660602	famXd_Y1_female_y	N	<DUP>	50	PASS	SVTYPE=CNV;END=10693753	GT:CN	.:.	1:2	.:.

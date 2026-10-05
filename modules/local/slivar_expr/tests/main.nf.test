@@ -10,7 +10,8 @@ nextflow_process {
 
     // Runs real slivar with assets/cnv-slivar-functions.js and the --family-expr / --sample-expr
     // lines from conf/modules.config, on toy, synthetic fixtures checked into ./data/ (no S3
-    // data-test/ dataset needed). The rules themselves are tested much more thoroughly, in plain
+    // data-test/ dataset needed), plus one test on the real joint trio VCF from data-test/
+    // (fam1_joint, the last one). The rules themselves are tested much more thoroughly, in plain
     // node, by assets/cnv-slivar-moi-harness.js; this test checks that slivar runs them as the
     // harness expects (slivar's own VCF/PED parsing, the expression wiring, its JS engine). Each
     // row ID names the harness scenario it reproduces (e.g. famA_T6_recessive is harness T6), so
@@ -23,9 +24,9 @@ nextflow_process {
     // that aren't its own. Scenarios sharing an identical pedigree shape (same affected-status
     // pattern) are combined as multiple rows of the same family, which is safe.
     //
-    // Each toy .vcf is plain, uncompressed VCF text (no bgzip step needed), and carries no
-    // INFO/END: the rules must read the CNV end from variant.stop, since reading a missing INFO
-    // field throws in slivar. Each .vcf.tbi is an inert placeholder: SLIVAR_EXPR never reads the
+    // Each toy .vcf is plain, uncompressed VCF text (no bgzip step needed). famA-famD carry no
+    // INFO/END, so the rules must read the CNV end from variant.stop (reading a missing INFO
+    // field throws in slivar); famXs/famXd do, which the chrX/chrY PAR checks depend on. Each .vcf.tbi is an inert placeholder: SLIVAR_EXPR never reads the
     // `tbi` input, it only satisfies the process's 4-element input tuple.
     //
     // Tags are checked by parsing each row's INFO field into exact key=value pairs, not by
@@ -225,6 +226,189 @@ nextflow_process {
             check(byId["famD_T13_po_mother"], null, [po_mother: ["famD_kid"]])
             check(byId["famD_T21_po_father"], null, [po_father: ["famD_kid"]])
             check(byId["famD_T22_po_ambiguous"], null, [po_ambiguous: ["famD_kid"]])
+        }
+    }
+
+    // Sex chromosomes and chrM, on records that carry INFO/END (famXs: affected son, famXd:
+    // affected daughter). Expected copy number depends on the chromosome, the record's whole
+    // start..END interval against the GRCh38 PARs, and the PED sex, so these rows exercise
+    // slivar's own variant interval and sample sex end to end.
+    test("famXs: son on chrX (PAR, straddling, normal, maternal, de novo), chrY and chrM") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famXs"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXs.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXs.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXs.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 7
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famXs_X6_par_de_novo"], "de_novo")                       // inside PAR1: autosomal rules
+            check(byId["famXs_X4_straddle"], null)                                // crosses the PAR1 end: not modelled
+            check(byId["famXs_X1_normal_boy"], null)                              // CN 1 is normal for a male
+            check(byId["famXs_X2_inherited_maternal"], "inherited_maternal", [po_mother: ["famXs_son"]])
+            check(byId["famXs_X3_de_novo"], "de_novo")
+            check(byId["famXs_Y2_paternal_y_dup"], null, [po_father: ["famXs_son"]]) // MoI: the mother has no Y
+            check(byId["famXs_M1_chrM"], null)
+        }
+    }
+
+    test("famXd: daughter on chrX (de novo, father's X, mother's deletion) and chrY") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famXd"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXd.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXd.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXd.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 4
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famXd_X7_de_novo"], "de_novo")
+            check(byId["famXd_X8_inherited_paternal"], "inherited_paternal", [po_father: ["famXd_daughter"]])
+            check(byId["famXd_X9_inherited_maternal"], "inherited_maternal", [po_mother: ["famXd_daughter"]])
+            check(byId["famXd_Y1_female_y"], null)
+        }
+    }
+
+    // Real data: the whole-genome joint NA12878/NA12891/NA12892 DRAGEN VCF from the S3-synced
+    // data-test/ dataset (daughter NA12878 affected; NA12891 father, NA12892 mother), with its
+    // real PED. It's the only file in data-test/ with chrX/chrY calls, and in the pipeline test
+    // VEP drops those (its test cache and FASTA only know chr22), so this is where real
+    // sex-chromosome calls reach slivar. NORMALIZE_CNV runs first, exactly as NORMALIZE_CNV_JOINT
+    // does in the pipeline (drops ALT="." reference blocks, splits multiallelic sites): slivar on
+    // the raw file gives different results.
+    test("fam1_joint: real DRAGEN joint trio VCF, chrX/chrY classification") {
+
+        setup {
+            run("NORMALIZE_CNV") {
+                script "../../normalize_cnv/main.nf"
+                process {
+                    """
+                    input[0] = [
+                        [id: "fam1_joint", caller: "DRAGEN_JOINT"],
+                        file("${projectDir}/data-test/vcf/1463_NA12878_NA12891_NA12892.cnv.vcf.gz")
+                    ]
+                    """
+                }
+            }
+        }
+
+        when {
+            process {
+                """
+                input[0] = NORMALIZE_CNV.out.vcf
+                    .join(NORMALIZE_CNV.out.tbi)
+                    .map { meta, vcf, tbi -> [meta, vcf, tbi, file("${projectDir}/data-test/ped/trio_NA12878_91_92.ped")] }
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def sexChrom = lines.collect { it.split("\t") }.findAll { it[0] in ["chrX", "chrY"] }
+            assert sexChrom.count { it[0] == "chrX" } == 50
+            assert sexChrom.count { it[0] == "chrY" } == 5
+            def byPos = sexChrom.collectEntries { c -> [("${c[0]}:${c[1]}".toString()): c[7]] }
+
+            // Real records, CN given as daughter,father,mother; a normal male has CN 1 on non-PAR chrX.
+            check(byPos["chrX:57696089"], "de_novo")                                               // 1,1,2: both parents normal
+            check(byPos["chrX:101800269"], "inherited_paternal", [po_father: ["NA12878"]])         // 3,2,2: father's duplicated X
+            check(byPos["chrX:12415722"], "inherited_maternal", [po_mother: ["NA12878"]])          // 1,1,1: father's X is normal
+            check(byPos["chrX:26792085"], "inherited_maternal", [po_mother: ["NA12878"]])          // 3,1,3: mother's duplication
+            check(byPos["chrX:942027"], "recessive", [po_both: ["NA12878"]])                       // inside PAR1: autosomal rules
+            sexChrom.findAll { it[0] == "chrY" }.each { c -> check(c[7], null) }                    // the daughter has no Y
+
+            // Every chrX/chrY record's tags (parent of origin with the samples it names), as a
+            // regression snapshot.
+            def summary = sexChrom.collect { c ->
+                def fields = infoOf(c[7])
+                def tags = MOI_TAGS.findAll { fields.containsKey(it) } + PO_TAGS.findAll { fields.containsKey(it) }.collect { "${it}=${fields[it]}" }
+                "${c[0]}:${c[1]}:${c[4]} ${tags.sort().join(',') ?: '-'}".toString()
+            }
+            assert snapshot(summary).match("fam1_joint_sex_chromosome_tags")
         }
     }
 }
