@@ -4,6 +4,6 @@
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	famD_mom	famD_dad	famD_kid
-chr1	2000	famD_7_po_maternal	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/1:1	0/0:2	0/1:1
-chr1	3000	famD_8_po_paternal	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/0:2	0/1:1	0/1:1
-chr1	4000	famD_9_po_ambiguous	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/1:3	0/1:3	0/1:3
+chr1	2000	famD_T13_po_mother	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/1:1	0/0:2	0/1:1
+chr1	3000	famD_T21_po_father	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/0:2	0/1:1	0/1:1
+chr1	4000	famD_T22_po_ambiguous	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/1:3	0/1:3	0/1:3

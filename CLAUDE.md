@@ -73,7 +73,7 @@ subworkflows/nf-core/                      # utils_nextflow_pipeline, utils_nfco
 modules/local/                             # normalize_cnv, truvari_collapse, bcftools_{merge,sort_index,index}, vcf_to_bed, mosdepth_ratio, depth_genotype_refine, slivar_expr, exomiser
 modules/nf-core/                           # ensemblvep/{vep,download}, tabix/tabix
 conf/                                      # base.config, modules.config, test.config, test_full.config
-assets/                                    # samplesheet.csv, schema_input.json, cnv-slivar-functions.js, exomiser/ (default analysis YAMLs)
+assets/                                    # samplesheet.csv, schema_input.json, exomiser/ (default analysis YAMLs), cnv-slivar-functions.js (slivar rules) + cnv-slivar-moi-harness.js (its test bench; golden file moi_scenarios.expected.tsv)
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE
 docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram)
 scripts/                                   # run-test-suite.sh, run-smoke-tests.sh (see below)
@@ -133,7 +133,7 @@ nf-test test modules/local/exomiser
 
 nf-core upstream module/subworkflow tests are excluded via the `ignore` glob in `nf-test.config`.
 `scripts/run-test-suite.sh` bundles the pre-push gate, harmonized with Post-processing-Pipeline's:
-nf-core CLI version pin check, pre-commit, the slivar JS unit tests, a `-preview` launch under the
+nf-core CLI version pin check, pre-commit, the slivar rules harness, a `-preview` launch under the
 declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 10 local modules (`modules/local/*`) have their own module
 test under `modules/local/<name>/tests/`.
 

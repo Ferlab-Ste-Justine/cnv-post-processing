@@ -8,54 +8,35 @@ nextflow_process {
     tag "modules_"
     tag "slivar_expr"
 
-    // Toy, synthetic fixtures checked into ./data/ -- unlike this repo's other tests, this one
-    // deliberately does NOT depend on the S3 data-test/ dataset.
+    // Runs real slivar with assets/cnv-slivar-functions.js and the --family-expr / --sample-expr
+    // lines from conf/modules.config, on toy, synthetic fixtures checked into ./data/ (no S3
+    // data-test/ dataset needed). The rules themselves are tested much more thoroughly, in plain
+    // node, by assets/cnv-slivar-moi-harness.js; this test checks that slivar runs them as the
+    // harness expects (slivar's own VCF/PED parsing, the expression wiring, its JS engine). Each
+    // row ID names the harness scenario it reproduces (e.g. famA_T6_recessive is harness T6), so
+    // its expected result is that scenario's line in assets/moi_scenarios.md.
     //
-    // Four toy families (famA-D), each in its OWN dedicated VCF+PED pair (never sharing a VCF with
-    // another family): slivar's --family-expr mechanism evaluates every function for every family
-    // in the PED at every variant row, using whatever genotype data exists for that family's own
-    // columns at that row. An earlier version of this fixture packed multiple families into one
-    // shared multi-sample VCF, which produced real, execution-confirmed cross-contamination --
-    // every OTHER family's own affected member showed up as "missing CN" on a row that wasn't
-    // theirs, spuriously firing moi_cnv_unknown_cn for them too (it's the one function whose truth
-    // value is *triggered by* missing CN, unlike the others, which just disqualify on it). One
-    // family per fixture pair avoids this entirely.
+    // Each toy family has its OWN dedicated VCF+PED pair (never sharing a VCF with another
+    // family): slivar's --family-expr mechanism evaluates every expression for every family in
+    // the PED at every variant row, using whatever genotype data exists for that family's own
+    // columns at that row, so a family sharing a VCF with another one sees "missing CN" on rows
+    // that aren't its own. Scenarios sharing an identical pedigree shape (same affected-status
+    // pattern) are combined as multiple rows of the same family, which is safe.
     //
-    // Scenarios sharing an identical pedigree shape (same affected-status pattern) are combined as
-    // multiple rows of the same family; that's safe (no cross-family interaction), so famA covers
-    // scenarios 1/3/5/6 and famD covers 7/8/9 in one invocation each.
+    // Each toy .vcf is plain, uncompressed VCF text (no bgzip step needed), and carries no
+    // INFO/END: the rules must read the CNV end from variant.stop, since reading a missing INFO
+    // field throws in slivar. Each .vcf.tbi is an inert placeholder: SLIVAR_EXPR never reads the
+    // `tbi` input, it only satisfies the process's 4-element input tuple.
     //
-    // Each toy*.vcf is plain, uncompressed VCF text (not .vcf.gz), so no bgzip step is needed to
-    // produce it. Each toy*.vcf.tbi is an inert placeholder: SLIVAR_EXPR's script block (see
-    // ../main.nf) never reads the `tbi` input at all, only stages it, so its content is
-    // irrelevant -- it exists purely to satisfy the process's 4-element input tuple shape.
-    //
-    // Tag presence is checked per test by parsing each row's INFO field into exact key=value pairs
-    // and testing set membership -- NOT by substring search -- because several of the 9 real tag
-    // names are substrings of each other (e.g. "candidate" is a substring of both
-    // "de_novo_candidate" and "recessive_candidate"; "ambiguous" is a substring of
-    // "po_ambiguous"), which a naive `.contains("tag=")` check would false-positive
-    // on. The exact same tiny helper is repeated in each test() block below rather than factored
-    // out to a shared top-level def, since nf-test's documented way to share Groovy code across
-    // test() blocks is a class under a repo-level lib/ folder (this repo doesn't have one), not a
-    // bare top-level function inside nextflow_process {} -- duplicating ~4 lines four times is a
-    // smaller risk than an unverified assumption about nf-test's own scoping rules.
-    //
-    // Verified against real slivar output, not just derived: run directly via `docker run` with
-    // the exact --vcf/--ped/--js/--family-expr invocation this process itself uses, against all 4
-    // fixture pairs (bypassing an unrelated Docker bind-mount limitation that keeps `nf-test`
-    // itself from executing end to end in the sandbox this was authored in -- `nf-test test
-    // modules/local/slivar_expr` fails there with a `.command.run: No such file or directory`
-    // error unrelated to this test's own correctness). Every assertion below matches the real
-    // per-row INFO output exactly. One informational note from that run, not a correctness issue:
-    // for famD (deliberately all-unaffected, since parent-of-origin is affected-status-agnostic),
-    // slivar warns "using --family-expr without any affected samples" and writes the tag's value
-    // as the family_id rather than a sample list -- irrelevant here since these assertions only
-    // check tag *key* presence, never the value, but worth knowing before writing anything that
-    // parses the value for an all-unaffected family. Re-run `nf-test test modules/local/slivar_expr`
-    // for real in an environment without that bind-mount limitation before merging.
+    // Tags are checked by parsing each row's INFO field into exact key=value pairs, not by
+    // substring search (e.g. "de_novo" is a substring of "possible_de_novo"). Mode-of-inheritance
+    // tags (--family-expr) are checked by key, and a record gets at most one: slivar values them
+    // with the family's affected members. Parent-of-origin tags (--sample-expr) are checked by
+    // value too, since which child they name is the point. The same helper is repeated in each
+    // test() block rather than factored out, since nf-test's documented way to share Groovy code
+    // across test() blocks is a class under a repo-level lib/ folder, which this repo doesn't have.
 
-    test("famA: de novo / recessive / ambiguous / unknown_cn (shared unaffected-parents pedigree)") {
+    test("famA: de novo / recessive / Mendelian-inconsistent / unknown CN (unaffected parents, affected son)") {
 
         when {
             process {
@@ -74,31 +55,40 @@ nextflow_process {
         then {
             assert process.success
 
-            def ALL_TAGS = [
-                "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
-                "ambiguous", "unknown_cn",
-                "po_mother", "po_father", "po_ambiguous"
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
             ]
-            def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
-            def check = { String info, List wantTrue ->
-                def present = tagsOf(info)
-                ALL_TAGS.each { tag -> assert present.contains(tag) == wantTrue.contains(tag) : "expected ${tag}=${wantTrue.contains(tag)} but INFO was: ${info}" }
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // moi: the one mode-of-inheritance tag expected, or null for none. po: parent-of-origin
+            // tag -> the exact sample IDs it must name; a po_* tag not listed must be absent.
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
             assert lines.size() == 4
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famA_1_denovo"], ["de_novo_candidate"])
-            check(byId["famA_3_recessive"], ["recessive_candidate", "po_mother", "po_father"])
-            check(byId["famA_5_ambiguous"], ["ambiguous"])
-            check(byId["famA_6_unknown_cn"], ["unknown_cn"])
+            check(byId["famA_T2_de_novo"], "de_novo")
+            check(byId["famA_T6_recessive"], "recessive", [po_both: ["famA_kid"]])
+            check(byId["famA_T19_mendelian_inconsistent"], "mendelian_inconsistent")
+            check(byId["famA_T20_unknown_cn"], "unknown_cn")
 
             assert snapshot(process.out.versions).match()
         }
     }
 
-    test("famB: dominant inheritance from an affected parent (+ resolvable parent-of-origin)") {
+    test("famB: dominant -- duplication inherited from an affected mother") {
 
         when {
             process {
@@ -117,23 +107,33 @@ nextflow_process {
         then {
             assert process.success
 
-            def ALL_TAGS = [
-                "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
-                "ambiguous", "unknown_cn",
-                "po_mother", "po_father", "po_ambiguous"
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
             ]
-            def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
+            }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
             assert lines.size() == 1
-            def info = lines[0].split("\t")[7]
-            def present = tagsOf(info)
-            def wantTrue = ["dominant_inherited", "po_mother"]
-            ALL_TAGS.each { tag -> assert present.contains(tag) == wantTrue.contains(tag) : "expected ${tag}=${wantTrue.contains(tag)} but INFO was: ${info}" }
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famB_T18_dominant"], "dominant", [po_mother: ["famB_kid"]])
         }
     }
 
-    test("famC: recessive candidate, incomplete trio (duo -- no dad in the pedigree at all)") {
+    test("famC: recessive, low confidence -- duo, no father in the pedigree") {
 
         when {
             process {
@@ -152,25 +152,34 @@ nextflow_process {
         then {
             assert process.success
 
-            def ALL_TAGS = [
-                "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
-                "ambiguous", "unknown_cn",
-                "po_mother", "po_father", "po_ambiguous"
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
             ]
-            def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
+            }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
             assert lines.size() == 1
-            def info = lines[0].split("\t")[7]
-            def present = tagsOf(info)
-            // moi_cnv_candidate is defined as moi_cnv_recessive(fam) && !all_affected_have_both_parents(fam)
-            // -- it can only ever fire alongside recessive_candidate, never instead of it.
-            def wantTrue = ["recessive_candidate", "candidate"]
-            ALL_TAGS.each { tag -> assert present.contains(tag) == wantTrue.contains(tag) : "expected ${tag}=${wantTrue.contains(tag)} but INFO was: ${info}" }
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            // No father, so no parent of origin: an autosomal origin needs both parents.
+            check(byId["famC_D2_recessive_lowconf"], "recessive_lowconf")
         }
     }
 
-    test("famD: parent-of-origin maternal / paternal / ambiguous (all unaffected -- PO is affected-status-agnostic)") {
+    test("famD: parent of origin maternal / paternal / ambiguous (all unaffected -- no MoI tag)") {
 
         when {
             process {
@@ -189,24 +198,33 @@ nextflow_process {
         then {
             assert process.success
 
-            def ALL_TAGS = [
-                "de_novo_candidate", "dominant_inherited", "recessive_candidate", "candidate",
-                "ambiguous", "unknown_cn",
-                "po_mother", "po_father", "po_ambiguous"
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "parental_mosaicism_candidate", "dominant",
+                "inherited_maternal", "inherited_paternal", "recessive", "recessive_lowconf",
+                "possible_de_novo", "possible_inherited_maternal", "possible_inherited_paternal",
+                "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
             ]
-            def tagsOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collect { it.tokenize('=')[0] } as Set }
-            def check = { String info, List wantTrue ->
-                def present = tagsOf(info)
-                ALL_TAGS.each { tag -> assert present.contains(tag) == wantTrue.contains(tag) : "expected ${tag}=${wantTrue.contains(tag)} but INFO was: ${info}" }
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            def check = { String info, String moi, Map po = [:] ->
+                def fields = infoOf(info)
+                MOI_TAGS.each { tag -> assert fields.containsKey(tag) == (tag == moi) : "expected ${tag}=${tag == moi} but INFO was: ${info}" }
+                PO_TAGS.each { tag ->
+                    def want = po.containsKey(tag) ? (po[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == want : "expected ${tag}=${want} but INFO was: ${info}"
+                }
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
             assert lines.size() == 3
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famD_7_po_maternal"], ["po_mother"])
-            check(byId["famD_8_po_paternal"], ["po_father"])
-            check(byId["famD_9_po_ambiguous"], ["po_ambiguous"])
+            // Nobody is affected, so no mode of inheritance; parent of origin is per sample and
+            // doesn't depend on affected status.
+            check(byId["famD_T13_po_mother"], null, [po_mother: ["famD_kid"]])
+            check(byId["famD_T21_po_father"], null, [po_father: ["famD_kid"]])
+            check(byId["famD_T22_po_ambiguous"], null, [po_ambiguous: ["famD_kid"]])
         }
     }
 }

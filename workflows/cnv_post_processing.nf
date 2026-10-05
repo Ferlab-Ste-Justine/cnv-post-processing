@@ -340,11 +340,10 @@ workflow CNV_POST_PROCESSING {
 
     //
     // STAGE 6 -- Slivar mode-of-inheritance classification, on the VEP-annotated family VCF.
-    // The moi_cnv_*(fam) functions in assets/cnv-slivar-functions.js generalize to any family
-    // shape the PED describes (trios, duos, singletons, sibships) via slivar's --family-expr --
-    // each MoI's own structural gate (has_aff_parent, no_parents_in_fam, etc.) decides whether a
-    // given family provides enough evidence for it, same as the sibling SNV pipeline's own
-    // moi_*(fam) design. No family-shape pre-check needed here, matching that pipeline's
+    // The rules in assets/cnv-slivar-functions.js (cnv_moi for the family, cn_po_origin per
+    // sample) handle any family shape the PED describes (trios, duos, singletons, sibships):
+    // TRIO_TABLE and FAMILY_TABLE decide what each shape supports, e.g. the possible_* tags for
+    // duos. No family-shape pre-check needed here, matching the sibling SNV pipeline's
     // convention -- only familyPed presence is required.
     //
     def ch_slivar_input = VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi

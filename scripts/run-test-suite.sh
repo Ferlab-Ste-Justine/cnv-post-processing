@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Automated pre-push checks, mirroring everything CI does short of the full
 # NXF_VER matrix: nf-core CLI version pin, pre-commit hooks, the slivar
-# classification unit tests, a declared-floor version check, nf-test suite,
-# and nf-core lint. Fail-fast (set -e) so the first broken step stops the
-# script. Harmonized with Post-processing-Pipeline's run-test-suite.sh (the
-# fleet reference); the slivar unit-test step (3) is specific to this repo.
+# rules harness, a declared-floor version check, nf-test suite, and nf-core
+# lint. Fail-fast (set -e) so the first broken step stops the script.
+# Harmonized with Post-processing-Pipeline's run-test-suite.sh (the fleet
+# reference); the slivar harness step (3) is specific to this repo.
 #
 # pre-commit is also wired into .github/workflows/linting.yml (duplicated on
 # purpose), so a local run catches formatting issues before CI does rather
@@ -67,8 +67,10 @@ fi
 step "[2/7] pre-commit (prettier, trailing-whitespace, end-of-file-fixer, editorconfig-checker)"
 pre-commit run --all-files
 
-step "[3/7] slivar classification function unit tests (plain node, no Docker needed)"
-node assets/tests/cnv_slivar_functions.test.js
+# Fails if any named scenario's result differs from assets/moi_scenarios.expected.tsv
+# (re-run with --accept once a change is understood) or a random-family check fails.
+step "[3/7] slivar rules harness (plain node, no Docker needed)"
+node assets/cnv-slivar-moi-harness.js
 
 # Only CI actually runs the pipeline under multiple pinned Nextflow versions
 # (see .github/workflows/nf-test.yml's NXF_VER matrix) -- this just checks
