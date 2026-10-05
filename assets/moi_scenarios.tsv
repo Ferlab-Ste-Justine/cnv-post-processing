@@ -24,6 +24,8 @@ T22 all unaffected, all CN=3 (origin ambiguous)	-	-	kid=ambiguous
 X1  chrX MALE kid CN=1, dad CN=1 (normal)	-	-	kid=null
 X2  chrX male kid CN=0, carrier mom CN=1, dad CN=1	inherited_maternal	kid=inherited_maternal	kid=maternal
 X3  chrX male kid CN=0, mom CN=2, dad CN=1 (de novo)	de_novo	kid=de_novo	kid=null
+X4  chrX record straddling the PAR1 boundary, son CN=3, parents CN=2 (not modelled)	-	-	kid=null
+X5  chrX record straddling the PAR1 boundary, daughter CN=1, mom CN=1, dad CN=2 (not modelled)	-	-	kid=null
 D1  duo kid CN=1, mom CN=1	possible_inherited_maternal	kid=possible_inherited_maternal	kid=null
 D2  duo kid CN=0, mom CN=1	recessive_lowconf	kid=recessive_lowconf	kid=null
 D3  duo kid CN=1, mom CN=2	possible_de_novo	kid=possible_de_novo	kid=null

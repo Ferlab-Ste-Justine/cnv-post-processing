@@ -87,6 +87,7 @@ function variant(chrom, start, end) {
 }
 var AUTO = variant("chr7", 1000000, 1200000);
 var XNP = variant("chrX", 50000000, 50200000);
+var XSTRADDLE = variant("chrX", 2779999, 2790000); // crosses the PAR1 end (2,781,479)
 // A record with no INFO/END (e.g. the slivar module-test fixtures): slivar sets stop
 // to POS, and reading INFO.END throws.
 var AUTO_NO_END = strict(
@@ -158,6 +159,18 @@ var scenarios = [
     "X3  chrX male kid CN=0, mom CN=2, dad CN=1 (de novo)",
     XNP,
     { kid: [0, 1], kidsex: "male", mom: [2, 0], dad: [1, 0] },
+  ],
+  // A record crossing a PAR boundary has no single normal CN (a man has 2 copies in the PAR
+  // part, 1 outside it), so it isn't modelled: no tag, no parent of origin, for anyone.
+  [
+    "X4  chrX record straddling the PAR1 boundary, son CN=3, parents CN=2 (not modelled)",
+    XSTRADDLE,
+    { kid: [3, 1], kidsex: "male", mom: [2, 0], dad: [2, 0] },
+  ],
+  [
+    "X5  chrX record straddling the PAR1 boundary, daughter CN=1, mom CN=1, dad CN=2 (not modelled)",
+    XSTRADDLE,
+    { kid: [1, 1], kidsex: "female", mom: [1, 0], dad: [2, 0] },
   ],
   ["D1  duo kid CN=1, mom CN=1", AUTO, { kid: [1, 1], mom: [1, 0], dad: null }],
   ["D2  duo kid CN=0, mom CN=1", AUTO, { kid: [0, 1], mom: [1, 0], dad: null }],
@@ -339,7 +352,7 @@ function problem(msg, spec, v) {
 }
 
 for (var it = 0; it < N; it++) {
-  var v = pick([AUTO, AUTO, XNP, XNP, YNP, AUTO_NO_END]);
+  var v = pick([AUTO, AUTO, XNP, XNP, YNP, XSTRADDLE, AUTO_NO_END]);
   var spec = {
     kid: [pick(CNPOOL), 1],
     kidsex: pick(["male", "female"]),

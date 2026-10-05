@@ -12,7 +12,8 @@ SLIVAR_EXPR (conf/modules.config) calls two classifiers:
   --sample-expr  po_*:cn_po_origin(sample, variant) == "<origin>" parent of origin, per sample
 
 cnv_moi(fam, variant)
-├─ modellable?           chrM, unknown sex on non-PAR X/Y, a female on non-PAR Y -> no tag
+├─ modellable?           chrM, a chrX/chrY record straddling a PAR boundary, unknown sex on
+│                        non-PAR X/Y, a female on non-PAR Y -> no tag
 ├─ unknown_cn?           an affected sample, or a parent of an affected carrier, has no CN
 ├─ carrier children      affected, at least one parent in the family, CN != expected CN
 ├─ TRIO_TABLE            per carrier child: (kid, mom, dad tokens, origin) -> child call
@@ -30,4 +31,5 @@ cn_po_origin(sample, variant)   maternal / paternal / both / ambiguous, or nothi
                                 a father's X to a son and a mother's Y count as nothing
 
 Expected CN: 2 on autosomes and in the GRCh38 PARs; on non-PAR chrX 1 for males and 2 for
-females; on non-PAR chrY 1 for males. Every rule works on the deviation from it.
+females; on non-PAR chrY 1 for males. Every rule works on the deviation from it. A record that
+crosses a PAR boundary has no single expected CN for a male, so it isn't modelled, for anyone.

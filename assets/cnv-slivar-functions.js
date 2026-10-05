@@ -283,7 +283,7 @@ var FAMILY_TABLE = [
  * cnv_moi(fam, variant)  // → "inherited_maternal"
  */
 function cnv_moi(fam, variant) {
-  if (!modellable(fam, variant)) return null; // chrM, unknown sex on X/Y, female on Y (P1)
+  if (!modellable(fam, variant)) return null; // chrM, PAR-straddling record, unknown sex on X/Y, female on Y (P1)
   if (unknown_cn(fam, variant)) return "unknown_cn"; // a CN we need is missing (P15)
 
   var kids = carrier_children(fam, variant);
@@ -639,8 +639,9 @@ function unknown_cn(fam, variant) {
 /**
  * Can we say, for every family member, what their normal CN is on this record?
  * If even one person cannot be modelled, the whole family gets no tag.
- * Not modellable: chrM; non-PAR chrX/chrY with a sample of unknown sex;
- * non-PAR chrY with a female (so chrY families with a mother are always skipped).
+ * Not modellable: chrM; a chrX/chrY record straddling a PAR boundary; non-PAR
+ * chrX/chrY with a sample of unknown sex; non-PAR chrY with a female (so chrY
+ * families with a mother are always skipped).
  * @param {Sample[]} fam
  * @param {Variant}  variant
  * @returns {boolean} false if expected_cn() is -1 for anyone
@@ -699,12 +700,32 @@ function cnv_in_par(chrom, start1, end1) {
 }
 
 /**
+ * Does the CNV cross a PAR boundary (partly inside a PAR, partly outside)? Such a
+ * record has no single normal CN for a male (2 in the PAR part, 1 outside), nor a
+ * single copy a father passes on, so it isn't modelled at all.
+ * @param {string} chrom   from cnv_chrom()
+ * @param {number} start1  1-based start
+ * @param {number} end1    1-based end
+ * @returns {boolean}
+ */
+function cnv_straddles_par(chrom, start1, end1) {
+  var pars = chrom === "X" ? CNV_PAR_X : chrom === "Y" ? CNV_PAR_Y : [];
+  for (var i = 0; i < pars.length; i++) {
+    var overlaps = start1 <= pars[i][1] && end1 >= pars[i][0];
+    var inside = start1 >= pars[i][0] && end1 <= pars[i][1];
+    if (overlaps && !inside) return true;
+  }
+  return false;
+}
+
+/**
  * Normal (reference) copy number for this sample on this record (P1).
  * @param {Sample}  s
  * @param {Variant} variant
  * @returns {number} 2 on autosomes and PAR; 1 for a male on non-PAR X or Y;
- *   2 for a female on non-PAR X; -1 when it cannot be modelled (chrM,
- *   unknown sex on non-PAR X/Y, female on non-PAR Y)
+ *   2 for a female on non-PAR X; -1 when it cannot be modelled (chrM, a
+ *   record straddling a PAR boundary, unknown sex on non-PAR X/Y, female on
+ *   non-PAR Y)
  * @example
  * expected_cn(boy, <chrX non-PAR record>)  // → 1
  * expected_cn(boy, <chr7 record>)          // → 2
@@ -716,6 +737,7 @@ function expected_cn(s, variant) {
   var start1 = variant.start + 1;
   var end1 = variant.stop; // not INFO.END: it throws when missing (Variant typedef)
   if (cnv_in_par(chrom, start1, end1)) return 2;
+  if (cnv_straddles_par(chrom, start1, end1)) return -1; // no single normal CN: not modelled, for anyone
   if (s.sex !== "male" && s.sex !== "female") return -1;
   if (chrom === "X") return s.sex === "male" ? 1 : 2;
   return s.sex === "male" ? 1 : -1;
@@ -781,7 +803,9 @@ var CN_HAPLOTYPES = { 0: [0, 0], 1: [1, 0], 2: [1, 1], 3: [2, 1] };
  */
 function parent_transmission(kid, which, variant) {
   var chrom = cnv_chrom(variant);
-  var hemi = (chrom === "X" || chrom === "Y") && !cnv_in_par(chrom, variant.start + 1, variant.stop);
+  var sexChrom = chrom === "X" || chrom === "Y";
+  if (sexChrom && cnv_straddles_par(chrom, variant.start + 1, variant.stop)) return null; // not modelled (expected_cn)
+  var hemi = sexChrom && !cnv_in_par(chrom, variant.start + 1, variant.stop);
   if (hemi) {
     // Parents who pass nothing here, whatever their own CN (or whether they're in the PED).
     // Open question for the team: "any value" instead when the parent is absent / has no CN?
