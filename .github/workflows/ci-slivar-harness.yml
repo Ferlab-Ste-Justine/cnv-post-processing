@@ -1,0 +1,42 @@
+name: slivar rules harness
+# Runs assets/cnv-slivar-moi-harness.js, the plain-node test bench of the slivar rules in
+# assets/cnv-slivar-functions.js. It fails when any named scenario's result differs from
+# assets/moi_scenarios.expected.tsv (re-run it locally with --accept once a change is
+# understood), or when a random-family check fails. It also regenerates moi_scenarios.md,
+# moi_scenarios.tsv and trio_lookup_table.tsv, which must match the committed copies, so those
+# generated docs always describe the rules as they are.
+#
+# No paths filter on purpose: the job takes seconds, and a filtered workflow never reports on
+# PRs it skips, which would block merging if this check is ever made required.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    name: slivar rules harness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pipeline code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Run the harness
+        run: node assets/cnv-slivar-moi-harness.js
+
+      - name: Check the generated scenario files are up to date
+        run: |
+          if ! git diff --exit-code -- assets/moi_scenarios.md assets/moi_scenarios.tsv assets/trio_lookup_table.tsv; then
+            echo "::error::assets/moi_scenarios.* or assets/trio_lookup_table.tsv are out of date: run 'node assets/cnv-slivar-moi-harness.js' and commit the result."
+            exit 1
+          fi

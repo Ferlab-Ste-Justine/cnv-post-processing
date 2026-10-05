@@ -168,7 +168,9 @@ every matrixed Nextflow version through the composite actions in `.github/action
 `confirm-pass` gives one result excluding `latest-everything`; releases and manual runs test
 everything), `ci-full-run.yml` (a plain `nextflow run . -profile test,docker`, which doesn't depend
 on nf-test's change detection), `ci-pr-title-lint.yml` (the PR title must look like
-`<type>: <TICKET-123> <description>`, as in Post-processing-Pipeline) and `commit_lint.yml` (Ferlab's
+`<type>: <TICKET-123> <description>`, as in Post-processing-Pipeline), `ci-slivar-harness.yml` (runs
+`assets/cnv-slivar-moi-harness.js` against its golden file and checks the generated `moi_scenarios.*` /
+`trio_lookup_table.tsv` are committed up to date) and `commit_lint.yml` (Ferlab's
 `action-commit-lint`, still the required check on `main`; its removal is pending, see
 `docs/journal.md`). Files the nf-core template defines keep
 their nf-core names (lint only recognizes those); this repo's own workflows get a `ci-` prefix.
