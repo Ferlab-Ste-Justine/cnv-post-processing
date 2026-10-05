@@ -47,7 +47,7 @@
 // ---------------------------------------------------------------------------
 // Map: what happens when slivar calls cnv_moi(fam, variant)
 // [name] = shared building block, see the box at the bottom.
-// (cn_po_origin is separate: slivar calls it once per sample via --sample-expr.)
+// (cn_po_origin has its own map below: slivar calls it once per sample via --sample-expr.)
 // ---------------------------------------------------------------------------
 //
 // cnv_moi(fam, variant)
@@ -130,6 +130,56 @@
 //                          └ some a ∈ fromMom, b ∈ fromDad with a + b = s.CN ?
 //         anyone impossible (any person has false) ────► "mendelian_inconsistent" (none of our patterns fit this family. Could these parents have produced this child's CN at all -> No, because there is at least one impossible)
 //         all possible (all person are set to true) ─────────► "inheritance_unresolved" (none of our patterns fit this family. Could these parents have produced this child's CN at all -> Yes, because there is no impossible)
+//
+// ---------------------------------------------------------------------------
+// Map: what happens when slivar calls cn_po_origin(sample, variant)
+// Once per sample (--sample-expr). Each po_* tag tests one result, and slivar
+// writes the IDs of the samples it's true for: po_mother "maternal", po_father
+// "paternal", po_both "both", po_ambiguous "ambiguous". Independent of cnv_moi(),
+// but the same [transmission_origin] fills TRIO_TABLE's origin column, so the
+// two always agree.
+// ---------------------------------------------------------------------------
+//
+// cn_po_origin(s, variant)
+// │
+// ├─① exp = [expected_cn(s)]
+// │     exp < 0  (chrM, PAR-straddling record, unknown sex on non-PAR X/Y,
+// │              female on non-PAR Y) ────────────────────────────────► null
+// │     ![has_cn(s)] ─────────────────────────────────────────────────► null
+// │     s.CN == exp  (not a carrier) ─────────────────────────────────► null
+// │
+// └─② transmission_origin(s, variant)
+//       │
+//       ├ m = parent_transmission(s, "mom")    what mom can pass, and a normal copy's value
+//       ├ d = parent_transmission(s, "dad")    same for dad
+//       │     ├ PAR-straddling record                      → null (not modelled)
+//       │     ├ non-PAR X: dad → son (or unknown sex)      → {haps: [0], normal: 0}  passes nothing
+//       │     ├ non-PAR Y: dad → daughter, or mom → anyone → {haps: [0], normal: 0}  passes nothing
+//       │     │    (these two hold even if that parent is absent / has no CN:
+//       │     │     open question, see docs/journal.md)
+//       │     ├ parent missing, or no [has_cn]             → null
+//       │     ├ non-PAR X/Y: the father's single copy      → {haps: [dad.CN], normal: 1}
+//       │     │    (his X to a daughter, his Y to a son)
+//       │     └ diploid: CN_HAPLOTYPES[CN], CN 0-3         → {haps: [a, b], normal: 1}
+//       │                CN >= 4 (several splits fit)      → null
+//       │     m or d null ────────────────────────────────────────────► null
+//       │
+//       ├ ways = the distinct (mom copy, dad copy) pairs with mom copy + dad copy == s.CN
+//       │     0 ways  (de novo, or a Mendelian error) ────────────────► null
+//       │     2+ ways ────────────────────────────────────────────────► "ambiguous"
+//       │
+//       └ 1 way: which transmitted copy differs from that parent's normal one?
+//             mom's only ─────────────────────────────────────────────► "maternal"
+//             dad's only ─────────────────────────────────────────────► "paternal"
+//             both ───────────────────────────────────────────────────► "both"
+//
+//   Examples (autosome unless noted; mom / dad copies in brackets):
+//     kid 1, mom 1 [1,0], dad 2 [1,1]       only 0 + 1          → "maternal"   (harness T4)
+//     kid 1, mom 1 [1,0], dad 1 [1,0]       0 + 1 or 1 + 0      → "ambiguous"  (T10)
+//     kid 0, mom 1 [1,0], dad 1 [1,0]       only 0 + 0          → "both"       (T6)
+//     kid 1, mom 2 [1,1], dad 2 [1,1]       no way (de novo)    → null         (T1)
+//     non-PAR X: son 0, mom 1 [1,0]         dad passes nothing  → "maternal"   (X2)
+//     non-PAR X: daughter 3, mom 2 [1,1], dad 2 [2]   1 + 2     → "paternal"   (X8)
 //
 //
 // ┌─ shared building blocks ─────────────────────────────────────────────┐

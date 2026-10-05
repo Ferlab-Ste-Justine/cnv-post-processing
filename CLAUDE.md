@@ -256,6 +256,36 @@ A few patterns and gotchas worth knowing before editing:
   consistent. Local-only logic goes under `modules/local/`.
 - **Schema and params stay in sync.** `nextflow_schema.json` drives the `nf-schema` plugin. When
   adding a param, update both `nextflow.config` defaults and the schema.
+- **slivar rules: `assets/cnv-slivar-functions.js`.** Two classifiers, each with a map at the top
+  of the file:
+  - `cnv_moi(fam, variant)` drives the 14 `--family-expr` mode-of-inheritance tags in
+    `conf/modules.config`: each affected carrier child gets a call from `TRIO_TABLE`, then
+    `FAMILY_TABLE` turns the children's calls into one family tag, so a record gets at most one
+    MoI tag (slivar values it with the family's affected members).
+  - `cn_po_origin(sample, variant)` drives the 4 per-sample `--sample-expr` tags (`po_mother`,
+    `po_father`, `po_both`, `po_ambiguous`), valued with exactly the children it resolves.
+  - Both use one transmission engine (`parent_transmission` / `transmission_origin`), so MoI and
+    parent of origin always agree.
+  - Expected CN is chromosome- and sex-aware: 2 on autosomes and PAR, on non-PAR chrX 1 for a male
+    and 2 for a female, on non-PAR chrY 1 for a male. chrM, PAR-straddling records, unknown sex on
+    non-PAR chrX/chrY and a female on non-PAR chrY aren't modelled (no tag). The PARs are
+    hard-coded GRCh38, hence the startup guard on `vep_genome` in `validateInputSamplesheet`; the
+    PED sex column must be right.
+  - The file is ES5, for slivar's JS engine (duktape). Reading an attribute slivar didn't set
+    (`s.mom` on a founder, `INFO.END` on a record without one) throws there, and slivar then
+    writes the record with no tag, silently: test parents with `has_parent()` (`in`) and read the
+    CNV end from `variant.stop`.
+  - `TRIO_TABLE` and `FAMILY_TABLE` are hand-aligned under `// prettier-ignore`; keep them aligned.
+    The worked-example notes inside `cnv_moi()` and `trio_call()` are kept on purpose.
+  - Tests: `node assets/cnv-slivar-moi-harness.js` runs every named scenario against the golden file
+    `assets/moi_scenarios.expected.tsv` (re-run with `--accept` once a change is understood) plus
+    200,000 random families whose fake samples throw on unset attributes like slivar's. It
+    regenerates `assets/moi_scenarios.md` / `.tsv` and `trio_lookup_table.tsv`, which must be
+    committed; `ci-slivar-harness.yml` checks both. The `SLIVAR_EXPR` module test runs real slivar:
+    fixture row IDs name the harness scenario they reproduce, and `fam1_joint` covers the real
+    trio's 55 chrX/chrY records. The pipeline test only reaches slivar on chr22 (VEP drops other
+    chromosomes with the chr22-only test cache).
+  - Open questions on the rules are in `docs/journal.md`.
 - **`--no-version` on every bcftools view/norm/merge/annotate call.** bcftools appends a
   `##bcftools_<cmd>Command=...; Date=<now>` header by default, which breaks byte-for-byte
   reproducibility between otherwise-identical runs — every bcftools invocation in this pipeline's
@@ -281,5 +311,7 @@ check it hasn't drifted from `conf/modules.config` before trusting it blindly on
 - Reference data setup (Exomiser data dir/analysis files, VEP cache/reference fasta): `docs/reference_data.md`.
 - Output layout: `docs/output.md`.
 - Visual flow diagrams: `docs/schema.txt` (ASCII), `docs/images/cnv_post_processing_workflow.png`.
+- slivar rules: the maps at the top of `assets/cnv-slivar-functions.js`; every named scenario's result in
+  `assets/moi_scenarios.md`; an overview in `docs/cnv-slivar.txt`.
 - Changelog and version history: `CHANGELOG.md`.
 - PR template: `.github/PULL_REQUEST_TEMPLATE.md`.
