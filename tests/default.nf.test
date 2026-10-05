@@ -36,4 +36,23 @@ nextflow_pipeline {
             )
         }
     }
+
+    // assets/cnv-slivar-functions.js models chrX/chrY copy number with hard-coded GRCh38 PAR
+    // coordinates, so PIPELINE_INITIALISATION refuses a non-GRCh38 run whenever a family has a
+    // familyPed (i.e. slivar would run), before any task starts.
+    test("-profile test with vep_genome GRCh37 fails before running slivar on the wrong build") {
+
+        when {
+            params {
+                outdir     = "$outputDir"
+                vep_genome = "GRCh37"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.trace.tasks().size() == 0
+            assert workflow.stdout.any { it.contains("only knows the GRCh38 pseudoautosomal regions") }
+        }
+    }
 }

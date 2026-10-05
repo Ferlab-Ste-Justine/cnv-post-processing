@@ -39,7 +39,7 @@ ind1,NA12878_ind,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cra
 | `cram`           | Optional  | Path to the sample's alignment file (`.cram` or `.bam`). Enables the depth-based genotype-refinement step for that sample; a family is only refined if every one of its samples has a cram. Not used for `DRAGEN_JOINT` rows.                                                                                                                      |
 | `pheno`          | Optional  | Path to a per-sample phenotype file in Phenopacket format (`.yaml`/`.yml`/`.json`). Enables Exomiser in single-sample mode for that sample.                                                                                                                                                                                                        |
 | `familyPheno`    | Optional  | Path to a phenopacket file, identical across every row of the same family. Enables Exomiser in family mode.                                                                                                                                                                                                                                        |
-| `familyPed`      | Optional  | Path to a PED file (`.ped`), identical across every row of the same family. Enables slivar mode-of-inheritance classification.                                                                                                                                                                                                                     |
+| `familyPed`      | Optional  | Path to a PED file (`.ped`), identical across every row of the same family. Enables slivar mode-of-inheritance classification (GRCh38 only).                                                                                                                                                                                                       |
 
 An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
@@ -72,7 +72,7 @@ Notes about the phenopacket file (`pheno`/`familyPheno` columns):
 
 ### PED file (`familyPed`)
 
-A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must match those in the samplesheet's `sample` column.
+A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must match those in the samplesheet's `sample` column. Its sex column must be correct: on non-PAR chrX and chrY, a normal male carries one copy, so slivar uses each sample's sex to decide what copy number is normal. A wrong sex misclassifies every call there, and a sex of `0` (unknown) makes slivar skip non-PAR chrX/chrY records for that family. Check sex against the data (e.g. chrX heterozygosity, or the CNV caller's own sex estimate) before running the pipeline.
 
 ## Install reference data and prepare parameters file
 

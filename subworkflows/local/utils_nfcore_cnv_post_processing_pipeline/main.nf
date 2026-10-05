@@ -173,6 +173,14 @@ def validateInputSamplesheet(input) {
     if (meta.caller == 'DRAGEN_JOINT' && meta.pheno) {
         error("Sample '${meta.sample}' (family '${meta.familyId}'): caller='DRAGEN_JOINT' rows don't go through the per-sample chain exomiser (single-sample mode) reads from, so 'pheno' would silently never be used. Remove 'pheno' for this row (use 'familyPheno' for exomiser family mode instead).")
     }
+    // A familyPed means slivar will classify this family, and assets/cnv-slivar-functions.js
+    // decides expected copy number on chrX/chrY from hard-coded GRCh38 PAR coordinates
+    // (CNV_PAR_X / CNV_PAR_Y). On any other build those coordinates are wrong, so every
+    // sex-chromosome call near a PAR would be silently misclassified -- fail before anything
+    // runs instead.
+    if (meta.familyPed && params.vep_genome != 'GRCh38') {
+        error("Family '${meta.familyId}' has a familyPed, so slivar will classify it, but vep_genome is '${params.vep_genome}': slivar's chrX/chrY expected-copy-number model (assets/cnv-slivar-functions.js) only knows the GRCh38 pseudoautosomal regions. Use GRCh38 data, or remove familyPed to skip slivar.")
+    }
     return input
 }
 

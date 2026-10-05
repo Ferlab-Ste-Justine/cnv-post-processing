@@ -665,6 +665,8 @@ function has_parent(s, which) {
 // ===========================================================================
 // Genome model: expected copy number (unchanged from the proposed file, P1)
 // GRCh38 PAR, 1-based inclusive. GRCh37: PAR1 60001-2699520, PAR2 154931044-155260560.
+// The pipeline refuses to run slivar unless vep_genome is GRCh38 (validateInputSamplesheet in
+// subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf).
 // ===========================================================================
 var CNV_PAR_X = [
   [10001, 2781479],
