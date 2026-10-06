@@ -63,7 +63,7 @@
 // │       [has_parent(s,"mom")] && ![has_cn(s.mom)]        ─► "unknown_cn"
 // │       [has_parent(s,"dad")] && ![has_cn(s.dad)]        ─► "unknown_cn"
 // │
-// ├─③ carrier_children(fam, variant)
+// ├─③ get_carrier_children(fam, variant)
 // │     for each person: affected
 // │                      && ([has_parent(s,"mom")] || [has_parent(s,"dad")])
 // │                      && [get_cn_dev(s)] ∉ {null, 0}        → keep
@@ -317,7 +317,7 @@ var FAMILY_TABLE = [
  * Checks, in order:
  *    1) can the record be modelled (is_modellable);
  *    2) is a needed CN missing (is_cn_missing);
- *    3) which affected carrier children are there (carrier_children);
+ *    3) which affected carrier children are there (get_carrier_children);
  *    4) their TRIO_TABLE calls (trio_call);
  *    5) the first FAMILY_TABLE row the family fits, otherwise 6) no_pattern().
  *
@@ -362,7 +362,7 @@ function cnv_moi(fam, variant) {
   if (!is_modellable(fam, variant)) return null; // chrM, PAR-straddling record, unknown sex on X/Y, female on Y (P1)
   if (is_cn_missing(fam, variant)) return "unknown_cn"; // a CN we need is missing (P15)
 
-  var kids = carrier_children(fam, variant);
+  var kids = get_carrier_children(fam, variant);
   if (kids.length === 0) {
     // no affected carrier child (S1 T12 T13 Q8 X1) ...
     if (has_affected_carrier(fam, variant) && !are_parent_absent_in_fam(fam)) return no_pattern(fam, variant); // ... but an affected parent carries it: not segregating (T15)
@@ -589,7 +589,7 @@ function populate_parent_token(kid, which, kd, variant) {
  * @param {Array}    row      one FAMILY_TABLE row: [tag, calls, carriers, transmitter, others]
  * @param {Sample[]} fam
  * @param {Variant}  variant
- * @param {Sample[]} kids     affected carrier children (from carrier_children)
+ * @param {Sample[]} kids     affected carrier children (from get_carrier_children)
  * @param {string[]} calls    their trio_call() results; calls[i] belongs to kids[i]
  * @returns {boolean} true if the family fits this row
  * @example
@@ -751,16 +751,16 @@ function is_half_of_some_kid(d, kids, variant) {
  * @example
  * // dad affected CN1 (founder), mom CN2, kid affected CN1,
  * // sib1 unaffected CN1, sib2 affected CN2
- * carrier_children(fam, variant)  // → [kid]
+ * get_carrier_children(fam, variant)  // → [kid]
  * @example
  * // T4: affected kid CN1, mom CN1, dad CN2
- * carrier_children(fam, variant)  // → [kid]
+ * get_carrier_children(fam, variant)  // → [kid]
  * // X1: affected son CN1 on non-PAR chrX (normal for a male: dev 0)
- * carrier_children(fam, variant)  // → []
+ * get_carrier_children(fam, variant)  // → []
  * // T13: UNAFFECTED kid CN1                 → []   (not affected)
  * // S1: affected singleton CN1, no parents  → []   (no parent in the family)
  */
-function carrier_children(fam, variant) {
+function get_carrier_children(fam, variant) {
   var out = [];
   for (var i = 0; i < fam.length; i++) {
     var s = fam[i];
