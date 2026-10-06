@@ -70,8 +70,8 @@
 // │     → kids = [...]
 // │
 // │     kids empty?
-// │       ├─ has_affected_carrier(fam)          [get_cn_dev] for each affected
-// │       │  && !are_parent_absent_in_fam(fam)  someone has kids?
+// │       ├─ has_affected_carrier(fam)           [get_cn_dev] for each affected
+// │       │  && !are_parents_absent_in_fam(fam)  someone has kids?
 // │       │        both true ──────────────────────────► no_pattern()  ⑥
 // │       └─ otherwise ────────────────────────────────────────► null
 // │
@@ -365,7 +365,7 @@ function cnv_moi(fam, variant) {
   var kids = get_carrier_children(fam, variant);
   if (kids.length === 0) {
     // no affected carrier child (S1 T12 T13 Q8 X1) ...
-    if (has_affected_carrier(fam, variant) && !are_parent_absent_in_fam(fam)) return no_pattern(fam, variant); // ... but an affected parent carries it: not segregating (T15)
+    if (has_affected_carrier(fam, variant) && !are_parents_absent_in_fam(fam)) return no_pattern(fam, variant); // ... but an affected parent carries it: not segregating (T15)
     return null;
   }
   var calls = [];
@@ -798,11 +798,11 @@ function has_affected_carrier(fam, variant) {
  * @param {Sample[]} fam
  * @returns {boolean}
  * @example
- * are_parent_absent_in_fam(<singleton>)                 // → true
- * are_parent_absent_in_fam(<two sibs, no parents>)      // → true
- * are_parent_absent_in_fam(<trio>)                      // → false
+ * are_parents_absent_in_fam(<singleton>)                 // → true
+ * are_parents_absent_in_fam(<two sibs, no parents>)      // → true
+ * are_parents_absent_in_fam(<trio>)                      // → false
  */
-function are_parent_absent_in_fam(fam) {
+function are_parents_absent_in_fam(fam) {
   for (var i = 0; i < fam.length; i++) if (fam[i].kids && fam[i].kids.length > 0) return false;
   return true;
 }
