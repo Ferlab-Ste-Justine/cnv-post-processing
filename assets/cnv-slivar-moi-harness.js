@@ -102,7 +102,7 @@ function child_calls(fam, v) {
   return (
     fam
       .filter(function (s) {
-        var d = T.cn_dev(s, v);
+        var d = T.get_cn_dev(s, v);
         return s.affected && ("mom" in s || "dad" in s) && d !== null && d !== 0;
       })
       .map(function (s) {
@@ -403,7 +403,7 @@ for (var it = 0; it < N; it++) {
     fam.forEach(function (s) {
       var po = T.cn_po_origin(s, v);
       if (!KNOWN_PO[po]) problem("unknown parent of origin: " + po, spec, v);
-      var d = T.cn_dev(s, v);
+      var d = T.get_cn_dev(s, v);
       if (!(s.affected && ("mom" in s || "dad" in s) && d !== null && d !== 0)) return;
       var call = T.trio_call(s, v); // every carrier child must get a real call ...
       if (typeof call !== "string") {

@@ -8,7 +8,7 @@ Running notes on decisions, open questions and follow-ups for this pipeline.
 
 _Noted 2026-10-05, BIOINFO-214. To discuss with the team._
 
-**Context:** in `assets/cnv-slivar-functions.js`, `parent_transmission()` says what a parent can pass to a child on a given record. Two things build on it: `transmission_origin()`, behind the `TRIO_TABLE` origin column and the parent-of-origin tags (`po_mother`, `po_father`, ...), and `transmissions()`, behind the `mendelian_inconsistent` check. On non-PAR chrX/chrY some parents pass nothing at all, biologically: a father passes no X to a son, and a mother passes no Y.
+**Context:** in `assets/cnv-slivar-functions.js`, `get_parent_transmission()` says what a parent can pass to a child on a given record. Two things build on it: `get_transmission_origin()`, behind the `TRIO_TABLE` origin column and the parent-of-origin tags (`po_mother`, `po_father`, ...), and `transmissions()`, behind the `mendelian_inconsistent` check. On non-PAR chrX/chrY some parents pass nothing at all, biologically: a father passes no X to a son, and a mother passes no Y.
 
 **Current behaviour (since the transmission-engine change):** such a parent counts as passing nothing (`[0]`) even when they are absent from the PED or have no CN. Before, an absent or CN-less parent always counted as "could have passed any value" (`0..kid CN`), whoever they were.
 
@@ -23,7 +23,7 @@ _Noted 2026-10-05, BIOINFO-214. To discuss with the team._
 - A mother–son duo on chrX no longer gets a parent of origin.
 - Parent of origin on chrY never resolves for anyone: DRAGEN reports no CN for females on chrY, so the mother would always count as unknown. If we want "any value", it should probably apply to an absent parent only, not to a parent with no CN on a chromosome they don't carry.
 
-**Where to change it:** the first `if (hemi)` block in `parent_transmission()`; `transmissions()` and `transmission_origin()` follow from it.
+**Where to change it:** the first `if (hemi)` block in `get_parent_transmission()`; `transmissions()` and `get_transmission_origin()` follow from it.
 
 ## TODO
 

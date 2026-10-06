@@ -24,11 +24,11 @@ cnv_moi(fam, variant)
 └─ no row fits           mendelian_inconsistent if some CN can't come from the parents,
                          inheritance_unresolved otherwise
 
-cn_po_origin(sample, variant)   maternal / paternal / both / ambiguous, or nothing
-└─ transmission_origin()        also the TRIO_TABLE origin column, so MoI and PO always agree
-   └─ parent_transmission()     what each parent can pass: one of two haplotypes (CN 0-3), or on
-                                non-PAR X/Y a father's single copy (X to a daughter, Y to a son);
-                                a father's X to a son and a mother's Y count as nothing
+cn_po_origin(sample, variant)       maternal / paternal / both / ambiguous, or nothing
+└─ get_transmission_origin()        also the TRIO_TABLE origin column, so MoI and PO always agree
+   └─ get_parent_transmission()     what each parent can pass: one of two haplotypes (CN 0-3), or on
+                                    non-PAR X/Y a father's single copy (X to a daughter, Y to a son);
+                                    a father's X to a son and a mother's Y count as nothing
 
 Expected CN: 2 on autosomes and in the GRCh38 PARs; on non-PAR chrX 1 for males and 2 for
 females; on non-PAR chrY 1 for males. Every rule works on the deviation from it. A record that

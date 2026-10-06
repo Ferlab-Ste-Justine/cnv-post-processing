@@ -264,8 +264,8 @@ A few patterns and gotchas worth knowing before editing:
     MoI tag (slivar values it with the family's affected members).
   - `cn_po_origin(sample, variant)` drives the 4 per-sample `--sample-expr` tags (`po_mother`,
     `po_father`, `po_both`, `po_ambiguous`), valued with exactly the children it resolves.
-  - Both use one transmission engine (`parent_transmission` / `transmission_origin`), so MoI and
-    parent of origin always agree.
+  - Both use one transmission engine (`get_parent_transmission` / `get_transmission_origin`), so
+    MoI and parent of origin always agree.
   - Expected CN is chromosome- and sex-aware: 2 on autosomes and PAR, on non-PAR chrX 1 for a male
     and 2 for a female, on non-PAR chrY 1 for a male. chrM, PAR-straddling records, unknown sex on
     non-PAR chrX/chrY and a female on non-PAR chrY aren't modelled (no tag). The PARs are
