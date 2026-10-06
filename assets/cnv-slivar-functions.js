@@ -498,8 +498,14 @@ function trio_call(kid, variant) {
   var origin = get_transmission_origin(kid, variant); // "maternal" | "paternal" | "both" | "ambiguous" | null -- same answer as cn_po_origin()
   for (var i = 0; i < TRIO_TABLE.length; i++) {
     var row = TRIO_TABLE[i];
+    // excerpt from the TRIO table.
+    // kid       mom        dad        origin       child call                      harness rows
+    // ["±1",    "normal",  "normal",  "any",       "de_novo"],                     // T1 T2 X3
+    // ["±2+",   "normal",  "normal",  "any",       "de_novo_suspect"],             // T3   (P5: two hits at one locus is implausible)
+    //["any",    "any",     "any",     "maternal",  "inherited_maternal"],          // T4 T7 X2, Q9 kid
     if (
-      kidTok.indexOf(row[0]) >= 0 && // is the row's kid value in the kid's list? again kid's list could be  ["any", "±1"]. yes ->
+      // ex: is "+/-1 found in ['any', '+1']"
+      kidTok.indexOf(row[0]) >= 0 && // is the row's kid value in the kidTok's list? again kid's list could be  ["any", "±1"]. yes ->
       (row[1] === "any" || row[1] === momTok) && // row accepts any mom, or exactly this mom? yes ->
       (row[2] === "any" || row[2] === dadTok) && // row accepts any dad, or exactly this dad? yes ->
       (row[3] === "any" || row[3] === origin)
