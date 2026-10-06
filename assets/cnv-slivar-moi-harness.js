@@ -23,7 +23,7 @@ var path = require("path");
 function here(f) {
   return path.join(__dirname, f);
 } // all files live next to this script, whatever the cwd
-var MISSING = -127; // slivar's sentinel for a missing FORMAT int
+var MISSING = -2147483648; // what slivar passes for FORMAT/CN "." (htslib's bcf_int32_missing, INT32_MIN)
 var EXPECTED = "moi_scenarios.expected.tsv";
 var ACCEPT = process.argv.indexOf("--accept") >= 0;
 var failed = false;
