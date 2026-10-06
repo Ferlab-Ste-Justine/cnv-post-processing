@@ -4,7 +4,8 @@
 //
 // Test bench for cnv-slivar-functions.js (the SLIVAR_EXPR rules) only.
 // Builds made-up families shaped like slivar's sample objects and writes:
-//   moi_scenarios.tsv       one row per named scenario: tag, child calls, parent of origin
+//   moi_scenarios.tsv       one row per named scenario: the family (region, each member's CN),
+//                           tag, child calls, parent of origin
 //   moi_scenarios.md        the same table as Markdown
 //   trio_lookup_table.tsv   TRIO_TABLE expanded to concrete autosomal CNs (kid, mom, dad -> call)
 //
@@ -239,11 +240,58 @@ var scenarios = [
 // ---------------------------------------------------------------------------
 // 1. Scenario table (TSV + Markdown)
 // ---------------------------------------------------------------------------
-var header = ["scenario", "tag", "child calls (TRIO_TABLE)", "parent of origin (sample-expr)"];
+// The family columns are built from each scenario's own spec, so they always show what was tested.
+var REGIONS = [
+  [AUTO, "chr7"],
+  [XNP, "chrX non-PAR"],
+  [XSTRADDLE, "chrX across the PAR1 end"],
+  [XPAR, "chrX PAR1"],
+  [YNP, "chrY non-PAR"],
+  [MT, "chrM"],
+  [AUTO_NO_END, "chr7, no INFO/END"],
+];
+function region(v) {
+  for (var i = 0; i < REGIONS.length; i++) if (REGIONS[i][0] === v) return REGIONS[i][1];
+  return v.CHROM;
+}
+// One member's cell: CN ("." = missing), " aff" when affected, "son " / "daughter " when the
+// spec sets the sex; "absent" = not in the PED. E.g. "son 0 aff", "1", ".", "absent".
+function member(m, sex) {
+  if (!m) return "absent";
+  var who = sex === "male" ? "son " : sex === "female" ? "daughter " : "";
+  return who + (m[0] === null ? "." : m[0]) + (m[1] ? " aff" : "");
+}
+var header = [
+  "scenario",
+  "region",
+  "kid",
+  "mom",
+  "dad",
+  "sib",
+  "tag",
+  "child calls (TRIO_TABLE)",
+  "parent of origin (sample-expr)",
+];
+var TAG = header.indexOf("tag");
 var rows = scenarios.map(function (sc) {
-  var fam = family(sc[2]),
+  var spec = sc[2],
+    fam = family(spec),
     v = sc[1];
-  return [sc[0], T.cnv_moi(fam, v) || "-", child_calls(fam, v), po(fam, v)];
+  return [
+    sc[0],
+    region(v),
+    member(spec.kid, spec.kidsex),
+    member(spec.mom),
+    member(spec.dad),
+    (spec.sibs || [])
+      .map(function (sb) {
+        return member(sb, sb[2]);
+      })
+      .join(", "),
+    T.cnv_moi(fam, v) || "-",
+    child_calls(fam, v),
+    po(fam, v),
+  ];
 });
 function to_tsv(rs) {
   return (
@@ -269,6 +317,9 @@ var md = [
   "",
   "Scenario prefixes: **T** trio, **X** chrX, **Y** chrY, **M** chrM, **D** duo, **S** singleton, **Q** two children. `-` = no tag.",
   "",
+  "Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = not in the PED; `son` / `daughter` where the scenario sets the sex. " +
+    "Normal CN: 2 on autosomes and in the PARs; on non-PAR chrX 1 for a son and 2 for a daughter; on non-PAR chrY 1 for a son (a daughter has no Y).",
+  "",
   "| " + header.join(" | ") + " |",
   "|" +
     header
@@ -281,7 +332,7 @@ var md = [
 rows.forEach(function (r) {
   var c = r.map(md_cell);
   c[0] = "**" + c[0].replace(/^(\S+)\s+/, "$1** ");
-  c[1] = "`" + c[1] + "`";
+  c[TAG] = "`" + c[TAG] + "`";
   md.push("| " + c.join(" | ") + " |");
 });
 fs.writeFileSync(here("moi_scenarios.md"), md.join("\n") + "\n");
@@ -311,7 +362,7 @@ if (!fs.existsSync(here(EXPECTED))) {
   var changes = [];
   Object.keys(now).forEach(function (id) {
     if (!exp[id]) {
-      changes.push("  + " + id + " (new scenario): " + now[id][1]);
+      changes.push("  + " + id + " (new scenario): " + now[id][TAG]);
       return;
     }
     for (var c = 1; c < header.length; c++) {
