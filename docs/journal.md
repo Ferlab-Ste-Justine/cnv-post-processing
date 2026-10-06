@@ -27,6 +27,23 @@ _Noted 2026-10-05, BIOINFO-214. To discuss with the team._
 
 ## TODO
 
+### Have a geneticist review the slivar MoI scenarios
+
+_Noted 2026-10-06, BIOINFO-214._
+
+**Why:** `assets/moi_scenarios.expected.tsv`, the golden file of the slivar rules harness, records what the code does, not what's right. It was produced with `node assets/cnv-slivar-moi-harness.js --accept`, and the harness and `ci-slivar-harness.yml` only check that the code keeps matching it. It only becomes a spec once a geneticist has gone through it and agreed. That review is part of the development work too.
+
+**What to hand over:**
+
+- `assets/moi_scenarios.md`: the 47 named scenarios (trios, duos, a singleton, families with two children, chrX/chrY/chrM), each with its family tag, child calls and parent of origin.
+- `assets/trio_lookup_table.tsv`: every autosomal kid/mom/dad CN combination with its child call and parent of origin, all 144 rows. For example, its first row says kid CN 0, mom CN 0, dad CN 0 → `inheritance_unresolved`, origin `both`. A geneticist can check calls like that at a glance. These are child calls (`TRIO_TABLE`), before `FAMILY_TABLE` uses who is affected to turn them into the family tag.
+- The open questions above.
+
+**After the review:**
+
+- A result they disagree with is either a rule change in `assets/cnv-slivar-functions.js` or a new open question.
+- A case they bring up that the table doesn't cover becomes a new named scenario in the harness, which also makes it a test.
+
 ### Replace `commit_lint.yml` with the PR title check
 
 _Noted 2026-09-28, BIOINFO-214._
