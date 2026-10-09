@@ -23,7 +23,7 @@ nextflow_process {
     // family sharing a VCF with another one sees "missing CN" on rows that aren't its own. Scenarios sharing an identical pedigree shape (same affected-status
     // pattern) are combined as multiple rows of the same family, which is safe.
     //
-    // Each toy .vcf is plain, uncompressed VCF text (no bgzip step needed). famA-famD carry no
+    // Each toy .vcf is plain, uncompressed VCF text (no bgzip step needed). famA-famD and famQ carry no
     // INFO/END, so the rules must read the CNV end from variant.stop (reading a missing INFO
     // field throws in slivar); famXs/famXd do, which the chrX/chrY PAR checks depend on. Each .vcf.tbi is an inert placeholder: SLIVAR_EXPR never reads the
     // `tbi` input, it only satisfies the process's 4-element input tuple.
@@ -133,7 +133,7 @@ nextflow_process {
         }
     }
 
-    test("famC: recessive, low confidence -- duo, no father in the pedigree") {
+    test("famC: duo, no father in the pedigree -- recessive low confidence, possible inherited / de novo") {
 
         when {
             process {
@@ -172,11 +172,13 @@ nextflow_process {
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
-            assert lines.size() == 1
+            assert lines.size() == 3
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
             // No father, so no parent of origin: an autosomal origin needs both parents.
             check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"]])
+            check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"]])
+            check(byId["famC_D3_possible_de_novo"], [possible_de_novo: ["famC_kid"]])
         }
     }
 
@@ -227,6 +229,58 @@ nextflow_process {
             check(byId["famD_T13_po_mother"], [po_mother: ["famD_kid"]])
             check(byId["famD_T21_po_father"], [po_father: ["famD_kid"]])
             check(byId["famD_T22_po_ambiguous"], [po_ambiguous: ["famD_kid"]])
+        }
+    }
+
+    // Two affected children, unaffected parents: each MoI tag is a --sample-expr, so one record can
+    // name both children in the same tag (Q5) or give each child a different one (Q9).
+    test("famQ: two affected children -- one tag naming both (Q5), a different tag per child (Q9)") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famQ"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famQ.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famQ.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famQ.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 2
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famQ_Q5_de_novo_both_sibs"], [de_novo: ["famQ_kid", "famQ_sib"]])
+            check(byId["famQ_Q9_maternal_kid_paternal_sib"], [
+                inherited_maternal: ["famQ_kid"], inherited_paternal: ["famQ_sib"],
+                po_mother: ["famQ_kid"], po_father: ["famQ_sib"]
+            ])
         }
     }
 
