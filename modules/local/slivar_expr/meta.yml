@@ -1,7 +1,7 @@
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
 name: "slivar_expr"
-description: Classify CNV mode of inheritance (one tag per family and record, e.g. de novo / dominant / inherited from one parent / recessive / unresolved / Mendelian-inconsistent) and per-sample parent-of-origin (maternal / paternal / both / ambiguous) for any family shape (trios, duos, singletons, sibships) via slivar expr --family-expr and --sample-expr
+description: Classify CNV mode of inheritance per affected child (one tag per child and record, e.g. de novo / inherited from one parent / recessive / unresolved / Mendelian-inconsistent) and per-child parent-of-origin (maternal / paternal / both / ambiguous) for any family shape (trios, duos, singletons, sibships) via slivar expr --sample-expr
 keywords:
   - cnv
   - inheritance
@@ -36,7 +36,7 @@ input:
         pattern: "*.ped"
   - - js:
         type: file
-        description: assets/cnv-slivar-functions.js -- the cnv_moi(fam, variant) and cn_po_origin(sample, variant) classifiers
+        description: assets/cnv-slivar-functions.js -- the cnv_moi(sample, variant) and cn_po_origin(sample, variant) classifiers
         pattern: "*.js"
 
 output:

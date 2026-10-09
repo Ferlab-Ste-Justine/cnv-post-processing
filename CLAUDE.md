@@ -256,26 +256,28 @@ A few patterns and gotchas worth knowing before editing:
   consistent. Local-only logic goes under `modules/local/`.
 - **Schema and params stay in sync.** `nextflow_schema.json` drives the `nf-schema` plugin. When
   adding a param, update both `nextflow.config` defaults and the schema.
-- **slivar rules: `assets/cnv-slivar-functions.js`.** Two classifiers, each with a map at the top
-  of the file:
-  - `cnv_moi(fam, variant)` drives the 14 `--family-expr` mode-of-inheritance tags in
-    `conf/modules.config`: each affected carrier child gets a call from `TRIO_TABLE`, then
-    `FAMILY_TABLE` turns the children's calls into one family tag, so a record gets at most one
-    MoI tag (slivar values it with the family's affected members).
-  - `cn_po_origin(sample, variant)` drives the 4 per-sample `--sample-expr` tags (`po_mother`,
-    `po_father`, `po_both`, `po_ambiguous`), valued with exactly the children it resolves.
+- **slivar rules: `assets/cnv-slivar-functions.js`.** Two per-sample classifiers, each with a map at
+  the top of the file, each tag a `--sample-expr` in `conf/modules.config` that slivar values
+  with exactly the samples it is true for:
+  - `cnv_moi(sample, variant)` drives the 12 mode-of-inheritance tags: each affected carrier child
+    gets the call of the first matching `TRIO_TABLE` row (the child and its parents), so a child
+    gets at most one MoI tag. There is no family-level tag (no `dominant`, no segregation check
+    across sibs): who is affected elsewhere in the family is left to whoever reads the tags.
+  - `cn_po_origin(sample, variant)` drives the 4 parent-of-origin tags (`po_mother`,
+    `po_father`, `po_both`, `po_ambiguous`), for every child.
   - Both use one transmission engine (`get_parent_transmission` / `get_transmission_origin`), so
     MoI and parent of origin always agree.
   - Expected CN is chromosome- and sex-aware: 2 on autosomes and PAR, on non-PAR chrX 1 for a male
     and 2 for a female, on non-PAR chrY 1 for a male. chrM, PAR-straddling records, unknown sex on
-    non-PAR chrX/chrY and a female on non-PAR chrY aren't modelled (no tag). The PARs are
-    hard-coded GRCh38, hence the startup guard on `vep_genome` in `validateInputSamplesheet`; the
-    PED sex column must be right.
+    non-PAR chrX/chrY and a female on non-PAR chrY aren't modelled (no tag). A parent who passes
+    nothing (a father's X to a son, any mother's Y) is read as normal and their CN isn't needed
+    (`does_parent_pass_nothing()`). The PARs are hard-coded GRCh38, hence the startup guard on
+    `vep_genome` in `validateInputSamplesheet`; the PED sex column must be right.
   - The file is ES5, for slivar's JS engine (duktape). Reading an attribute slivar didn't set
     (`s.mom` on a founder, `INFO.END` on a record without one) throws there, and slivar then
     writes the record with no tag, silently: test parents with `has_parent()` (`in`) and read the
     CNV end from `variant.stop`.
-  - `TRIO_TABLE` and `FAMILY_TABLE` are hand-aligned under `// prettier-ignore`; keep them aligned.
+  - `TRIO_TABLE` is hand-aligned under `// prettier-ignore`; keep it aligned.
     The worked-example notes inside `cnv_moi()` and `trio_call()` are kept on purpose.
   - Tests: `node assets/cnv-slivar-moi-harness.js` runs every named scenario against the golden file
     `assets/moi_scenarios.expected.tsv` (re-run with `--accept` once a change is understood) plus

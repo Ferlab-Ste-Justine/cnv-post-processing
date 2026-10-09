@@ -5,7 +5,7 @@
 // Test bench for cnv-slivar-functions.js (the SLIVAR_EXPR rules) only.
 // Builds made-up families shaped like slivar's sample objects and writes:
 //   moi_scenarios.tsv       one row per named scenario: the family (region, each member's CN),
-//                           tag, child calls, parent of origin
+//                           MoI call per child, parent of origin
 //   moi_scenarios.md        the same table as Markdown
 //   trio_lookup_table.tsv   TRIO_TABLE expanded to concrete autosomal CNs (kid, mom, dad -> call)
 //
@@ -15,7 +15,8 @@
 //   explain. When you agree with the new results, re-run with --accept.
 //
 // Random families: 200000 random pedigrees are run to check that nothing
-// crashes and that cnv_moi() only ever returns a known tag (or null).
+// crashes, that cnv_moi() only ever returns a known call (or null), and that
+// every inherited_* call agrees with the child's parent of origin.
 //
 // Exit code 1 if anything changed versus the reference or a check failed.
 var T = require("./cnv-slivar-functions.js");
@@ -99,15 +100,16 @@ var AUTO_NO_END = strict(
   "variant",
 );
 
-function child_calls(fam, v) {
+// The MoI tags as slivar writes them: every sample with a call, as id=call.
+function moi(fam, v) {
   return (
     fam
-      .filter(function (s) {
-        var d = T.get_cn_dev(s, v);
-        return s.affected && ("mom" in s || "dad" in s) && d !== null && d !== 0;
-      })
       .map(function (s) {
-        return s.id + "=" + T.trio_call(s, v);
+        var call = T.cnv_moi(s, v);
+        return call === null ? null : s.id + "=" + call;
+      })
+      .filter(function (x) {
+        return x !== null;
       })
       .join(" ") || "-"
   );
@@ -197,8 +199,8 @@ var scenarios = [
     XNP,
     { kid: [1, 1], kidsex: "female", mom: [1, 0], dad: [1, 0] },
   ],
-  // chrY: a female has no Y (no CN there), so any family with a mother isn't modelled for MoI;
-  // a son's own parent of origin is still resolved (his Y is his father's).
+  // chrY: a daughter has no Y, so she isn't modelled; a son's Y is his father's, and his
+  // mother (no CN there) passes nothing.
   [
     "Y1  chrY daughter, no CN on Y (not modelled)",
     YNP,
@@ -208,6 +210,17 @@ var scenarios = [
     "Y2  chrY son CN=2, dad CN=2 (father's duplicated Y)",
     YNP,
     { kid: [2, 1], kidsex: "male", mom: [null, 0], dad: [2, 0] },
+  ],
+  [
+    "Y3  chrY son CN=2, dad CN=1 (de novo duplication)",
+    YNP,
+    { kid: [2, 1], kidsex: "male", mom: [null, 0], dad: [1, 0] },
+  ],
+  ["Y4  chrY son CN=0, dad CN=1 (de novo deletion)", YNP, { kid: [0, 1], kidsex: "male", mom: [null, 0], dad: [1, 0] }],
+  [
+    "Y5  chrY son CN=0, dad CN=0 (father's deleted Y)",
+    YNP,
+    { kid: [0, 1], kidsex: "male", mom: [null, 0], dad: [0, 0] },
   ],
   ["M1  chrM son CN=0, parents CN=2 (not modelled)", MT, { kid: [0, 1], kidsex: "male", mom: [2, 0], dad: [2, 0] }],
   ["D1  duo kid CN=1, mom CN=1", AUTO, { kid: [1, 1], mom: [1, 0], dad: null }],
@@ -221,7 +234,11 @@ var scenarios = [
     { kid: [0, 1], mom: [1, 0], dad: [1, 0], sibs: [[1, 0]] },
   ],
   ["Q2  quad: recessive + unaffected sib CN=2", AUTO, { kid: [0, 1], mom: [1, 0], dad: [1, 0], sibs: [[2, 0]] }],
-  ["Q3  quad: dominant + unaffected sib CN=1", AUTO, { kid: [1, 1], mom: [2, 0], dad: [1, 1], sibs: [[1, 0]] }],
+  [
+    "Q3  quad: kid CN=1 from AFFECTED dad CN=1, unaffected sib CN=1",
+    AUTO,
+    { kid: [1, 1], mom: [2, 0], dad: [1, 1], sibs: [[1, 0]] },
+  ],
   ["Q4  quad: de novo, unaffected sib CN=2", AUTO, { kid: [1, 1], mom: [2, 0], dad: [2, 0], sibs: [[2, 0]] }],
   ["Q5  quad: two affected sibs CN=1, parents CN=2", AUTO, { kid: [1, 1], mom: [2, 0], dad: [2, 0], sibs: [[1, 1]] }],
   [
@@ -261,18 +278,8 @@ function member(m, sex) {
   var who = sex === "male" ? "son " : sex === "female" ? "daughter " : "";
   return who + (m[0] === null ? "." : m[0]) + (m[1] ? " aff" : "");
 }
-var header = [
-  "scenario",
-  "region",
-  "kid",
-  "mom",
-  "dad",
-  "sib",
-  "tag",
-  "child calls (TRIO_TABLE)",
-  "parent of origin (sample-expr)",
-];
-var TAG = header.indexOf("tag");
+var header = ["scenario", "region", "kid", "mom", "dad", "sib", "MoI (sample-expr)", "parent of origin (sample-expr)"];
+var MOI = header.indexOf("MoI (sample-expr)");
 var rows = scenarios.map(function (sc) {
   var spec = sc[2],
     fam = family(spec),
@@ -288,8 +295,7 @@ var rows = scenarios.map(function (sc) {
         return member(sb, sb[2]);
       })
       .join(", "),
-    T.cnv_moi(fam, v) || "-",
-    child_calls(fam, v),
+    moi(fam, v),
     po(fam, v),
   ];
 });
@@ -332,7 +338,7 @@ var md = [
 rows.forEach(function (r) {
   var c = r.map(md_cell);
   c[0] = "**" + c[0].replace(/^(\S+)\s+/, "$1** ");
-  c[TAG] = "`" + c[TAG] + "`";
+  c[MOI] = c[MOI].replace(/=(\S+)/g, "=`$1`");
   md.push("| " + c.join(" | ") + " |");
 });
 fs.writeFileSync(here("moi_scenarios.md"), md.join("\n") + "\n");
@@ -362,7 +368,7 @@ if (!fs.existsSync(here(EXPECTED))) {
   var changes = [];
   Object.keys(now).forEach(function (id) {
     if (!exp[id]) {
-      changes.push("  + " + id + " (new scenario): " + now[id][TAG]);
+      changes.push("  + " + id + " (new scenario): " + now[id][MOI]);
       return;
     }
     for (var c = 1; c < header.length; c++) {
@@ -410,9 +416,9 @@ fs.writeFileSync(
 // ---------------------------------------------------------------------------
 // 4. Random families: no crash, only known tags, MoI and parent of origin agree
 // ---------------------------------------------------------------------------
-var KNOWN = { "-": true, unknown_cn: true, inheritance_unresolved: true, mendelian_inconsistent: true };
-T.FAMILY_TABLE.forEach(function (row) {
-  KNOWN[row[0]] = true;
+var KNOWN = { unknown_cn: true, inheritance_unresolved: true, mendelian_inconsistent: true };
+T.TRIO_TABLE.forEach(function (row) {
+  if (row[4] !== "no_pattern") KNOWN[row[4]] = true;
 });
 var KNOWN_PO = { null: true, maternal: true, paternal: true, both: true, ambiguous: true };
 
@@ -447,18 +453,23 @@ for (var it = 0; it < N; it++) {
     dad: rnd(5) ? [pick(CNPOOL), rnd(4) === 0 ? 1 : 0] : null,
     sibs: rnd(2) ? [[pick(CNPOOL), rnd(2), pick(["male", "female"])]] : [],
   };
-  var fam = family(spec),
-    tag;
+  var fam = family(spec);
   try {
-    tag = T.cnv_moi(fam, v) || "-";
     fam.forEach(function (s) {
       var po = T.cn_po_origin(s, v);
       if (!KNOWN_PO[po]) problem("unknown parent of origin: " + po, spec, v);
+      var call = T.cnv_moi(s, v);
+      if (!("mom" in s || "dad" in s)) {
+        if (call !== null) problem("a founder got a call: " + call, spec, v);
+        return;
+      }
+      if (call !== null && !KNOWN[call]) problem("unknown call: " + call, spec, v);
+      counts[call || "-"] = (counts[call || "-"] || 0) + 1;
       var d = T.get_cn_dev(s, v);
-      if (!(s.affected && ("mom" in s || "dad" in s) && d !== null && d !== 0)) return;
-      var call = T.trio_call(s, v); // every carrier child must get a real call ...
+      if (!(s.affected && d !== null && d !== 0)) return;
       if (typeof call !== "string") {
-        problem("trio_call() returned no call", spec, v);
+        // every affected carrier child must get a call ...
+        problem("an affected carrier child got no call", spec, v);
         return;
       }
       if (call === "inherited_maternal" && po !== "maternal")
@@ -471,21 +482,21 @@ for (var it = 0; it < N; it++) {
     problem("crash: " + e.message, spec, v);
     continue;
   }
-  if (!KNOWN[tag]) problem("unknown tag: " + tag, spec, v);
-  counts[tag] = (counts[tag] || 0) + 1;
 }
 
 console.log("\nRandom families (" + N + "):");
 var probs = Object.keys(problems);
 if (probs.length === 0)
-  console.log("  no crashes, no unknown tags, every carrier child got a call that agrees with its parent of origin");
+  console.log(
+    "  no crashes, no unknown calls, every affected carrier child got a call that agrees with its parent of origin",
+  );
 else {
   failed = true;
   probs.forEach(function (p) {
     console.log("  PROBLEM " + p + "\n    e.g. " + problems[p]);
   });
 }
-console.log("  tags seen:");
+console.log('  MoI calls seen, per child ("-" = no call):');
 Object.keys(counts)
   .sort(function (a, b) {
     return counts[b] - counts[a];

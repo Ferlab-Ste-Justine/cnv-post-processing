@@ -15,8 +15,8 @@ nextflow_process {
     // this, not guessed).
     //
     // Unlike modules/local/slivar_expr/tests/main.nf.test's toy fixtures (which had to be split
-    // one-family-per-file to avoid slivar's --family-expr evaluating every family together at
-    // every row), refine_genotypes.py processes each VCF record/sample genotype fully
+    // one-family-per-file to avoid slivar evaluating every family's samples together at every
+    // row), refine_genotypes.py processes each VCF record/sample genotype fully
     // independently -- no shared state across records -- so it's safe and appropriate to combine
     // all scenarios into one VCF/one test(), which was itself confirmed (not assumed) by the real
     // run below.
