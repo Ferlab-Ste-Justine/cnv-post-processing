@@ -15,8 +15,11 @@
 //   explain. When you agree with the new results, re-run with --accept.
 //
 // Random families: 200000 random pedigrees are run to check that nothing
-// crashes, that cnv_moi() only ever returns a known call (or null), and that
-// every inherited_* call agrees with the child's parent of origin.
+// crashes, that cnv_moi() only ever returns a known call (or null), that every
+// inherited_* and de novo call agrees with the child's parent of origin, and that has_moi_call()
+// (the --family-expr entry point) tags the family with exactly its children's calls.
+//
+// Wiring: conf/modules.config must have one slivar expression per call and parent of origin.
 //
 // Exit code 1 if anything changed versus the reference or a check failed.
 var T = require("./cnv-slivar-functions.js");
@@ -100,7 +103,8 @@ var AUTO_NO_END = strict(
   "variant",
 );
 
-// The MoI tags as slivar writes them: every sample with a call, as id=call.
+// Each child's MoI call (cnv_moi), as id=call. slivar tags the family with each of these calls
+// (has_moi_call, --family-expr), valued with the family's affected members.
 function moi(fam, v) {
   return (
     fam
@@ -199,6 +203,11 @@ var scenarios = [
     XNP,
     { kid: [1, 1], kidsex: "female", mom: [1, 0], dad: [1, 0] },
   ],
+  [
+    "X10 chrX daughter CN=0, carrier mom CN=1, dad CN=0 (both X copies hit)",
+    XNP,
+    { kid: [0, 1], kidsex: "female", mom: [1, 0], dad: [0, 0] },
+  ],
   // chrY: a daughter has no Y, so she isn't modelled; a son's Y is his father's, and his
   // mother (no CN there) passes nothing.
   [
@@ -278,8 +287,17 @@ function member(m, sex) {
   var who = sex === "male" ? "son " : sex === "female" ? "daughter " : "";
   return who + (m[0] === null ? "." : m[0]) + (m[1] ? " aff" : "");
 }
-var header = ["scenario", "region", "kid", "mom", "dad", "sib", "MoI (sample-expr)", "parent of origin (sample-expr)"];
-var MOI = header.indexOf("MoI (sample-expr)");
+var header = [
+  "scenario",
+  "region",
+  "kid",
+  "mom",
+  "dad",
+  "sib",
+  "MoI call per child (cnv_moi)",
+  "parent of origin (sample-expr)",
+];
+var MOI = header.indexOf("MoI call per child (cnv_moi)");
 var rows = scenarios.map(function (sc) {
   var spec = sc[2],
     fam = family(spec),
@@ -420,7 +438,20 @@ var KNOWN = { unknown_cn: true, inheritance_unresolved: true, mendelian_inconsis
 T.TRIO_TABLE.forEach(function (row) {
   if (row[4] !== "no_pattern") KNOWN[row[4]] = true;
 });
-var KNOWN_PO = { null: true, maternal: true, paternal: true, both: true, ambiguous: true };
+["male", "female"].forEach(function (sex) {
+  Object.keys(T.X_LINKED_CALLS[sex]).forEach(function (call) {
+    KNOWN[T.X_LINKED_CALLS[sex][call]] = true;
+  });
+});
+var KNOWN_PO = {
+  null: true,
+  maternal: true,
+  paternal: true,
+  both: true,
+  ambiguous: true,
+  denovo: true,
+  possible_denovo: true,
+};
 
 // Fixed seed: same families every run. mulberry32, in exact 32-bit integer maths:
 // a plain (seed * 1103515245 + 12345) LCG overflows JS's 2^53 exact range, so its
@@ -476,7 +507,21 @@ for (var it = 0; it < N; it++) {
         problem("inherited_maternal but parent of origin " + po, spec, v);
       if (call === "inherited_paternal" && po !== "paternal")
         problem("inherited_paternal but parent of origin " + po, spec, v);
+      var de_novo_call = /de_novo/.test(call) && !/possible/.test(call); // de_novo, de_novo_suspect, x_linked_*_de_novo
+      if (call === "x_linked_recessive" && po !== (s.sex === "male" ? "maternal" : "both"))
+        problem("x_linked_recessive (" + s.sex + ") but parent of origin " + po, spec, v);
+      if (de_novo_call !== (po === "denovo")) problem(call + " but parent of origin " + po, spec, v);
+      if (call === "possible_de_novo" && po !== "possible_denovo")
+        problem("possible_de_novo but parent of origin " + po, spec, v);
       po_counts[v.CHROM + " " + po] = (po_counts[v.CHROM + " " + po] || 0) + 1; // ... and agree with its parent of origin
+    });
+    // the --family-expr entry point tags the family with exactly its children's calls
+    var calls = fam.map(function (s) {
+      return T.cnv_moi(s, v);
+    });
+    Object.keys(KNOWN).forEach(function (c) {
+      if (T.has_moi_call(fam, v, c) !== calls.indexOf(c) >= 0)
+        problem("has_moi_call(" + c + ") disagrees with the children's calls", spec, v);
     });
   } catch (e) {
     problem("crash: " + e.message, spec, v);
@@ -488,7 +533,7 @@ console.log("\nRandom families (" + N + "):");
 var probs = Object.keys(problems);
 if (probs.length === 0)
   console.log(
-    "  no crashes, no unknown calls, every affected carrier child got a call that agrees with its parent of origin",
+    "  no crashes, no unknown calls, every affected carrier child got a call that agrees with its parent of origin, has_moi_call() matches the calls",
   );
 else {
   failed = true;
@@ -510,6 +555,51 @@ Object.keys(po_counts)
   .forEach(function (t) {
     console.log("    " + String(po_counts[t]).padStart(7) + "  " + t);
   });
+
+// ---------------------------------------------------------------------------
+// 5. The slivar wiring: conf/modules.config has an expression for every call
+// ---------------------------------------------------------------------------
+// A call cnv_moi() can return but SLIVAR_EXPR never asks for is silently never written.
+var config = fs.readFileSync(here("../conf/modules.config"), "utf8");
+var wired = { moi: {}, po: {} };
+config.replace(/--family-expr '(\w+):has_moi_call\(fam, variant, \\"(\w+)\\"\)'/g, function (m, tag, call) {
+  if (tag !== call) problem_wiring("tag " + tag + " tests the call " + call);
+  wired.moi[call] = true;
+});
+config.replace(/--sample-expr '(\w+):cn_po_origin\(sample, variant\) == \\"(\w+)\\"'/g, function (m, tag, po) {
+  wired.po[po] = true;
+});
+var wiring = [];
+function problem_wiring(msg) {
+  wiring.push(msg);
+}
+Object.keys(KNOWN).forEach(function (call) {
+  if (!wired.moi[call]) problem_wiring("no --family-expr for the call " + call);
+});
+Object.keys(wired.moi).forEach(function (call) {
+  if (!KNOWN[call]) problem_wiring("--family-expr for an unknown call " + call);
+});
+Object.keys(KNOWN_PO).forEach(function (po) {
+  if (po !== "null" && !wired.po[po]) problem_wiring("no --sample-expr for the parent of origin " + po);
+});
+Object.keys(wired.po).forEach(function (po) {
+  if (!KNOWN_PO[po]) problem_wiring("--sample-expr for an unknown parent of origin " + po);
+});
+console.log("\nconf/modules.config (SLIVAR_EXPR):");
+if (wiring.length === 0)
+  console.log(
+    "  " +
+      Object.keys(wired.moi).length +
+      " MoI and " +
+      Object.keys(wired.po).length +
+      " parent-of-origin expressions, one per value",
+  );
+else {
+  failed = true;
+  wiring.forEach(function (p) {
+    console.log("  PROBLEM " + p);
+  });
+}
 
 console.log("\nwrote moi_scenarios.tsv, moi_scenarios.md, trio_lookup_table.tsv");
 if (failed) {

@@ -8,7 +8,7 @@ nextflow_process {
     tag "modules_"
     tag "slivar_expr"
 
-    // Runs real slivar with assets/cnv-slivar-functions.js and the --sample-expr lines from
+    // Runs real slivar with assets/cnv-slivar-functions.js and the --family-expr / --sample-expr lines from
     // conf/modules.config, on toy, synthetic fixtures checked into ./data/ (no S3 data-test/
     // dataset needed), plus one test on the real joint trio VCF from data-test/ (fam1_joint, the
     // last one). The rules themselves are tested much more thoroughly, in plain
@@ -29,10 +29,11 @@ nextflow_process {
     // `tbi` input, it only satisfies the process's 4-element input tuple.
     //
     // Tags are checked by parsing each row's INFO field into exact key=value pairs, not by
-    // substring search (e.g. "de_novo" is a substring of "possible_de_novo"). Every tag is a
-    // --sample-expr that slivar values with the samples it is true for, so each expected tag is
-    // checked with the exact sample IDs it must name (which child is the point), and every other
-    // mode-of-inheritance or parent-of-origin tag must be absent. The same helper is repeated in each
+    // substring search (e.g. "de_novo" is a substring of "possible_de_novo"). Each expected tag is
+    // checked with the exact sample IDs slivar writes, and every other mode-of-inheritance or
+    // parent-of-origin tag must be absent. Mode-of-inheritance tags are --family-expr, valued
+    // with the family's affected members (an affected parent too, famB); parent-of-origin tags
+    // are --sample-expr, valued with exactly the children they resolve. The same helper is repeated in each
     // test() block rather than factored out, since nf-test's documented way to share Groovy code
     // across test() blocks is a class under a repo-level lib/ folder, which this repo doesn't have.
 
@@ -58,9 +59,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -78,7 +80,7 @@ nextflow_process {
             assert lines.size() == 4
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famA_T2_de_novo"], [de_novo: ["famA_kid"]])
+            check(byId["famA_T2_de_novo"], [de_novo: ["famA_kid"], po_denovo: ["famA_kid"]])
             check(byId["famA_T6_recessive"], [recessive: ["famA_kid"], po_both: ["famA_kid"]])
             check(byId["famA_T19_mendelian_inconsistent"], [mendelian_inconsistent: ["famA_kid"]])
             check(byId["famA_T20_unknown_cn"], [unknown_cn: ["famA_kid"]])
@@ -109,9 +111,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -129,7 +132,8 @@ nextflow_process {
             assert lines.size() == 1
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famB_T18_inherited_maternal"], [inherited_maternal: ["famB_kid"], po_mother: ["famB_kid"]])
+            // a family tag lists the family's affected members: the affected mother as well as the kid
+            check(byId["famB_T18_inherited_maternal"], [inherited_maternal: ["famB_mom", "famB_kid"], po_mother: ["famB_kid"]])
         }
     }
 
@@ -155,9 +159,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -175,10 +180,10 @@ nextflow_process {
             assert lines.size() == 3
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            // No father, so no parent of origin: an autosomal origin needs both parents.
+            // No father: an autosomal origin needs both parents, so only "possibly de novo" can be said (D3).
             check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"]])
             check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"]])
-            check(byId["famC_D3_possible_de_novo"], [possible_de_novo: ["famC_kid"]])
+            check(byId["famC_D3_possible_de_novo"], [possible_de_novo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
         }
     }
 
@@ -204,9 +209,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -232,9 +238,10 @@ nextflow_process {
         }
     }
 
-    // Two affected children, unaffected parents: each MoI tag is a --sample-expr, so one record can
-    // name both children in the same tag (Q5) or give each child a different one (Q9).
-    test("famQ: two affected children -- one tag naming both (Q5), a different tag per child (Q9)") {
+    // Two affected children, unaffected parents: every child's call tags the family, so one
+    // record can carry the same call for both (Q5) or one call per child (Q9). Both MoI tags are
+    // valued with the family's affected members; the po_* tags say which child is which.
+    test("famQ: two affected children -- the same call for both (Q5), a different call per child (Q9)") {
 
         when {
             process {
@@ -256,9 +263,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -276,9 +284,9 @@ nextflow_process {
             assert lines.size() == 2
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famQ_Q5_de_novo_both_sibs"], [de_novo: ["famQ_kid", "famQ_sib"]])
+            check(byId["famQ_Q5_de_novo_both_sibs"], [de_novo: ["famQ_kid", "famQ_sib"], po_denovo: ["famQ_kid", "famQ_sib"]])
             check(byId["famQ_Q9_maternal_kid_paternal_sib"], [
-                inherited_maternal: ["famQ_kid"], inherited_paternal: ["famQ_sib"],
+                inherited_maternal: ["famQ_kid", "famQ_sib"], inherited_paternal: ["famQ_kid", "famQ_sib"],
                 po_mother: ["famQ_kid"], po_father: ["famQ_sib"]
             ])
         }
@@ -310,9 +318,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -330,19 +339,19 @@ nextflow_process {
             assert lines.size() == 8
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famXs_X6_par_de_novo"], [de_novo: ["famXs_son"]])        // inside PAR1: autosomal rules
+            check(byId["famXs_X6_par_de_novo"], [de_novo: ["famXs_son"], po_denovo: ["famXs_son"]])  // inside PAR1: autosomal rules
             check(byId["famXs_X4_straddle"])                                      // crosses the PAR1 end: not modelled
             check(byId["famXs_X1_normal_boy"])                                    // CN 1 is normal for a male
-            check(byId["famXs_X2_inherited_maternal"], [inherited_maternal: ["famXs_son"], po_mother: ["famXs_son"]])
-            check(byId["famXs_X3_de_novo"], [de_novo: ["famXs_son"]])
+            check(byId["famXs_X2_inherited_maternal"], [x_linked_recessive: ["famXs_son"], po_mother: ["famXs_son"]])  // his only X is his mother's
+            check(byId["famXs_X3_de_novo"], [x_linked_recessive_de_novo: ["famXs_son"], po_denovo: ["famXs_son"]])
             // chrY: his Y is his father's; the mother (no CN on Y) passes none and is read as normal
             check(byId["famXs_Y2_paternal_y_dup"], [inherited_paternal: ["famXs_son"], po_father: ["famXs_son"]])
-            check(byId["famXs_Y3_de_novo_y_dup"], [de_novo: ["famXs_son"]])
+            check(byId["famXs_Y3_de_novo_y_dup"], [de_novo: ["famXs_son"], po_denovo: ["famXs_son"]])
             check(byId["famXs_M1_chrM"])
         }
     }
 
-    test("famXd: daughter on chrX (de novo, father's X, mother's deletion) and chrY") {
+    test("famXd: daughter on chrX (de novo, father's X, mother's deletion, both copies hit) and chrY") {
 
         when {
             process {
@@ -364,9 +373,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -381,12 +391,13 @@ nextflow_process {
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
-            assert lines.size() == 4
+            assert lines.size() == 5
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famXd_X7_de_novo"], [de_novo: ["famXd_daughter"]])
+            check(byId["famXd_X7_de_novo"], [x_linked_dominant_de_novo: ["famXd_daughter"], po_denovo: ["famXd_daughter"]])
             check(byId["famXd_X8_inherited_paternal"], [inherited_paternal: ["famXd_daughter"], po_father: ["famXd_daughter"]])
-            check(byId["famXd_X9_inherited_maternal"], [inherited_maternal: ["famXd_daughter"], po_mother: ["famXd_daughter"]])
+            check(byId["famXd_X9_inherited_maternal"], [inherited_maternal: ["famXd_daughter"], po_mother: ["famXd_daughter"]])  // one copy: keeps inherited_*
+            check(byId["famXd_X10_x_linked_recessive"], [x_linked_recessive: ["famXd_daughter"], po_both: ["famXd_daughter"]])  // both of her X copies hit
             check(byId["famXd_Y1_female_y"])
         }
     }
@@ -431,9 +442,10 @@ nextflow_process {
             def MOI_TAGS = [
                 "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
                 "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
-                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn"
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -454,7 +466,7 @@ nextflow_process {
             def byPos = sexChrom.collectEntries { c -> [("${c[0]}:${c[1]}".toString()): c[7]] }
 
             // Real records, CN given as daughter,father,mother; a normal male has CN 1 on non-PAR chrX.
-            check(byPos["chrX:57696089"], [de_novo: ["NA12878"]])                                          // 1,1,2: both parents normal
+            check(byPos["chrX:57696089"], [x_linked_dominant_de_novo: ["NA12878"], po_denovo: ["NA12878"]]) // 1,1,2: both parents normal
             check(byPos["chrX:101800269"], [inherited_paternal: ["NA12878"], po_father: ["NA12878"]])      // 3,2,2: father's duplicated X
             check(byPos["chrX:12415722"], [inherited_maternal: ["NA12878"], po_mother: ["NA12878"]])       // 1,1,1: father's X is normal
             check(byPos["chrX:26792085"], [inherited_maternal: ["NA12878"], po_mother: ["NA12878"]])       // 3,1,3: mother's duplication

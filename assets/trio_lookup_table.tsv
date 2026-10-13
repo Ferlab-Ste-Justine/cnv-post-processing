@@ -13,10 +13,10 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 0	1	absent	recessive_lowconf	null
 0	2	0	mendelian_inconsistent	null
 0	2	1	mendelian_inconsistent	null
-0	2	2	de_novo_suspect	null
+0	2	2	de_novo_suspect	denovo
 0	2	3	mendelian_inconsistent	null
 0	2	4	mendelian_inconsistent	null
-0	2	absent	possible_de_novo	null
+0	2	absent	possible_de_novo	possible_denovo
 0	3	0	mendelian_inconsistent	null
 0	3	1	mendelian_inconsistent	null
 0	3	2	mendelian_inconsistent	null
@@ -31,7 +31,7 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 0	4	absent	inheritance_unresolved	null
 0	absent	0	inheritance_unresolved	null
 0	absent	1	recessive_lowconf	null
-0	absent	2	possible_de_novo	null
+0	absent	2	possible_de_novo	possible_denovo
 0	absent	3	mendelian_inconsistent	null
 0	absent	4	inheritance_unresolved	null
 0	absent	absent	inheritance_unresolved	null
@@ -49,10 +49,10 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 1	1	absent	possible_inherited_maternal	null
 1	2	0	inherited_paternal	paternal
 1	2	1	inherited_paternal	paternal
-1	2	2	de_novo	null
+1	2	2	de_novo	denovo
 1	2	3	mendelian_inconsistent	null
 1	2	4	inheritance_unresolved	null
-1	2	absent	possible_de_novo	null
+1	2	absent	possible_de_novo	possible_denovo
 1	3	0	inherited_paternal	paternal
 1	3	1	inherited_paternal	paternal
 1	3	2	mendelian_inconsistent	null
@@ -67,7 +67,7 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 1	4	absent	inheritance_unresolved	null
 1	absent	0	inheritance_unresolved	null
 1	absent	1	possible_inherited_paternal	null
-1	absent	2	possible_de_novo	null
+1	absent	2	possible_de_novo	possible_denovo
 1	absent	3	inheritance_unresolved	null
 1	absent	4	inheritance_unresolved	null
 1	absent	absent	inheritance_unresolved	null
@@ -85,10 +85,10 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 3	1	absent	inheritance_unresolved	null
 3	2	0	mendelian_inconsistent	null
 3	2	1	mendelian_inconsistent	null
-3	2	2	de_novo	null
+3	2	2	de_novo	denovo
 3	2	3	inherited_paternal	paternal
 3	2	4	inheritance_unresolved	null
-3	2	absent	possible_de_novo	null
+3	2	absent	possible_de_novo	possible_denovo
 3	3	0	mendelian_inconsistent	null
 3	3	1	inherited_maternal	maternal
 3	3	2	inherited_maternal	maternal
@@ -103,7 +103,7 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 3	4	absent	inheritance_unresolved	null
 3	absent	0	inheritance_unresolved	null
 3	absent	1	inheritance_unresolved	null
-3	absent	2	possible_de_novo	null
+3	absent	2	possible_de_novo	possible_denovo
 3	absent	3	possible_inherited_paternal	null
 3	absent	4	inheritance_unresolved	null
 3	absent	absent	inheritance_unresolved	null
@@ -121,10 +121,10 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 4	1	absent	inheritance_unresolved	null
 4	2	0	mendelian_inconsistent	null
 4	2	1	mendelian_inconsistent	null
-4	2	2	de_novo_suspect	null
+4	2	2	de_novo_suspect	denovo
 4	2	3	mendelian_inconsistent	null
 4	2	4	inheritance_unresolved	null
-4	2	absent	possible_de_novo	null
+4	2	absent	possible_de_novo	possible_denovo
 4	3	0	mendelian_inconsistent	null
 4	3	1	mendelian_inconsistent	null
 4	3	2	mendelian_inconsistent	null
@@ -139,7 +139,7 @@ kid_CN	mom_CN	dad_CN	child_call	parent_of_origin
 4	4	absent	inheritance_unresolved	null
 4	absent	0	inheritance_unresolved	null
 4	absent	1	inheritance_unresolved	null
-4	absent	2	possible_de_novo	null
+4	absent	2	possible_de_novo	possible_denovo
 4	absent	3	recessive_lowconf	null
 4	absent	4	inheritance_unresolved	null
 4	absent	absent	inheritance_unresolved	null

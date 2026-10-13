@@ -8,7 +8,7 @@ Running notes on decisions, open questions and follow-ups for this pipeline.
 
 _Decided 2026-10-09, BIOINFO-214, with the team._
 
-**What:** `cnv_moi()` in `assets/cnv-slivar-functions.js` returns the `TRIO_TABLE` call of each affected carrier child, from the child and its parents only. Each MoI tag is a `--sample-expr` that slivar values with the children it is true for, like the parent-of-origin tags. The family-level step that combined the children's calls into one family tag (`FAMILY_TABLE`) is gone.
+**What:** `cnv_moi()` in `assets/cnv-slivar-functions.js` returns the `TRIO_TABLE` call of each affected carrier child, from the child and its parents only. Each MoI tag is a `--family-expr`, as in the SNV pipeline: `has_moi_call()` is true when at least one child of the family gets that call, and slivar values the tag with the family's affected members (2026-10-09; the same day's first version used one `--sample-expr` per tag, valued with the children themselves, and gave the same tags on the real trio). The parent-of-origin tags stay `--sample-expr`, so they name the child. The family-level step that combined the children's calls into one family tag (`FAMILY_TABLE`) is gone.
 
 **Why:** simpler rules, which a geneticist can review from the trio lookup table alone. Interpreting the family (penetrance, segregation, who is affected) is left to whoever reads the tags, who has the PED and the phenotypes anyway.
 
@@ -19,7 +19,29 @@ _Decided 2026-10-09, BIOINFO-214, with the team._
 - The segregation check across the family: an unaffected carrier sib, or an affected sib without the CNV, no longer changes a child's call, and an affected parent carrying a CNV their affected child doesn't carry gets no tag (harness T15). The open question of whether a non-penetrant carrier sib should block `dominant` goes away with it.
 - The family-wide Mendelian check: only each carrier child's own CN is checked against their parents.
 
-**What it adds:** families with several affected children can get a different call per child (harness Q9), and a son's chrY gets a call: a mother passes no Y, so her missing CN there no longer blocks him (Y2 to Y5). On the real NA12878 trio, all 1,259 records get the same tags as before.
+**What it adds:** families with several affected children can get a different call per child (harness Q9: the family carries both tags, and the `po_*` tags say which child is which), and a son's chrY gets a call: a mother passes no Y, so her missing CN there no longer blocks him (Y2 to Y5). On the real NA12878 trio, all 1,259 records get the same tags as before.
+
+### Parent of origin is a transmission label for every child
+
+_Decided 2026-10-10, BIOINFO-214._
+
+**What:** besides `po_mother`, `po_father`, `po_both` and `po_ambiguous`, `cn_po_origin()` now returns `denovo` when no parent's copy explains the child's CN and both parents are known and normal (a parent who passes nothing on chrX/chrY counts as normal), and `possible_denovo` when one parent is normal and the other unknown (not in the PED, or no CN). So, as in the SNV pipeline, every child carrying a CNV gets a per-child transmission label when one can be given, affected or not.
+
+**Why:** since the mode-of-inheritance tags became `--family-expr`, they list the family's affected members; the `po_*` tags are the only per-child record. Without `po_denovo`, a de novo CNV said nothing about which child it was in, and nothing at all for an unaffected child.
+
+**Difference from SNV:** the SNV pipeline's `po_denovo` also covers any allele neither parent explains. Here a parent carrying a CNV that still can't explain the child's (harness T14, T19) gets no `po_*` tag: that's `mendelian_inconsistent`, not de novo.
+
+**Consequence:** de novo is reported twice for an affected child (`de_novo` on the family, `po_denovo` on the child). The harness checks that the two always agree (`de_novo` / `de_novo_suspect` ⇔ `po_denovo`, `possible_de_novo` ⇒ `po_possible_denovo`). Not added: SNV's `po_possible_mother` / `po_possible_father` (a duo whose present parent carries the CNV, harness D1) and `po_unknown`.
+
+### X-linked names on non-PAR chrX, as in the SNV pipeline
+
+_Decided 2026-10-10, BIOINFO-214._
+
+**What:** on non-PAR chrX, the clear-cut calls take the SNV pipeline's X-linked names (Radiant's transmission modes), by the child's sex, in place of the generic ones: a son's `de_novo` is `x_linked_recessive_de_novo`, a daughter's `x_linked_dominant_de_novo`; a son's `inherited_maternal` (his only X is his mother's) and a daughter's `recessive` (both of her X copies hit) are `x_linked_recessive`. PAR records keep the autosomal names, and chrY is unchanged (SNV has no Y-linked tags).
+
+**Not renamed:** a daughter's single inherited copy keeps `inherited_maternal` / `inherited_paternal`: in SNV, `x_linked_dominant` needs the transmitting parent to be affected, and the CNV calls don't look at affected status, so dominant or carrier can't be told from the CNs. `de_novo_suspect` and the duo calls (`possible_*`, `recessive_lowconf`) keep their names too. The rest of the tags still use their own names, not Radiant's: a full rename to Radiant values would be its own change, and several CNV calls have no Radiant equivalent.
+
+**Where:** `X_LINKED_CALLS`, next to `TRIO_TABLE` in `assets/cnv-slivar-functions.js`. The harness now also checks that `conf/modules.config` has a slivar expression for every call and parent of origin: the first version of this change forgot the three new lines, and the module test caught it.
 
 ## Open questions
 
@@ -55,7 +77,7 @@ _Noted 2026-10-06, BIOINFO-214._
 
 **What to hand over:**
 
-- `assets/moi_scenarios.md`: the 50 named scenarios (trios, duos, a singleton, families with two children, chrX/chrY/chrM), each with its family (region, each member's CN and affected status), the MoI call per child and the parent of origin.
+- `assets/moi_scenarios.md`: the 51 named scenarios (trios, duos, a singleton, families with two children, chrX/chrY/chrM), each with its family (region, each member's CN and affected status), the MoI call per child and the parent of origin.
 - `assets/trio_lookup_table.tsv`: every autosomal kid/mom/dad CN combination with its child call and parent of origin, all 144 rows. For example, its first row says kid CN 0, mom CN 0, dad CN 0 → `inheritance_unresolved`, origin `both`. A geneticist can check calls like that at a glance. These calls are the MoI tags the pipeline writes for an affected child (see Decisions: there is no family-level tag).
 - The open questions above.
 

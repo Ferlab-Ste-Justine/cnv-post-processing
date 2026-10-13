@@ -256,15 +256,23 @@ A few patterns and gotchas worth knowing before editing:
   consistent. Local-only logic goes under `modules/local/`.
 - **Schema and params stay in sync.** `nextflow_schema.json` drives the `nf-schema` plugin. When
   adding a param, update both `nextflow.config` defaults and the schema.
-- **slivar rules: `assets/cnv-slivar-functions.js`.** Two per-sample classifiers, each with a map at
-  the top of the file, each tag a `--sample-expr` in `conf/modules.config` that slivar values
-  with exactly the samples it is true for:
-  - `cnv_moi(sample, variant)` drives the 12 mode-of-inheritance tags: each affected carrier child
-    gets the call of the first matching `TRIO_TABLE` row (the child and its parents), so a child
-    gets at most one MoI tag. There is no family-level tag (no `dominant`, no segregation check
-    across sibs): who is affected elsewhere in the family is left to whoever reads the tags.
-  - `cn_po_origin(sample, variant)` drives the 4 parent-of-origin tags (`po_mother`,
-    `po_father`, `po_both`, `po_ambiguous`), for every child.
+- **slivar rules: `assets/cnv-slivar-functions.js`.** Two per-child classifiers, each with a map at
+  the top of the file:
+  - `cnv_moi(sample, variant)` gives each affected carrier child the call of the first matching
+    `TRIO_TABLE` row (the child and its parents), at most one per child. There is no family-level
+    logic (no `dominant`, no segregation check across sibs): who is affected elsewhere in the
+    family is left to whoever reads the tags. On non-PAR chrX, a call takes the SNV pipeline's
+    X-linked name (`X_LINKED_CALLS`: a son's `de_novo` → `x_linked_recessive_de_novo`, a daughter's
+    → `x_linked_dominant_de_novo`, a son's `inherited_maternal` and a daughter's `recessive` →
+    `x_linked_recessive`; a daughter's single inherited copy keeps `inherited_*`). As in the SNV
+    pipeline, the 15 mode-of-inheritance tags are `--family-expr` in `conf/modules.config`: `has_moi_call(fam, variant, tag)` is true
+    when any child of the family gets that call, so a family with several affected children can
+    carry several tags, and slivar values them with the family's affected members.
+  - `cn_po_origin(sample, variant)` drives the 6 parent-of-origin tags (`po_mother`,
+    `po_father`, `po_both`, `po_ambiguous`, `po_denovo`, `po_possible_denovo`), as `--sample-expr`
+    valued with exactly the children it resolves: a transmission label for every child, affected or
+    not, duos included (SNV-style). `po_denovo` needs both parents known and normal (a parent
+    carrying a CNV that can't explain the child's gets no tag: that's `mendelian_inconsistent`).
   - Both use one transmission engine (`get_parent_transmission` / `get_transmission_origin`), so
     MoI and parent of origin always agree.
   - Expected CN is chromosome- and sex-aware: 2 on autosomes and PAR, on non-PAR chrX 1 for a male
@@ -281,7 +289,8 @@ A few patterns and gotchas worth knowing before editing:
     The worked-example notes inside `cnv_moi()` and `trio_call()` are kept on purpose.
   - Tests: `node assets/cnv-slivar-moi-harness.js` runs every named scenario against the golden file
     `assets/moi_scenarios.expected.tsv` (re-run with `--accept` once a change is understood) plus
-    200,000 random families whose fake samples throw on unset attributes like slivar's. It
+    200,000 random families whose fake samples throw on unset attributes like slivar's, and checks that
+    `conf/modules.config` has one slivar expression per call and parent of origin. It
     regenerates `assets/moi_scenarios.md` / `.tsv` and `trio_lookup_table.tsv`, which must be
     committed; `ci-slivar-harness.yml` checks both. The `SLIVAR_EXPR` module test runs real slivar:
     fixture row IDs name the harness scenario they reproduce, and `fam1_joint` covers the real

@@ -1,7 +1,7 @@
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
 name: "slivar_expr"
-description: Classify CNV mode of inheritance per affected child (one tag per child and record, e.g. de novo / inherited from one parent / recessive / unresolved / Mendelian-inconsistent) and per-child parent-of-origin (maternal / paternal / both / ambiguous) for any family shape (trios, duos, singletons, sibships) via slivar expr --sample-expr
+description: Classify CNV mode of inheritance from each affected child's call (e.g. de novo / inherited from one parent / recessive / unresolved / Mendelian-inconsistent; slivar expr --family-expr) and per-child parent-of-origin (maternal / paternal / both / ambiguous / denovo / possible_denovo; --sample-expr) for any family shape (trios, duos, singletons, sibships)
 keywords:
   - cnv
   - inheritance
@@ -46,7 +46,7 @@ output:
           description: Groovy Map containing family information
       - "*.vcf.gz":
           type: file
-          description: Input VCF with classification tags added (INFO/<tag>=<samples>; mode-of-inheritance tags -- at most one per record -- list the family's affected members, the po_mother/po_father/po_both/po_ambiguous tags the children they resolve) it applies to)
+          description: Input VCF with classification tags added (INFO/<tag>=<samples>; mode-of-inheritance tags list the family's affected members, the po_* tags the children they apply to)
           pattern: "*.vcf.gz"
   - versions:
       - "versions.yml":
