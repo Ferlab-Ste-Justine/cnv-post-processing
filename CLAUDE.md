@@ -217,7 +217,11 @@ A few patterns and gotchas worth knowing before editing:
   `familyId`, `sampleSize`, `familyPed`, `familyPheno`, `pheno` from the samplesheet. At the
   family-merge fan-in (stage 2 in the flow above), sample-only fields (`sample`, `id`, `caller`,
   `cram`) are dropped and `id` resets to the family level, keeping a `samples: [...]` list for
-  fanning back out later (e.g. depth-refinement's per-sample mosdepth runs).
+  fanning back out later (e.g. depth-refinement's per-sample mosdepth runs). The fan-in sorts a
+  family's samples by name first: `groupTuple` keeps arrival order, which varies between runs, and
+  `bcftools merge` writes its sample columns in input order. Any new fan-in feeding an
+  order-sensitive tool, or putting a per-sample list in `meta`, needs the same sort. (A `path`
+  list alone doesn't: Nextflow hashes it regardless of order.)
 - **The solo/family split is a filter, not just a branch.** True solos are dropped from
   `ch_grouped_by_family` entirely (a `.filter{...}` in `workflows/cnv_post_processing.nf`) _before_
   the `.branch{ solo / family }` that follows. Any other channel built from

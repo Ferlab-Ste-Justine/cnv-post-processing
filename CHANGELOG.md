@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### `Fixed`
 
+- A family's merged VCF now always lists its samples in name order. Before, `BCFTOOLS_MERGE` got the per-sample VCFs in whatever order their tasks finished, so the sample columns of the family VCF, and of every file built from it, could change from one run to the next, and `-resume` could re-run the merge and every family-level step after it
 - `conf/modules.config`'s VEP `ext.args` no longer fails to parse under Nextflow's strict config syntax (the default from 26.04, "Variable declarations cannot be mixed with config statements"); its local variables now live inside an `ext.args` closure. Resolved args are unchanged for all three cache flavors
 
 ### `Dependencies`

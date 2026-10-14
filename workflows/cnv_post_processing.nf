@@ -203,7 +203,17 @@ workflow CNV_POST_PROCESSING {
         .join(BCFTOOLS_SORT_INDEX_PERSAMPLE.out.tbi)
         .map { meta, vcf, tbi -> tuple(groupKey(meta.familyId, meta.sampleSize), meta, vcf, tbi) }
         .groupTuple()
-        .map { _familyId, metas, vcfs, tbis ->
+        .map { _familyId, grouped_metas, grouped_vcfs, grouped_tbis ->
+            // groupTuple keeps the order the samples arrive in, which changes from run to run.
+            // Put them in sample-name order: bcftools merge writes its sample columns in input
+            // order, and meta.samples is part of every family-level task's hash, so -resume
+            // would otherwise re-run the merge and everything after it.
+            def by_sample = [grouped_metas as List, grouped_vcfs as List, grouped_tbis as List]
+                .transpose()
+                .sort { entry -> entry[0].sample }
+            def metas = by_sample.collect { entry -> entry[0] }
+            def vcfs = by_sample.collect { entry -> entry[1] }
+            def tbis = by_sample.collect { entry -> entry[2] }
             // now that samples are grouped together, drop the per-sample-only meta fields and
             // reset id to the family level. Keep the sample-id list (needed to fan back out to
             // per-sample steps later, e.g. depth-based genotype refinement).
