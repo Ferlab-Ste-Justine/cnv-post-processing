@@ -72,7 +72,14 @@ Notes about the phenopacket file (`pheno`/`familyPheno` columns):
 
 ### PED file (`familyPed`)
 
-A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must match those in the samplesheet's `sample` column. Its sex column must be correct: on non-PAR chrX and chrY, a normal male carries one copy, so slivar uses each sample's sex to decide what copy number is normal. A wrong sex misclassifies every call there, and a sex of `0` (unknown) makes slivar skip non-PAR chrX/chrY records for that family. Check sex against the data (e.g. chrX heterozygosity, or the CNV caller's own sex estimate) before running the pipeline.
+A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must be the VCFs' sample names (their `#CHROM` header line), not the samplesheet's `sample` column: for `DRAGEN` rows, the name in each per-sample VCF; for a `DRAGEN_JOINT` row, the names in the joint VCF. Its sex column must be correct: on non-PAR chrX and chrY, a normal male carries one copy, so slivar uses each sample's sex to decide what copy number is normal. A wrong sex misclassifies every call there, and a sex of `0` (unknown) makes slivar skip non-PAR chrX/chrY records for that family. Check sex against the data (e.g. chrX heterozygosity, or the CNV caller's own sex estimate) before running the pipeline.
+
+Before running slivar, the pipeline checks each family's PED against the sample names in the family VCF, and stops with an error naming the problem and its fix if:
+
+- a sample in the VCF has no row in the PED. slivar would leave that sample out of the family, and a PED matching none of the VCF's names would give no tags at all;
+- a sequenced sample's father or mother is named but isn't in the VCF. Write a parent who wasn't sequenced as `0`: when the named father is missing, slivar also drops the child's link to the mother, and a child with no parent in the family gets no mode-of-inheritance or parent-of-origin tag.
+
+Rows for relatives who weren't sequenced can stay in the PED; they aren't checked. slivar exits normally in all these cases, so without the check the tags would be silently missing. To run anyway, for example for tests, set `--skip_ped_validation`: the same problems are then logged as warnings, and those families' slivar tags may be missing or wrong.
 
 ## Install reference data and prepare parameters file
 

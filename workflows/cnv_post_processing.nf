@@ -5,6 +5,7 @@
 */
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { validatePedAgainstVcf  } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { EXOMISER } from '../modules/local/exomiser/main.nf'
 include { EXOMISER as EXOMISER_SINGLE } from '../modules/local/exomiser/main.nf'
 include { NORMALIZE_CNV } from '../modules/local/normalize_cnv/main.nf'
@@ -345,7 +346,10 @@ workflow CNV_POST_PROCESSING {
     // parent-of-origin tags on the child (--sample-expr). They handle any family shape the PED
     // describes (trios, duos, singletons, sibships): TRIO_TABLE decides what each shape supports,
     // e.g. the possible_* tags for duos. No family-shape pre-check needed here, matching the
-    // sibling SNV pipeline's convention -- only familyPed presence is required.
+    // sibling SNV pipeline's convention -- only familyPed presence is required. The PED is checked
+    // against this family VCF's sample names, though (validatePedAgainstVcf): slivar silently
+    // mishandles a PED that doesn't match. The check stays here rather than in a subworkflow, so
+    // module and subworkflow tests can still feed slivar deliberately inconsistent PEDs.
     //
     def ch_slivar_input = VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi
         .filter { meta, _vcf, _tbi ->
@@ -355,7 +359,11 @@ workflow CNV_POST_PROCESSING {
             }
             true
         }
-        .map { meta, vcf, tbi -> [meta, vcf, tbi, file(meta.familyPed)] }
+        .map { meta, vcf, tbi ->
+            def ped = file(meta.familyPed)
+            validatePedAgainstVcf(meta.id, vcf, ped, params.skip_ped_validation)
+            [meta, vcf, tbi, ped]
+        }
 
     SLIVAR_EXPR(ch_slivar_input, slivar_js)
 

@@ -47,7 +47,9 @@ route applicable to it, decided per-row/per-family purely from which optional co
 6. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`. Its
    output is the pipeline's last file, so it's the only stage that gets an explicit indexing step
    of its own (`BCFTOOLS_INDEX_SLIVAR`) rather than relying on a downstream stage to need/produce
-   one.
+   one. Before it, `validatePedAgainstVcf` (in the workflow's slivar-input `.map`, not in a
+   subworkflow, so tests can still feed slivar inconsistent PEDs) checks the PED against the family
+   VCF's `#CHROM` names and stops the run on a mismatch, or only warns under `--skip_ped_validation`.
 
 **Solo route** (true singletons: `sampleSize==1`, no `familyPed`, no `familyPheno` — the family
 route would add nothing over this for them, so they're dropped from `ch_grouped_by_family`
@@ -200,7 +202,8 @@ Authoritative schema: `assets/schema_input.json`. Required: `familyId`, `sample`
 `DRAGEN_JOINT` are currently supported by normalization), `vcf`. Optional: `cram` (enables
 depth-based genotype refinement), `pheno` (per-sample phenopacket, enables single-sample
 Exomiser), `familyPheno` (family-level phenopacket, identical across a family's rows, enables
-family-mode Exomiser), `familyPed` (identical across a family's rows, enables slivar).
+family-mode Exomiser), `familyPed` (identical across a family's rows, enables slivar; its IDs
+are the VCFs' `#CHROM` sample names, not the samplesheet's `sample` column, e.g. `fam1_joint`).
 `caller=DRAGEN_JOINT` families must have exactly one row and no per-sample rows (enforced by
 `validateJointCallerExclusivity` in `PIPELINE_INITIALISATION`).
 
