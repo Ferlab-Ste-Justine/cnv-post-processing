@@ -275,11 +275,15 @@ A few patterns and gotchas worth knowing before editing:
     pipeline, the 15 mode-of-inheritance tags are `--family-expr` in `conf/modules.config`: `has_moi_call(fam, variant, tag)` is true
     when any child of the family gets that call, so a family with several affected children can
     carry several tags, and slivar values them with the family's affected members.
-  - `cn_po_origin(sample, variant)` drives the 6 parent-of-origin tags (`po_mother`,
-    `po_father`, `po_both`, `po_ambiguous`, `po_denovo`, `po_possible_denovo`), as `--sample-expr`
-    valued with exactly the children it resolves: a transmission label for every child, affected or
-    not, duos included (SNV-style). `po_denovo` needs both parents known and normal (a parent
-    carrying a CNV that can't explain the child's gets no tag: that's `mendelian_inconsistent`).
+  - `cn_po_origin(sample, variant)` drives the 8 parent-of-origin tags, named as in the SNV
+    pipeline (`po_mother`, `po_father`, `po_both`, `po_ambiguous`, `po_denovo`,
+    `po_possible_denovo`, `po_possible_mother`, `po_possible_father`), as `--sample-expr` valued
+    with exactly the children it resolves: a transmission label for every child, affected or not,
+    duos included. `po_denovo` needs both parents known and normal (a parent carrying a CNV that
+    can't explain the child's gets no tag: that's `mendelian_inconsistent`). With one parent
+    unknown (absent, or no CN), `get_one_parent_origin()` gives `po_mother`/`po_father` when the
+    known parent surely passed the CNV, `po_possible_*` when it may have. A parent in the VCF
+    without CN counts as absent for the MoI calls too.
   - Both use one transmission engine (`get_parent_transmission` / `get_transmission_origin`), so
     MoI and parent of origin always agree.
   - Expected CN is chromosome- and sex-aware: 2 on autosomes and PAR, on non-PAR chrX 1 for a male

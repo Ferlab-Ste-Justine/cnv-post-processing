@@ -41,7 +41,9 @@
 //   --sample-expr 'po_both:cn_po_origin(sample, variant) == "both"' \
 //   --sample-expr 'po_ambiguous:cn_po_origin(sample, variant) == "ambiguous"' \
 //   --sample-expr 'po_denovo:cn_po_origin(sample, variant) == "denovo"' \
-//   --sample-expr 'po_possible_denovo:cn_po_origin(sample, variant) == "possible_denovo"'
+//   --sample-expr 'po_possible_denovo:cn_po_origin(sample, variant) == "possible_denovo"' \
+//   --sample-expr 'po_possible_mother:cn_po_origin(sample, variant) == "possible_maternal"' \
+//   --sample-expr 'po_possible_father:cn_po_origin(sample, variant) == "possible_paternal"'
 //
 // Vocabulary
 //   dev      = CN - expected CN. Expected CN is 2 on autosomes and PAR, 1 for a
@@ -121,9 +123,10 @@
 // Once per sample (--sample-expr): a transmission label for every child, SNV-style.
 // Each po_* tag tests one result, and slivar writes the IDs of the samples it's true
 // for: po_mother "maternal", po_father "paternal", po_both "both", po_ambiguous
-// "ambiguous", po_denovo "denovo", po_possible_denovo "possible_denovo". Independent
-// of cnv_moi(), but the same [get_transmission_origin] fills TRIO_TABLE's origin
-// column, so the two always agree.
+// "ambiguous", po_denovo "denovo", po_possible_denovo "possible_denovo",
+// po_possible_mother "possible_maternal", po_possible_father "possible_paternal" (the
+// SNV pipeline's names). Independent of cnv_moi(), but the same
+// [get_transmission_origin] fills TRIO_TABLE's origin column, so the two always agree.
 // ---------------------------------------------------------------------------
 //
 // cn_po_origin(s, variant)
@@ -160,7 +163,17 @@
 // │           both ───────────────────────────────────────────────────► "both"
 // │     (any origin found is the answer)
 // │
-// └─③ get_denovo_origin(s, variant)     only when ② found nothing
+// ├─③ get_one_parent_origin(s, variant)   only when ② found nothing: one parent known
+// │     (a CN 0-3, or a father's single X/Y copy), the other absent or without CN, who
+// │     could have passed any copy. Which copies the known parent can pass that leave the
+// │     unknown one a copy number >= 0? A copy is "the CNV" if it changed the child's way.
+// │       only the CNV (it passed it for sure) ──────────► "maternal" / "paternal"
+// │       the CNV or a normal copy (it may have) ─────────► "possible_maternal" / "possible_paternal"
+// │       no copy that is the CNV ────────────────────────► ④
+// │     (SNV / Radiant: a het child with a het mother and an unknown father is
+// │      POSSIBLE_MOTHER; a hom-alt child with a het mother is MOTHER)
+// │
+// └─④ get_denovo_origin(s, variant)     only when ② and ③ found nothing
 //       mom, dad = get_parent_status(s, "mom" | "dad")
 //         "nothing" (passes no copy here) | "absent" | "unknown" (no CN) | "normal" | "carrier"
 //       both known and normal ("normal" or "nothing") ─────────────► "denovo"
@@ -173,6 +186,8 @@
 //     kid 0, mom 1 [1,0], dad 1 [1,0]       only 0 + 0          → "both"       (T6)
 //     kid 1, mom 2 [1,1], dad 2 [1,1]       no way, both normal → "denovo"     (T1)
 //     duo: kid 1, mom 2 [1,1], no father    no way, dad unknown → "possible_denovo"  (D3)
+//     duo: kid 1, mom 1 [1,0], no father    mom's 0 or her 1    → "possible_maternal" (D1)
+//     duo: kid 0, mom 1 [1,0], no father    only mom's 0 fits   → "maternal"   (D2)
 //     kid 0, mom 2 [1,1], dad 1 [1,0]       no way, dad carrier → null         (T19)
 //     non-PAR X: son 0, mom 1 [1,0]         dad passes nothing  → "maternal"   (X2)
 //     non-PAR X: daughter 3, mom 2 [1,1], dad 2 [2]   1 + 2     → "paternal"   (X8)
@@ -983,7 +998,10 @@ function get_transmission_origin(kid, variant) {
  *
  * First, which parent's transmitted copy is abnormal (get_transmission_origin,
  * the same computation as TRIO_TABLE's origin column): "maternal", "paternal",
- * "both" or "ambiguous". When no combination of the parents' copies explains
+ * "both" or "ambiguous". With one parent unknown (absent, or no CN),
+ * get_one_parent_origin() asks whether the known one passed the CNV: for sure
+ * ("maternal" / "paternal") or maybe ("possible_maternal" / "possible_paternal",
+ * the SNV pipeline's po_possible_mother / po_possible_father). When no combination of the parents' copies explains
  * the child's CN, get_denovo_origin() decides between "denovo" (both parents
  * known and normal) and "possible_denovo" (one parent normal, the other
  * unknown). A parent carrying a CNV that still can't explain the child's
@@ -993,7 +1011,7 @@ function get_transmission_origin(kid, variant) {
  * @param {Sample}  s        the child
  * @param {Variant} variant
  * @returns {?string} "maternal" | "paternal" | "both" | "ambiguous" | "denovo"
- *   | "possible_denovo", or null when it does not apply (not a carrier, no CN,
+ *   | "possible_denovo" | "possible_maternal" | "possible_paternal", or null when it does not apply (not a carrier, no CN,
  *   unmodellable record, founder) or can't be told
  * @example
  * // kid CN1, mom CN1, dad CN2  → only mom 0 + dad 1 fits
@@ -1014,7 +1032,9 @@ function get_transmission_origin(kid, variant) {
  * // chr7: kid CN0, mom CN2, dad CN1                  (T19: dad carries a CNV, yet can't explain it)
  * cn_po_origin(kid, variant)  // → null
  * // chr7 duo: kid CN1, mom CN1, no father            (D1: mom or the father?)
- * cn_po_origin(kid, variant)  // → null
+ * cn_po_origin(kid, variant)  // → "possible_maternal"
+ * // chr7 duo: kid CN0, mom CN1, no father            (D2: one deleted copy is surely hers)
+ * cn_po_origin(kid, variant)  // → "maternal"
  * // non-PAR chrX: daughter CN3, mom CN2, dad CN2     (X8: her father's duplicated X)
  * cn_po_origin(kid, variant)  // → "paternal"
  * // non-PAR chrY: son CN2, dad CN2                   (Y2: the mother isn't needed)
@@ -1029,7 +1049,63 @@ function cn_po_origin(s, variant) {
   if (exp < 0 || !has_cn(s) || s.CN === exp) return null;
   var origin = get_transmission_origin(s, variant);
   if (origin !== null) return origin;
+  origin = get_one_parent_origin(s, variant);
+  if (origin !== null) return origin;
   return get_denovo_origin(s, variant);
+}
+
+/**
+ * For a carrier child with one parent known and the other unknown (absent from
+ * the PED, or without CN): did the known parent pass the CNV? The unknown parent
+ * could have passed any copy number, so each copy the known parent can pass
+ * (get_parent_transmission) works as long as it isn't larger than the child's CN.
+ * A copy counts as the CNV only if it changed the child's way (a deleted copy
+ * for a loss, an extra one for a gain). If every copy that works is the CNV, the
+ * known parent surely passed it; if a normal one works too, maybe. This follows the SNV pipeline and Radiant (a
+ * het child with a het mother and an unknown father is POSSIBLE_MOTHER; a
+ * hom-alt one is MOTHER), with a CNV carrier in place of a het. A known parent
+ * who can only have passed a normal copy is left to get_denovo_origin().
+ * A parent with CN >= 4 isn't unknown, only undecomposable: no answer then.
+ * @param {Sample}  kid      a carrier child (cn_po_origin checked it)
+ * @param {Variant} variant
+ * @returns {?string} "maternal" | "paternal" | "possible_maternal" | "possible_paternal" | null
+ * @example
+ * get_one_parent_origin(<kid CN1, mom CN1, no father>, <chr7>)          // → "possible_maternal" (her 0 or her 1)  (D1)
+ * get_one_parent_origin(<kid CN0, mom CN1, no father>, <chr7>)          // → "maternal" (only her 0 fits)  (D2)
+ * get_one_parent_origin(<kid CN1, no mother, dad CN1>, <chr7>)          // → "possible_paternal"  (D4)
+ * get_one_parent_origin(<kid CN1, mom CN1, dad CN missing>, <chr7>)     // → "possible_maternal"
+ * get_one_parent_origin(<daughter CN3, no mother, dad CN2>, <non-PAR chrX>) // → "paternal" (her father's single X)
+ * get_one_parent_origin(<kid CN1, mom CN2, no father>, <chr7>)          // → null (only a normal copy: possible de novo)
+ * get_one_parent_origin(<kid CN1, mom CN3, no father>, <chr7>)          // → null (her 2 is too big, her 1 is normal)
+ * get_one_parent_origin(<kid CN3, mom CN0, no father>, <chr7>)          // → null (a deleted copy can't make a gain)
+ */
+function get_one_parent_origin(kid, variant) {
+  var m = get_parent_transmission(kid, "mom", variant),
+    d = get_parent_transmission(kid, "dad", variant);
+  var unknown = function (which) {
+    var st = get_parent_status(kid, which, variant);
+    return st === "absent" || st === "unknown";
+  };
+  var known, side;
+  if (m && !d && unknown("dad")) {
+    known = m;
+    side = "maternal";
+  } else if (d && !m && unknown("mom")) {
+    known = d;
+    side = "paternal";
+  } else return null;
+  if (known.normal === 0) return null; // passes nothing here: get_denovo_origin()
+  var kd = get_cn_dev(kid, variant); // its sign is the CNV's direction: < 0 a loss, > 0 a gain
+  var abnormal = false,
+    normal = false;
+  for (var i = 0; i < known.haps.length; i++) {
+    var h = known.haps[i];
+    if (h > kid.CN) continue; // would leave the unknown parent a negative copy number
+    if (h === known.normal) normal = true;
+    else if ((h - known.normal) * kd > 0) abnormal = true; // a copy changed the child's way (a deleted copy for a loss)
+  }
+  if (!abnormal) return null;
+  return normal ? "possible_" + side : side;
 }
 
 /**

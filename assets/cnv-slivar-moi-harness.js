@@ -462,6 +462,8 @@ var KNOWN_PO = {
   ambiguous: true,
   denovo: true,
   possible_denovo: true,
+  possible_maternal: true,
+  possible_paternal: true,
 };
 
 // Fixed seed: same families every run. mulberry32, in exact 32-bit integer maths:
@@ -524,6 +526,10 @@ for (var it = 0; it < N; it++) {
       if (de_novo_call !== (po === "denovo")) problem(call + " but parent of origin " + po, spec, v);
       if (call === "possible_de_novo" && po !== "possible_denovo")
         problem("possible_de_novo but parent of origin " + po, spec, v);
+      // a duo call names the known parent; its parent of origin must name the same one
+      var side = !("mom" in s) || !T.has_cn(s.mom) ? "paternal" : "maternal";
+      if (/^possible_inherited_|^recessive_lowconf$/.test(call) && po !== side && po !== "possible_" + side)
+        problem(call + " but parent of origin " + po, spec, v);
       po_counts[v.CHROM + " " + po] = (po_counts[v.CHROM + " " + po] || 0) + 1; // ... and agree with its parent of origin
     });
     // the --family-expr entry point tags the family with exactly its children's calls

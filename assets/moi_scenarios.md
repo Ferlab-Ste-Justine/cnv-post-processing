@@ -50,10 +50,10 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 | **Y4** chrY son CN=0, dad CN=1 (de novo deletion) | chrY non-PAR | son 0 aff | . | 1 |  | kid=`de_novo` | kid=denovo |
 | **Y5** chrY son CN=0, dad CN=0 (father's deleted Y) | chrY non-PAR | son 0 aff | . | 0 |  | kid=`inherited_paternal` | kid=paternal |
 | **M1** chrM son CN=0, parents CN=2 (not modelled) | chrM | son 0 aff | 2 | 2 |  | - | kid=null |
-| **D1** duo kid CN=1, mom CN=1 | chr7 | 1 aff | 1 | absent |  | kid=`possible_inherited_maternal` | kid=null |
-| **D2** duo kid CN=0, mom CN=1 | chr7 | 0 aff | 1 | absent |  | kid=`recessive_lowconf` | kid=null |
+| **D1** duo kid CN=1, mom CN=1 | chr7 | 1 aff | 1 | absent |  | kid=`possible_inherited_maternal` | kid=possible_maternal |
+| **D2** duo kid CN=0, mom CN=1 | chr7 | 0 aff | 1 | absent |  | kid=`recessive_lowconf` | kid=maternal |
 | **D3** duo kid CN=1, mom CN=2 | chr7 | 1 aff | 2 | absent |  | kid=`possible_de_novo` | kid=possible_denovo |
-| **D4** duo kid CN=1, AFFECTED dad CN=1 | chr7 | 1 aff | absent | 1 aff |  | kid=`possible_inherited_paternal` | kid=null |
+| **D4** duo kid CN=1, AFFECTED dad CN=1 | chr7 | 1 aff | absent | 1 aff |  | kid=`possible_inherited_paternal` | kid=possible_paternal |
 | **S1** singleton kid CN=1 | chr7 | 1 aff | absent | absent |  | - | - |
 | **Q1** quad: recessive + UNAFFECTED CARRIER sib CN=1 | chr7 | 0 aff | 1 | 1 | 1 | kid=`recessive` | kid=both sib1=ambiguous |
 | **Q2** quad: recessive + unaffected sib CN=2 | chr7 | 0 aff | 1 | 1 | 2 | kid=`recessive` | kid=both sib1=null |

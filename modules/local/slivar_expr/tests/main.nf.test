@@ -62,7 +62,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -116,7 +116,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -164,7 +164,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -183,8 +183,8 @@ nextflow_process {
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
             // No father: an autosomal origin needs both parents, so only "possibly de novo" can be said (D3).
-            check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"]])
-            check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"]])
+            check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"], po_mother: ["famC_kid"]])
+            check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"], po_possible_mother: ["famC_kid"]])
             check(byId["famC_D3_possible_de_novo"], [possible_de_novo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
         }
     }
@@ -214,7 +214,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -268,7 +268,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -323,7 +323,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -378,7 +378,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
@@ -447,7 +447,7 @@ nextflow_process {
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
                 "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
             ]
-            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo"]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
             // want: every tag expected on the record -> the exact sample IDs it must name; any other
             // mode-of-inheritance or parent-of-origin tag must be absent.
