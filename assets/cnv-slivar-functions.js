@@ -84,7 +84,8 @@
 // ├─③ is_cn_missing(s, variant)
 // │       ![has_cn(s)]                                          ─► "unknown_cn"
 // │       [get_cn_dev(s)] == 0 ?          not a carrier: parents not needed
-// │       ![has_cn(p)] for one of get_needed_parents(s)         ─► "unknown_cn"
+// │       ![has_cn(p)] for every one of get_needed_parents(s)   ─► "unknown_cn"
+// │       (only one of them without CN: that parent counts as "absent", like a duo)
 // │
 // ├─④ [get_cn_dev(s)] == 0 ?  not a carrier ─────────────────────► null
 // │
@@ -94,7 +95,7 @@
 //       │  kidTok = populate_kid_tokens(kd)                 → ["any","±1",...] // returns array of strings that is then used
 //       │  momTok = does_parent_pass_nothing(kid,"mom") ? "normal"
 //       │             : populate_parent_token(kid,"mom",kd)
-//       │                 ├ [has_parent]  no → "absent"
+//       │                 ├ [has_parent] no, or no [has_cn] → "absent"
 //       │                 └ [get_cn_dev(mom)] → "normal" | "same" | "half" | "other"
 //       │  dadTok = the same for "dad"
 //       │  origin = [get_transmission_origin(kid)]          → "maternal" | "paternal" | "both" | "ambiguous" | null
@@ -241,7 +242,9 @@
 //   "normal"  parent dev = 0
 //   "same"    parent dev = kid dev            (parent has the same CNV)
 //   "half"    parent dev = kid dev / 2        (parent is a carrier of one copy)
-//   "absent"  parent not in the PED / VCF
+//   "absent"  parent not in the PED / VCF, or without a usable CN (as SNV/Radiant
+//             treat a parent's no-call); is_cn_missing() gives unknown_cn instead
+//             when no needed parent has a CN
 //   "any"
 // A parent who passes nothing here (a father's X to a son, any mother's Y) is read as
 // "normal", even when absent from the PED or without a CN.
@@ -358,8 +361,8 @@ function has_moi_call(fam, variant, call) {
  * cnv_moi(kid, variant)  // → "inheritance_unresolved"
  * // kid 0, mom 0, dad 2                         dad can't pass a deleted copy  (T14)
  * cnv_moi(kid, variant)  // → "mendelian_inconsistent"
- * // kid 1, mom 2, dad CN missing                (T11)
- * cnv_moi(kid, variant)  // → "unknown_cn"
+ * // kid 1, mom 2, dad CN missing                read as a duo without a father  (T11)
+ * cnv_moi(kid, variant)  // → "possible_de_novo"
  * // duo: kid 1, mom 2, no father in the PED     (D3)
  * cnv_moi(kid, variant)  // → "possible_de_novo"
  * // non-PAR chrX: son 0, carrier mom 1, dad 1   his only X is hers  (X2)
@@ -545,10 +548,10 @@ function populate_kid_tokens(d) {
 }
 /**
  * How one parent compares with the child: the TRIO_TABLE mom / dad column value.
- * Checked in this order: absent, normal, same, half, other. "same" means the
- * parent carries the child's CNV as is (a one-copy carrier passing it on);
- * "half" means the parent carries half the child's deviation (a recessive
- * carrier); anything else is "other".
+ * Checked in this order: absent (not in the family, or no usable CN), normal,
+ * same, half, other. "same" means the parent carries the child's CNV as is (a
+ * one-copy carrier passing it on); "half" means the parent carries half the
+ * child's deviation (a recessive carrier); anything else is "other".
  * @param {Sample}  kid
  * @param {string}  which    "mom" | "dad"
  * @param {number}  kd       the child's dev
@@ -564,11 +567,12 @@ function populate_kid_tokens(d) {
  * populate_parent_token(kid, "mom", -1, variant)  // mom CN1 (dev -1) → "same"
  * populate_parent_token(kid, "mom", -1, variant)  // mom CN0 (dev -2) → "other"
  * populate_parent_token(kid, "dad", -1, variant)  // duo, no father   → "absent"
+ * populate_parent_token(kid, "dad", -1, variant)  // dad CN missing   → "absent"  (T11)
  * // non-PAR chrX: daughter CN3 (kd = +1), dad CN2 (dev +1 against his expected 1)
  * populate_parent_token(kid, "dad", 1, variant)   // → "same"
  */
 function populate_parent_token(kid, which, kd, variant) {
-  if (!has_parent(kid, which)) return "absent";
+  if (!has_parent(kid, which) || !has_cn(kid[which])) return "absent"; // no CN: read as a duo (is_cn_missing)
   var pd = get_cn_dev(kid[which], variant);
   if (pd === 0) return "normal";
   if (pd === kd) return "same";
@@ -584,12 +588,17 @@ function populate_parent_token(kid, which, kd, variant) {
  * parents' only when the child carries the CNV, and only the parents whose
  * copies matter here (get_needed_parents): a missing CN on a parent who passes
  * nothing, or on anyone else in the family, doesn't block the call (P15).
+ * A needed parent without CN only blocks it when no needed parent has one:
+ * otherwise that parent counts as "absent" (populate_parent_token), as for a
+ * duo, the way the SNV pipeline and Radiant treat a parent's no-call.
  * @param {Sample}  kid      an affected child, with at least one parent in the family
  * @param {Variant} variant
- * @returns {boolean} true if the child has no usable CN, or is a carrier with a
- *   needed parent without usable CN
+ * @returns {boolean} true if the child has no usable CN, or is a carrier none of
+ *   whose needed parents has a usable CN
  * @example
- * // kid CN1, mom CN2, dad CN missing (T11)
+ * // kid CN1, mom CN2, dad CN missing (T11): dad read as absent
+ * is_cn_missing(kid, variant)  // → false
+ * // kid CN1, mom CN missing, dad CN missing
  * is_cn_missing(kid, variant)  // → true
  * @example
  * // kid CN missing, parents CN2 (T20)
@@ -603,8 +612,8 @@ function is_cn_missing(kid, variant) {
   if (!has_cn(kid)) return true;
   if (get_cn_dev(kid, variant) === 0) return false;
   var parents = get_needed_parents(kid, variant);
-  for (var i = 0; i < parents.length; i++) if (!has_cn(parents[i])) return true;
-  return false;
+  for (var i = 0; i < parents.length; i++) if (has_cn(parents[i])) return false;
+  return parents.length > 0;
 }
 
 /**

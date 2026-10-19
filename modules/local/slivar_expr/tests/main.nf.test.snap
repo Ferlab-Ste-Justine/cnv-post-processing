@@ -1,11 +1,11 @@
 {
-    "famA: de novo / recessive / Mendelian-inconsistent / unknown CN (unaffected parents, affected son)": {
+    "famA: de novo / recessive / Mendelian-inconsistent / unknown CN / father without CN (unaffected parents, affected son)": {
         "content": [
             [
                 "versions.yml:md5,1e6a9360a7d60cfb3a3319c1edcfca92"
             ]
         ],
-        "timestamp": "2026-10-05T20:50:38.225010749",
+        "timestamp": "2026-10-19T20:58:09.075765022",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"

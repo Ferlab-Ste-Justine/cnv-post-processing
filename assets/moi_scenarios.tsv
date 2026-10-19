@@ -9,7 +9,7 @@ T7  dup inherited from unaffected mom	chr7	3 aff	3	2		kid=inherited_maternal	kid
 T8  dup, both parents CN=3	chr7	3 aff	3	3		kid=inheritance_unresolved	kid=ambiguous
 T9  CN=4 kid, both parents CN=3	chr7	4 aff	3	3		kid=recessive	kid=both
 T10 het del kid, both parents CN=1	chr7	1 aff	1	1		kid=inheritance_unresolved	kid=ambiguous
-T11 dad CN missing	chr7	1 aff	2	.		kid=unknown_cn	kid=possible_denovo
+T11 dad CN missing	chr7	1 aff	2	.		kid=possible_de_novo	kid=possible_denovo
 T12 kid CN=2, mom CN=1	chr7	2 aff	1	2		-	kid=null
 T13 unaffected kid CN=1	chr7	1	1	2		-	kid=maternal
 T14 kid CN=0, mom CN=0, dad CN=2 (impossible)	chr7	0 aff	0	2		kid=mendelian_inconsistent	kid=null

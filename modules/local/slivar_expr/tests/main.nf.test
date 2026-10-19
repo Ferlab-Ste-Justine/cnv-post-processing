@@ -37,7 +37,7 @@ nextflow_process {
     // test() block rather than factored out, since nf-test's documented way to share Groovy code
     // across test() blocks is a class under a repo-level lib/ folder, which this repo doesn't have.
 
-    test("famA: de novo / recessive / Mendelian-inconsistent / unknown CN (unaffected parents, affected son)") {
+    test("famA: de novo / recessive / Mendelian-inconsistent / unknown CN / father without CN (unaffected parents, affected son)") {
 
         when {
             process {
@@ -77,13 +77,15 @@ nextflow_process {
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
-            assert lines.size() == 4
+            assert lines.size() == 5
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
             check(byId["famA_T2_de_novo"], [de_novo: ["famA_kid"], po_denovo: ["famA_kid"]])
             check(byId["famA_T6_recessive"], [recessive: ["famA_kid"], po_both: ["famA_kid"]])
             check(byId["famA_T19_mendelian_inconsistent"], [mendelian_inconsistent: ["famA_kid"]])
             check(byId["famA_T20_unknown_cn"], [unknown_cn: ["famA_kid"]])
+            // a father in the VCF without CN counts as absent, as in a duo
+            check(byId["famA_T11_possible_de_novo"], [possible_de_novo: ["famA_kid"], po_possible_denovo: ["famA_kid"]])
 
             assert snapshot(process.out.versions).match()
         }
