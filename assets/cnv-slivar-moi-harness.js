@@ -152,13 +152,24 @@ var scenarios = [
   ["T14 kid CN=0, mom CN=0, dad CN=2 (impossible)", AUTO, { kid: [0, 1], mom: [0, 0], dad: [2, 0] }],
   ["T15 AFFECTED dad CN=1, affected kid CN=2 (not segregating)", AUTO, { kid: [2, 1], mom: [2, 0], dad: [1, 1] }],
   ["T16 kid CN=3, mom CN=4, dad CN=3 (possible, origin unknown)", AUTO, { kid: [3, 1], mom: [4, 0], dad: [3, 0] }],
-  ["T17 kid CN=3, mom CN=4, dad CN=1 (possible, maternal)", AUTO, { kid: [3, 1], mom: [4, 0], dad: [1, 0] }],
+  ["T17 kid CN=3, mom CN=4, dad CN=1 (possible: maternal, or both)", AUTO, { kid: [3, 1], mom: [4, 0], dad: [1, 0] }],
   // T18-T22: the scenarios of the retired assets/tests/cnv_slivar_functions.test.js not covered above
   ["T18 dup inherited from AFFECTED mom", AUTO, { kid: [3, 1], mom: [3, 1], dad: [2, 0] }],
   ["T19 kid CN=0, mom CN=2, dad CN=1 (impossible)", AUTO, { kid: [0, 1], mom: [2, 0], dad: [1, 0] }],
   ["T20 affected kid CN missing", AUTO, { kid: [null, 1], mom: [2, 0], dad: [2, 0] }],
   ["T21 unaffected kid CN=1, dad CN=1 (paternal origin)", AUTO, { kid: [1, 0], mom: [2, 0], dad: [1, 0] }],
   ["T22 all unaffected, all CN=3 (origin ambiguous)", AUTO, { kid: [3, 0], mom: [3, 0], dad: [3, 0] }],
+  // T23-T26: a reviewer's cases. The origin comes from every way the parents' copies can add up to
+  // the child's CN, not from comparing their deviations, so a parent with a different CNV is fine.
+  [
+    "T23 kid CN=1, mom CN=0, dad CN=2 (mom can only pass a deleted copy)",
+    AUTO,
+    { kid: [1, 1], mom: [0, 0], dad: [2, 0] },
+  ],
+  ["T24 kid CN=3, mom CN=3, dad CN=1 (dad passed his normal copy)", AUTO, { kid: [3, 1], mom: [3, 0], dad: [1, 0] }],
+  // At most 2 + 1: only a hidden [3,0] split of mom's CN 3 could give 4 (MENDEL_ALLOW_RARE_SPLITS).
+  ["T25 kid CN=4, mom CN=3, dad CN=2 (impossible)", AUTO, { kid: [4, 1], mom: [3, 0], dad: [2, 0] }],
+  ["T26 de novo CN=4 (implausible, like T3)", AUTO, { kid: [4, 1], mom: [2, 0], dad: [2, 0] }],
   ["X1  chrX MALE kid CN=1, dad CN=1 (normal)", XNP, { kid: [1, 1], kidsex: "male", mom: [2, 0], dad: [1, 0] }],
   [
     "X2  chrX male kid CN=0, carrier mom CN=1, dad CN=1",

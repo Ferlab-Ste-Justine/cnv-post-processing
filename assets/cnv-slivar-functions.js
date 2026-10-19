@@ -255,8 +255,8 @@
 var TRIO_TABLE = [
   // kid      mom        dad        origin       child call                      harness rows
   ["±1",     "normal",  "normal",  "any",       "de_novo"],                     // T1 T2 X3
-  ["±2+",    "normal",  "normal",  "any",       "de_novo_suspect"],             // T3   (P5: two hits at one locus is implausible)
-  ["any",    "any",     "any",     "maternal",  "inherited_maternal"],          // T4 T7 X2, Q9 kid
+  ["±2+",    "normal",  "normal",  "any",       "de_novo_suspect"],             // T3 T26 (P5: two hits at one locus is implausible)
+  ["any",    "any",     "any",     "maternal",  "inherited_maternal"],          // T4 T7 T23 T24 X2, Q9 kid
   ["any",    "any",     "any",     "paternal",  "inherited_paternal"],          // T5, Q9 sib
   ["even",   "half",    "half",    "any",       "recessive"],                   // T6 T9 (T9 = CN4 from two CN3, see P7)
   ["any",    "normal",  "absent",  "any",       "possible_de_novo"],            // D3
@@ -265,7 +265,7 @@ var TRIO_TABLE = [
   ["±1",     "absent",  "same",    "any",       "possible_inherited_paternal"],
   ["even",   "half",    "absent",  "any",       "recessive_lowconf"],           // D2
   ["even",   "absent",  "half",    "any",       "recessive_lowconf"],
-  ["any",    "any",     "any",     "any",       "no_pattern"]                   // -> inheritance_unresolved (T8 T10) or mendelian_inconsistent (T14)
+  ["any",    "any",     "any",     "any",       "no_pattern"]                   // -> inheritance_unresolved (T8 T10) or mendelian_inconsistent (T14 T25)
 ];
 
 // On non-PAR chrX, a child's call takes the SNV pipeline's X-linked name (Radiant's

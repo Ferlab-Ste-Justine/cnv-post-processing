@@ -15,12 +15,16 @@ T13 unaffected kid CN=1	chr7	1	1	2		-	kid=maternal
 T14 kid CN=0, mom CN=0, dad CN=2 (impossible)	chr7	0 aff	0	2		kid=mendelian_inconsistent	kid=null
 T15 AFFECTED dad CN=1, affected kid CN=2 (not segregating)	chr7	2 aff	2	1 aff		-	kid=null
 T16 kid CN=3, mom CN=4, dad CN=3 (possible, origin unknown)	chr7	3 aff	4	3		kid=inheritance_unresolved	kid=null
-T17 kid CN=3, mom CN=4, dad CN=1 (possible, maternal)	chr7	3 aff	4	1		kid=inheritance_unresolved	kid=null
+T17 kid CN=3, mom CN=4, dad CN=1 (possible: maternal, or both)	chr7	3 aff	4	1		kid=inheritance_unresolved	kid=null
 T18 dup inherited from AFFECTED mom	chr7	3 aff	3 aff	2		kid=inherited_maternal	kid=maternal
 T19 kid CN=0, mom CN=2, dad CN=1 (impossible)	chr7	0 aff	2	1		kid=mendelian_inconsistent	kid=null
 T20 affected kid CN missing	chr7	. aff	2	2		kid=unknown_cn	kid=null
 T21 unaffected kid CN=1, dad CN=1 (paternal origin)	chr7	1	2	1		-	kid=paternal
 T22 all unaffected, all CN=3 (origin ambiguous)	chr7	3	3	3		-	kid=ambiguous
+T23 kid CN=1, mom CN=0, dad CN=2 (mom can only pass a deleted copy)	chr7	1 aff	0	2		kid=inherited_maternal	kid=maternal
+T24 kid CN=3, mom CN=3, dad CN=1 (dad passed his normal copy)	chr7	3 aff	3	1		kid=inherited_maternal	kid=maternal
+T25 kid CN=4, mom CN=3, dad CN=2 (impossible)	chr7	4 aff	3	2		kid=mendelian_inconsistent	kid=null
+T26 de novo CN=4 (implausible, like T3)	chr7	4 aff	2	2		kid=de_novo_suspect	kid=denovo
 X1  chrX MALE kid CN=1, dad CN=1 (normal)	chrX non-PAR	son 1 aff	2	1		-	kid=null
 X2  chrX male kid CN=0, carrier mom CN=1, dad CN=1	chrX non-PAR	son 0 aff	1	1		kid=x_linked_recessive	kid=maternal
 X3  chrX male kid CN=0, mom CN=2, dad CN=1 (de novo)	chrX non-PAR	son 0 aff	2	1		kid=x_linked_recessive_de_novo	kid=denovo
