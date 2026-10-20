@@ -277,11 +277,11 @@
 // prettier-ignore
 var TRIO_TABLE = [
   // kid     outcome                 child call                     parent of origin      harness rows
-  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X7 Y3
+  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X6 X7 Y3 Y4, Q4 Q5
   ["±2+",    "new",                  "denovo_suspect",              "denovo"],            // T3 T26 (P5: two hits at one locus is implausible)
-  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T23 T24 X2, Q9 kid
-  ["any",    "paternal",             "inherited_paternal",          "paternal"],          // T5 X8 Y2, Q9 sib
-  ["even",   "both",                 "recessive",                   "both"],              // T6 T9 T27 X10 (T9 = CN4 from two CN3, see P7)
+  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T18 T23 T24 X2 X9, Q9 kid
+  ["any",    "paternal",             "inherited_paternal",          "paternal"],          // T5 X8 Y2 Y5, Q3 Q10, Q9 sib
+  ["even",   "both",                 "recessive",                   "both"],              // T6 T9 T27 X10, Q1 Q2 (T9 = CN4 from two CN3, see P7)
   ["any",    "both",                 "inheritance_unresolved",      "both"],
   ["any",    "ambiguous",            "inheritance_unresolved",      "ambiguous"],         // T8 T10
   ["any",    "duo_new",              "possible_denovo",             "possible_denovo"],   // D3 D7 T11
@@ -522,9 +522,9 @@ function get_trio_row(kid, variant) {
     var row = TRIO_TABLE[i];
     // excerpt from the TRIO table.
     // kid      outcome      child call             parent of origin   harness rows
-    // ["±1",   "new",       "denovo",              "denovo"],         // T1 T2 X3 X7 Y3
+    // ["±1",   "new",       "denovo",              "denovo"],         // T1 T2 X3 X6 X7 Y3 Y4, Q4 Q5
     // ["±2+",  "new",       "denovo_suspect",      "denovo"],         // T3 T26 (P5: two hits at one locus is implausible)
-    // ["any",  "maternal",  "inherited_maternal",  "maternal"],       // T4 T7 T23 T24 X2, Q9 kid
+    // ["any",  "maternal",  "inherited_maternal",  "maternal"],       // T4 T7 T18 T23 T24 X2 X9, Q9 kid
     if (
       // ex: is "±1" found in ["any", "±1"]
       kidTok.indexOf(row[0]) >= 0 && // is the row's kid value in the kidTok's list? again kid's list could be  ["any", "±1"]. yes ->
