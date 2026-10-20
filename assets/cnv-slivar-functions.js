@@ -52,13 +52,19 @@
 //   carrier  = a sample with dev != 0.
 //   carrier child = an AFFECTED carrier with at least one parent in the family:
 //              the only samples cnv_moi() gives a call.
+//   copy     = what a parent passes to the child: one of its two haplotypes (CN 3
+//              is [2,1]: it passes 2 or 1), or a father's single X / Y.
+//   hit      = a passed copy that changed the child's way: a deleted copy for a
+//              loss, an extra copy for a gain (copy_effect()).
 //   passes nothing = a parent who gives this child no copy of this chromosome:
-//              a father's X to a son, any mother's Y. Such a parent is read as
-//              "normal", and their CN isn't needed (does_parent_pass_nothing()).
+//              a father's X to a son, any mother's Y. Such a parent counts as
+//              normal, and their CN isn't needed (does_parent_pass_nothing()).
+//   missing parent = not in the PED, or in the VCF without a usable CN: it could
+//              have passed 0, 1 or 2 copies, like any parent with CN 0 to 3.
 //   mendelian_inconsistent = no way for the parents to transmit the child's CN
 //              (see is_mendelian_possible() below) -> sample swap, miscall, missed call.
-//   inheritance_unresolved = transmission is possible, but no table row describes it
-//              (e.g. kid 3, mom 4, dad 3) -> needs a human.
+//   inheritance_unresolved = transmission is possible, but who passed what can't be
+//              told (e.g. kid 3, mom 3, dad 3; or a parent with CN 4) -> needs a human.
 //
 // ---------------------------------------------------------------------------
 // Map: what happens when slivar calls has_moi_call(fam, variant, tag)
@@ -87,7 +93,7 @@
 // │       ![has_cn(s)]                                          ─► "unknown_cn"
 // │       [get_cn_dev(s)] == 0 ?          not a carrier: parents not needed
 // │       ![has_cn(p)] for every one of get_needed_parents(s)   ─► "unknown_cn"
-// │       (only one of them without CN: that parent counts as "absent", like a duo)
+// │       (only one of them without CN: that parent counts as missing, like in a duo)
 // │
 // ├─④ [get_cn_dev(s)] == 0 ?  not a carrier ─────────────────────► null
 // │
@@ -95,18 +101,15 @@
 //       │
 //       │  kd     = [get_cn_dev(kid)]                                 // How far is the kid from normal. -1 = 1 copy lost, 1 = 1 copy gained.
 //       │  kidTok = populate_kid_tokens(kd)                 → ["any","±1",...] // returns array of strings that is then used
-//       │  momTok = does_parent_pass_nothing(kid,"mom") ? "normal"
-//       │             : populate_parent_token(kid,"mom",kd)
-//       │                 ├ [has_parent] no, or no [has_cn] → "absent"
-//       │                 └ [get_cn_dev(mom)] → "normal" | "same" | "half" | "other"
-//       │  dadTok = the same for "dad"
-//       │  origin = [get_transmission_origin(kid)]          → "maternal" | "paternal" | "both" | "ambiguous" | null
+//       │  outcome = [get_transmission_outcome(kid)]       → "new" | "maternal" | "both" | "duo_maybe_maternal" | ...
+//       │  row    = get_trio_row(kid): the first TRIO_TABLE row matching (kidTok, outcome),
+//       │           the same row cn_po_origin() reads
 //       │
-//       │  scan TRIO_TABLE, first row matching (kidTok, momTok, dadTok, origin)
-//       │    call ≠ "no_pattern" ─────────────────────► that call
-//       │    call = "no_pattern" ─► is_mendelian_possible(kid)
-//       │                             yes → "inheritance_unresolved" (no pattern fits, but these parents
-//       │                                                             could have produced this child's CN)
+//       │  the row's call ≠ "no_pattern" ─────────────────────► that call
+//       │  the row's call = "no_pattern" (outcome "undecided") ─► is_mendelian_possible(kid)
+//       │                             yes → "inheritance_unresolved" (these parents could have produced
+//       │                                                             this child's CN, but who passed what
+//       │                                                             can't be told)
 //       │                             no  → "mendelian_inconsistent" (they couldn't have)
 //       │
 //       └ is_mendelian_possible(kid)
@@ -125,8 +128,8 @@
 // for: po_mother "maternal", po_father "paternal", po_both "both", po_ambiguous
 // "ambiguous", po_denovo "denovo", po_possible_denovo "possible_denovo",
 // po_possible_mother "possible_maternal", po_possible_father "possible_paternal" (the
-// SNV pipeline's names). Independent of cnv_moi(), but the same
-// [get_transmission_origin] fills TRIO_TABLE's origin column, so the two always agree.
+// SNV pipeline's names). It reads the same TRIO_TABLE row as cnv_moi(), so the MoI
+// call and the parent of origin always agree.
 // ---------------------------------------------------------------------------
 //
 // cn_po_origin(s, variant)
@@ -137,60 +140,50 @@
 // │     ![has_cn(s)] ─────────────────────────────────────────────────► null
 // │     s.CN == exp  (not a carrier) ─────────────────────────────────► null
 // │
-// ├─② get_transmission_origin(s, variant)
-// │     │
-// │     ├ m = get_parent_transmission(s, "mom")    what mom can pass, and a normal copy's value
-// │     ├ d = get_parent_transmission(s, "dad")    same for dad
-// │     │     ├ PAR-straddling record                      → null (not modelled). When a record crosses a PAR boundary, return null.
-// │     │     ├ non-PAR X: dad → son (or unknown sex)      → {haps: [0], normal: 0}  passes nothing
-// │     │     ├ non-PAR Y: dad → daughter, or mom → anyone → {haps: [0], normal: 0}  passes nothing
-// │     │     │    (these two hold even if that parent is absent / has no CN:
-// │     │     │     open question, ** see docs/journal.md) **
-// │     │     ├ parent missing, or no [has_cn]             → null
-// │     │     ├ non-PAR X/Y: the father's single copy      → {haps: [dad.CN], normal: 1}
-// │     │     │    (his X to a daughter, his Y to a son)
-// │     │     └ diploid: CN_HAPLOTYPES[CN], CN 0-3         → {haps: [a, b], normal: 1}
-// │     │                CN >= 4 (several splits fit)      → null
-// │     │     m or d null ────────────────────────────────────────────► ③
-// │     │
-// │     ├ ways = the distinct (mom copy, dad copy) pairs with mom copy + dad copy == s.CN
-// │     │     0 ways  (de novo, or a Mendelian error) ────────────────► ③
-// │     │     2+ ways ────────────────────────────────────────────────► "ambiguous"
-// │     │
-// │     └ 1 way: which transmitted copy differs from that parent's normal one?
-// │           mom's only ─────────────────────────────────────────────► "maternal"
-// │           dad's only ─────────────────────────────────────────────► "paternal"
-// │           both ───────────────────────────────────────────────────► "both"
-// │     (any origin found is the answer)
-// │
-// ├─③ get_one_parent_origin(s, variant)   only when ② found nothing: one parent known
-// │     (a CN 0-3, or a father's single X/Y copy), the other absent or without CN, who
-// │     could have passed any copy. Which copies the known parent can pass that leave the
-// │     unknown one a copy number >= 0? A copy is "the CNV" if it changed the child's way.
-// │       only the CNV (it passed it for sure) ──────────► "maternal" / "paternal"
-// │       the CNV or a normal copy (it may have) ─────────► "possible_maternal" / "possible_paternal"
-// │       no copy that is the CNV ────────────────────────► ④
-// │     (SNV / Radiant: a het child with a het mother and an unknown father is
-// │      POSSIBLE_MOTHER; a hom-alt child with a het mother is MOTHER)
-// │
-// └─④ get_denovo_origin(s, variant)     only when ② and ③ found nothing
-//       mom, dad = get_parent_status(s, "mom" | "dad")
-//         "nothing" (passes no copy here) | "absent" | "unknown" (no CN) | "normal" | "carrier"
-//       both known and normal ("normal" or "nothing") ─────────────► "denovo"
-//       one known and normal, the other "absent" or "unknown" ──────► "possible_denovo"
-//       otherwise (a carrier parent: Mendelian error; or too unknown) ► null
+// └─② get_trio_row(s)[3]: the parent-of-origin column of the child's TRIO_TABLE row,
+//     found from get_transmission_outcome(s, variant):
+//       │
+//       ├ m = get_parent_transmission(s, "mom")    what mom can pass, and a normal copy's value
+//       ├ d = get_parent_transmission(s, "dad")    same for dad
+//       │     ├ PAR-straddling record                      → null (not modelled). When a record crosses a PAR boundary, return null.
+//       │     ├ non-PAR X: dad → son (or unknown sex)      → {haps: [0], normal: 0}  passes nothing
+//       │     ├ non-PAR Y: dad → daughter, or mom → anyone → {haps: [0], normal: 0}  passes nothing
+//       │     │    (these two hold even if that parent is absent / has no CN:
+//       │     │     open question, ** see docs/journal.md) **
+//       │     ├ parent missing, or no [has_cn]             → null
+//       │     ├ non-PAR X/Y: the father's single copy      → {haps: [dad.CN], normal: 1}
+//       │     │    (his X to a daughter, his Y to a son)
+//       │     └ diploid: CN_HAPLOTYPES[CN], CN 0-3         → {haps: [a, b], normal: 1}
+//       │                CN >= 4 (several splits fit)      → null
+//       │
+//       ├ both parents known (m and d): every way, mom copy + dad copy == s.CN (get_way_kinds),
+//       │   named by which copies are hits (copy_effect)
+//       │     no way, both can only pass normal copies ──────────► "new"
+//       │     the ways disagree ─────────────────────────────────► "ambiguous"
+//       │     only mom's copy a hit / only dad's / both ─────────► "maternal" / "paternal" / "both"
+//       ├ one known, the other missing (get_duo_outcome): the missing parent passes 0, 1 or 2
+//       │     the known parent only passes normal copies, or only
+//       │     its normal copy fits ──────────────────────────────► "duo_new"
+//       │     its hit fits, the missing parent's copy normal ────► "duo_maternal" / "duo_paternal"
+//       │     its hit and the missing parent's hit ──────────────► "duo_maternal_two" / "duo_paternal_two"
+//       │     its hit, or its normal copy and the missing hit ───► "duo_maybe_maternal" / "duo_maybe_paternal"
+//       │     (SNV / Radiant: a het child with a het mother and an unknown father is
+//       │      POSSIBLE_MOTHER; a hom-alt child with a het mother is MOTHER)
+//       └ otherwise (CN >= 4, no ordinary way, copies changed in opposite directions) ► "undecided"
 //
-//   Examples (autosome unless noted; mom / dad copies in brackets):
-//     kid 1, mom 1 [1,0], dad 2 [1,1]       only 0 + 1          → "maternal"   (harness T4)
-//     kid 1, mom 1 [1,0], dad 1 [1,0]       0 + 1 or 1 + 0      → "ambiguous"  (T10)
-//     kid 0, mom 1 [1,0], dad 1 [1,0]       only 0 + 0          → "both"       (T6)
-//     kid 1, mom 2 [1,1], dad 2 [1,1]       no way, both normal → "denovo"     (T1)
-//     duo: kid 1, mom 2 [1,1], no father    no way, dad unknown → "possible_denovo"  (D3)
-//     duo: kid 1, mom 1 [1,0], no father    mom's 0 or her 1    → "possible_maternal" (D1)
-//     duo: kid 0, mom 1 [1,0], no father    only mom's 0 fits   → "maternal"   (D2)
-//     kid 0, mom 2 [1,1], dad 1 [1,0]       no way, dad carrier → null         (T19)
-//     non-PAR X: son 0, mom 1 [1,0]         dad passes nothing  → "maternal"   (X2)
-//     non-PAR X: daughter 3, mom 2 [1,1], dad 2 [2]   1 + 2     → "paternal"   (X8)
+//   Examples (autosome unless noted; mom / dad copies in brackets; outcome → parent of origin):
+//     kid 1, mom 1 [1,0], dad 2 [1,1]       only 0 + 1            maternal  → "maternal"   (harness T4)
+//     kid 1, mom 1 [1,0], dad 1 [1,0]       0 + 1 or 1 + 0        ambiguous → "ambiguous"  (T10)
+//     kid 0, mom 1 [1,0], dad 1 [1,0]       only 0 + 0            both      → "both"       (T6)
+//     kid 0, mom 0 [0,0], dad 1 [1,0]       only 0 + 0            both      → "both"       (T27)
+//     kid 1, mom 2 [1,1], dad 2 [1,1]       no way, both normal   new       → "denovo"     (T1)
+//     kid 0, mom 2 [1,1], dad 1 [1,0]       no way, dad carrier   undecided → null         (T19)
+//     duo: kid 1, mom 2 [1,1], no father    her normal copy       duo_new   → "possible_denovo"   (D3)
+//     duo: kid 1, mom 1 [1,0], no father    her 0 + 1, or 1 + 0   duo_maybe_maternal → "possible_maternal" (D1)
+//     duo: kid 0, mom 1 [1,0], no father    her 0 + his 0         duo_maternal_two   → "maternal" (D2)
+//     duo: kid 1, mom 0 [0,0], no father    her 0 + his 1         duo_maternal       → "maternal" (D5)
+//     non-PAR X: son 0, mom 1 [1,0]         dad passes nothing    maternal  → "maternal"   (X2)
+//     non-PAR X: daughter 3, mom 2 [1,1], dad 2 [2]   1 + 2      paternal  → "paternal"   (X8)
 //
 //
 // ┌─ shared building blocks ───────────────────────────────────────────────────────────────────┐
@@ -206,14 +199,15 @@
 // │  has_parent(s, "mom"|"dad")                        "mom" in s  (reading s.mom throws       │
 // │                                                     in slivar when it isn't set)           │
 // │                                                                                            │
-// │  get_transmission_origin(kid, variant)             "which parent's copy is abnormal?"      │
+// │  get_transmission_outcome(kid, variant)            "who passed what?" → TRIO_TABLE outcome │
 // │    ├ get_parent_transmission(kid, "mom"|"dad")     copies it can pass:                     │
 // │    │    diploid → CN_HAPLOTYPES[CN] (CN >= 4 → can't tell);                                │
 // │    │    non-PAR X/Y father → [his CN] to a daughter (X) / son (Y),                         │
 // │    │    [0] to the other sex; mother on Y → [0]                                            │
-// │    └ the distinct (mom copy, dad copy) pairs that add up to kid.CN:                        │
-// │         0 → null, 2+ → "ambiguous", 1 → maternal / paternal / both                         │
-// │  Also behind cn_po_origin() (--sample-expr), so MoI and PO agree.                          │
+// │    ├ missing parent (get_duo_outcome) → 0, 1 or 2                                          │
+// │    └ get_way_kinds(): every pair adding up to kid.CN, by its hits (copy_effect)            │
+// │  get_trio_row(kid, variant): TRIO_TABLE row → the MoI call (trio_call) and                 │
+// │    the parent of origin (cn_po_origin), so the two always agree.                           │
 // └────────────────────────────────────────────────────────────────────────────────────────────┘
 
 /**
@@ -246,44 +240,58 @@
  */
 
 // ===========================================================================
-// TABLE 1 — TRIO_TABLE: one affected carrier child and its parents
+// TABLE 1 — TRIO_TABLE: one carrier child, and what its parents passed
 // ===========================================================================
+// One row gives both answers for a child: the MoI call (cnv_moi(), affected children
+// only) and the parent of origin (cn_po_origin(), every child), so the two can't
+// disagree. The row is the first one matching the child's dev and its transmission
+// outcome (get_transmission_outcome(): every way one copy from each parent can add
+// up to the child's CN).
 // kid column (the child's dev):
 //   "±1"    dev is -1 or +1            (one copy lost or gained)
 //   "±2+"   |dev| >= 2                 (CN 0 or CN >= 4 on an autosome)
 //   "even"  dev is -2, +2, -4, ...     (could be one copy from each parent)
 //   "any"
-// mom / dad columns (the parent's dev, read RELATIVE to the kid):
-//   "normal"  parent dev = 0
-//   "same"    parent dev = kid dev            (parent has the same CNV)
-//   "half"    parent dev = kid dev / 2        (parent is a carrier of one copy)
-//   "absent"  parent not in the PED / VCF, or without a usable CN (as SNV/Radiant
-//             treat a parent's no-call); is_cn_missing() gives unknown_cn instead
-//             when no needed parent has a CN
-//   "any"
-// A parent who passes nothing here (a father's X to a son, any mother's Y) is read as
-// "normal", even when absent from the PED or without a CN.
-// origin column (get_transmission_origin(): which parent's transmitted copy is abnormal,
-// from every way the parents' copies can add up to the child's CN; the same
-// computation cn_po_origin() reports per sample, so the two always agree):
-//   "maternal" / "paternal"   exactly one way fits, and only that parent's copy is abnormal
-//   "any"                     no requirement (de novo and duo rows rely on the columns before)
+// outcome column. A "hit" is a passed copy that changed the child's way: a deleted
+// copy for a loss, an extra copy for a gain.
+//   Both parents known (a parent who passes nothing counts as known and normal):
+//     "new"          no way to make the child's CN, and both parents can only pass
+//                    normal copies
+//     "maternal"     every way: only the mother's copy is a hit
+//     "paternal"     every way: only the father's copy is a hit
+//     "both"         every way: both copies are hits
+//     "ambiguous"    the ways disagree (e.g. kid 1, mom 1, dad 1: 0 + 1 or 1 + 0)
+//   One parent known, the other missing (not in the PED, or no CN): the missing
+//   parent could have passed 0, 1 or 2 copies, like any parent with CN 0 to 3.
+//     "duo_new"            the known parent only passed a normal copy: the CNV is
+//                          new, or from the missing parent
+//     "duo_maternal"       the mother surely passed it; the father's copy was normal
+//     "duo_maternal_two"   two hits: the mother's, and the father's
+//     "duo_maybe_maternal" the mother's hit, or her normal copy and the father's hit
+//     (and the same three for the father)
+//   "undecided"    a parent with CN >= 4 (several splits), no way with ordinary
+//                  copies, or copies changed in opposite directions: the catch-all
+//                  row, where is_mendelian_possible() decides
+// parent-of-origin column: what cn_po_origin() returns (null: no po_* tag).
 // First matching row wins.
 // prettier-ignore
 var TRIO_TABLE = [
-  // kid      mom        dad        origin       child call                      harness rows
-  ["±1",     "normal",  "normal",  "any",       "denovo"],                      // T1 T2 X3
-  ["±2+",    "normal",  "normal",  "any",       "denovo_suspect"],              // T3 T26 (P5: two hits at one locus is implausible)
-  ["any",    "any",     "any",     "maternal",  "inherited_maternal"],          // T4 T7 T23 T24 X2, Q9 kid
-  ["any",    "any",     "any",     "paternal",  "inherited_paternal"],          // T5, Q9 sib
-  ["even",   "half",    "half",    "any",       "recessive"],                   // T6 T9 (T9 = CN4 from two CN3, see P7)
-  ["any",    "normal",  "absent",  "any",       "possible_denovo"],             // D3
-  ["any",    "absent",  "normal",  "any",       "possible_denovo"],
-  ["±1",     "same",    "absent",  "any",       "possible_inherited_maternal"], // D1
-  ["±1",     "absent",  "same",    "any",       "possible_inherited_paternal"],
-  ["even",   "half",    "absent",  "any",       "recessive_lowconf"],           // D2
-  ["even",   "absent",  "half",    "any",       "recessive_lowconf"],
-  ["any",    "any",     "any",     "any",       "no_pattern"]                   // -> inheritance_unresolved (T8 T10) or mendelian_inconsistent (T14 T25)
+  // kid     outcome                 child call                     parent of origin      harness rows
+  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X7 Y3
+  ["±2+",    "new",                  "denovo_suspect",              "denovo"],            // T3 T26 (P5: two hits at one locus is implausible)
+  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T23 T24 X2, Q9 kid
+  ["any",    "paternal",             "inherited_paternal",          "paternal"],          // T5 X8 Y2, Q9 sib
+  ["even",   "both",                 "recessive",                   "both"],              // T6 T9 T27 X10 (T9 = CN4 from two CN3, see P7)
+  ["any",    "both",                 "inheritance_unresolved",      "both"],
+  ["any",    "ambiguous",            "inheritance_unresolved",      "ambiguous"],         // T8 T10
+  ["any",    "duo_new",              "possible_denovo",             "possible_denovo"],   // D3 D7 T11
+  ["any",    "duo_maternal",         "inherited_maternal",          "maternal"],          // D5
+  ["any",    "duo_paternal",         "inherited_paternal",          "paternal"],          // X11
+  ["even",   "duo_maternal_two",     "recessive_lowconf",           "maternal"],          // D2 D6
+  ["even",   "duo_paternal_two",     "recessive_lowconf",           "paternal"],
+  ["any",    "duo_maybe_maternal",   "possible_inherited_maternal", "possible_maternal"], // D1
+  ["any",    "duo_maybe_paternal",   "possible_inherited_paternal", "possible_paternal"], // D4
+  ["any",    "any",                  "no_pattern",                  null]                 // -> inheritance_unresolved (T16 T17) or mendelian_inconsistent (T14 T19 T25)
 ];
 
 // On non-PAR chrX, a child's call takes the SNV pipeline's X-linked name (Radiant's
@@ -417,16 +425,13 @@ function cnv_moi(s, variant) {
 }
 
 /**
- * TRIO_TABLE call for one affected carrier child (step ⑤ of the map).
- *
- * Turns the child's and each parent's CN into tokens (populate_kid_tokens,
- * populate_parent_token) and works out the origin (get_transmission_origin), then
- * returns the call (5th column) of the first matching TRIO_TABLE row. The
- * catch-all "no_pattern" row is resolved here with is_mendelian_possible().
- * Exported for the harness / debugging.
+ * TRIO_TABLE call for one affected carrier child (step ⑤ of the map): the
+ * child call (3rd column) of its row (get_trio_row), the row cn_po_origin()
+ * reads too. The catch-all "no_pattern" row is resolved here with
+ * is_mendelian_possible(). Exported for the harness / debugging.
  *
  * The call describes this child and its parents only (who is affected among
- * them is not looked at). A parent who passes nothing here is read as "normal"
+ * them is not looked at). A parent who passes nothing here counts as normal
  * (does_parent_pass_nothing).
  *
  * @param {Sample}  kid      affected carrier with at least one parent in the family
@@ -455,63 +460,77 @@ function cnv_moi(s, variant) {
  * //   INFO:  { END: 1200000, SVTYPE: "DEL" }
  * // }
  * //
- * // tokens: kid ["any","±1"], mom "same", dad "normal"; origin "maternal"
+ * // kid tokens ["any","±1"]; mom [1,0] + dad [1,1]: only 0 + 1, mom's copy is the hit: outcome "maternal"
  * trio_call(kid, variant)  // → "inherited_maternal"
  * @example
- * // kid / mom / dad CNs, chr7 unless noted; the TRIO_TABLE row that matches in brackets
- * // kid 1, mom 2, dad 2             [±1, normal, normal]                 (T1)
+ * // kid / mom / dad CNs, chr7 unless noted; the outcome in brackets
+ * // kid 1, mom 2, dad 2             [new]                                       (T1)
  * trio_call(kid, variant)  // → "denovo"
- * // kid 0, mom 2, dad 2             [±2+, normal, normal]                (T3)
+ * // kid 0, mom 2, dad 2             [new], two copies changed                   (T3)
  * trio_call(kid, variant)  // → "denovo_suspect"
- * // kid 0, mom 1, dad 1             [even, half, half]                   (T6)
+ * // kid 0, mom 1, dad 1             [both]: only 0 + 0                          (T6)
  * trio_call(kid, variant)  // → "recessive"
- * // kid 1, mom 1, dad 3             origin "maternal": dad's CN3 passes 1 or 2, only 1 fits  (Q9)
+ * // kid 0, mom 0, dad 1             [both]: only 0 + 0 (her [0,0] has no other copy)  (T27)
+ * trio_call(kid, variant)  // → "recessive"
+ * // kid 1, mom 1, dad 3             [maternal]: dad's CN3 passes 1 or 2, only 0 + 1 fits  (Q9)
  * trio_call(kid, variant)  // → "inherited_maternal"
- * // duo: kid 1, mom 1, no father    [±1, same, absent]                   (D1)
+ * // duo: kid 1, mom 1, no father    [duo_maybe_maternal]: her 0 + his 1, or her 1 + his 0  (D1)
  * trio_call(kid, variant)  // → "possible_inherited_maternal"
- * // kid 3, mom 3, dad 3             no_pattern, but transmittable        (T8)
- * trio_call(kid, variant)  // → "inheritance_unresolved"
- * // kid 0, mom 0, dad 2             no_pattern, not transmittable        (T14)
- * trio_call(kid, variant)  // → "mendelian_inconsistent"
- * // non-PAR chrX: son 0, mom 1, dad 1   dad read as "normal" (he passes no X to a son)  (X2)
+ * // duo: kid 1, mom 0, no father    [duo_maternal]: her 0 + his 1             (D5)
  * trio_call(kid, variant)  // → "inherited_maternal"
- * // non-PAR chrY: son 2, mom (no Y CN), dad 1   mom read as "normal" (no Y from a mother)  (Y3)
+ * // kid 3, mom 3, dad 3             [ambiguous]: 2 + 1 or 1 + 2                 (T8)
+ * trio_call(kid, variant)  // → "inheritance_unresolved"
+ * // kid 0, mom 0, dad 2             [undecided]: no way, not transmittable      (T14)
+ * trio_call(kid, variant)  // → "mendelian_inconsistent"
+ * // non-PAR chrX: son 0, mom 1, dad 1   [maternal]: dad passes no X to a son  (X2)
+ * trio_call(kid, variant)  // → "inherited_maternal"
+ * // non-PAR chrY: son 2, mom (no Y CN), dad 1   [new]: no Y from a mother  (Y3)
  * trio_call(kid, variant)  // → "denovo"
  */
 function trio_call(kid, variant) {
-  var kd = get_cn_dev(kid, variant);
-  var kidTok = populate_kid_tokens(kd); // kid gets an array of strings. Ex could be ["any", "±2+", "even"] or ["any", "±1"] . Always contains "any" at first pos. "any" can be seen as a placeholder that triggers when we found no matches in the TRIO_TABLE.
-  // each parent (momTok and dadTok gets one single string value. ex: "normal", "same", "half", "absent" or "other"
-  var momTok = does_parent_pass_nothing(kid, "mom", variant)
-    ? "normal"
-    : populate_parent_token(kid, "mom", kd, variant);
-  var dadTok = does_parent_pass_nothing(kid, "dad", variant)
-    ? "normal"
-    : populate_parent_token(kid, "dad", kd, variant);
-  var origin = get_transmission_origin(kid, variant); // "maternal" | "paternal" | "both" | "ambiguous" | null -- same answer as cn_po_origin()
+  var row = get_trio_row(kid, variant); // e.g. T4: ["any", "maternal", "inherited_maternal", "maternal"]
+  // Return the value of row[2], i.e. the 3rd value of the lookup table (the child call).
+  //      Except if row[2] is "no_pattern" (the catch-all row: the outcome is "undecided"). If that is the
+  //      case, we'll go with the is_mendelian_possible() which assess if:
+  //          "mendelian_inconsistent" (none of our patterns fit this child. Could these parents have produced
+  //                                    this child's CN at all -> No)
+  //          "inheritance_unresolved" (none of our patterns fit this child. Could these parents have produced
+  //                                    this child's CN at all -> Yes)
+  if (row[2] !== "no_pattern") return row[2];
+  return is_mendelian_possible(kid, variant) ? "inheritance_unresolved" : "mendelian_inconsistent";
+}
+
+/**
+ * The TRIO_TABLE row of one carrier child: the first row whose kid column the
+ * child's dev satisfies and whose outcome column is the child's transmission
+ * outcome (get_transmission_outcome). trio_call() reads its child call (3rd
+ * column) and cn_po_origin() its parent of origin (4th column), so the two
+ * always agree. Exported for the harness / debugging.
+ * @param {Sample}  kid      a carrier child
+ * @param {Variant} variant
+ * @returns {Array} a TRIO_TABLE row; the catch-all row when nothing more specific fits
+ * @example
+ * // kid CN1, mom CN1, dad CN2 (T4): kid tokens ["any", "±1"], outcome "maternal"
+ * get_trio_row(kid, variant)  // → ["any", "maternal", "inherited_maternal", "maternal"]
+ * // kid 3, mom 4, dad 3 (T16): outcome "undecided" (mom's CN4 can't be split)
+ * get_trio_row(kid, variant)  // → ["any", "any", "no_pattern", null]
+ */
+function get_trio_row(kid, variant) {
+  var kidTok = populate_kid_tokens(get_cn_dev(kid, variant)); // kid gets an array of strings. Ex could be ["any", "±2+", "even"] or ["any", "±1"] . Always contains "any" at first pos. "any" can be seen as a placeholder that triggers when we found no matches in the TRIO_TABLE.
+  var outcome = get_transmission_outcome(kid, variant); // one single string value. ex: "new", "maternal", "both", "duo_maybe_maternal" or "undecided"
   for (var i = 0; i < TRIO_TABLE.length; i++) {
     var row = TRIO_TABLE[i];
     // excerpt from the TRIO table.
-    // kid       mom        dad        origin       child call                      harness rows
-    // ["±1",    "normal",  "normal",  "any",       "denovo"],                      // T1 T2 X3
-    // ["±2+",   "normal",  "normal",  "any",       "denovo_suspect"],              // T3   (P5: two hits at one locus is implausible)
-    //["any",    "any",     "any",     "maternal",  "inherited_maternal"],          // T4 T7 X2, Q9 kid
+    // kid      outcome      child call             parent of origin   harness rows
+    // ["±1",   "new",       "denovo",              "denovo"],         // T1 T2 X3 X7 Y3
+    // ["±2+",  "new",       "denovo_suspect",      "denovo"],         // T3 T26 (P5: two hits at one locus is implausible)
+    // ["any",  "maternal",  "inherited_maternal",  "maternal"],       // T4 T7 T23 T24 X2, Q9 kid
     if (
-      // ex: is "+/-1 found in ['any', '+1']"
+      // ex: is "±1" found in ["any", "±1"]
       kidTok.indexOf(row[0]) >= 0 && // is the row's kid value in the kidTok's list? again kid's list could be  ["any", "±1"]. yes ->
-      (row[1] === "any" || row[1] === momTok) && // row accepts any mom, or exactly this mom? yes ->
-      (row[2] === "any" || row[2] === dadTok) && // row accepts any dad, or exactly this dad? yes ->
-      (row[3] === "any" || row[3] === origin)
-    ) {
-      // row accepts any origin, or exactly this one? If all 4 yes, return the value of row[4] i.e. the 5th value of the lookup table.
-      //      Except if row[4] of the lookup table is "no_pattern". If that is the case, we'll go with the is_mendelian_possible() which assess if:
-      //          "mendelian_inconsistent" (none of our patterns fit this child. Could these parents have produced
-      //                                    this child's CN at all -> No)
-      //          "inheritance_unresolved" (none of our patterns fit this child. Could these parents have produced
-      //                                    this child's CN at all -> Yes)
-      if (row[4] !== "no_pattern") return row[4]; // So basically returns the value of the 5th column of TRIO_TABLE's current row unless that value is "no_pattern"
-      return is_mendelian_possible(kid, variant) ? "inheritance_unresolved" : "mendelian_inconsistent";
-    }
+      (row[1] === "any" || row[1] === outcome) // row accepts any outcome, or exactly this one? If both yes, this is the child's row.
+    )
+      return row;
   }
 }
 
@@ -562,40 +581,6 @@ function populate_kid_tokens(d) {
   if (d !== 0 && d % 2 === 0) t.push("even");
   return t;
 }
-/**
- * How one parent compares with the child: the TRIO_TABLE mom / dad column value.
- * Checked in this order: absent (not in the family, or no usable CN), normal,
- * same, half, other. "same" means the parent carries the child's CNV as is (a
- * one-copy carrier passing it on); "half" means the parent carries half the
- * child's deviation (a recessive carrier); anything else is "other".
- * @param {Sample}  kid
- * @param {string}  which    "mom" | "dad"
- * @param {number}  kd       the child's dev
- * @param {Variant} variant
- * @returns {string} "absent" | "normal" (dev 0) | "same" (dev = kd)
- *   | "half" (dev × 2 = kd) | "other"
- * @example
- * // kid CN0 (kd = -2), mom CN1 (dev -1)
- * populate_parent_token(kid, "mom", -2, variant)  // → "half"
- * @example
- * // kid CN1 (kd = -1), chr7:
- * populate_parent_token(kid, "mom", -1, variant)  // mom CN2 (dev 0)  → "normal"
- * populate_parent_token(kid, "mom", -1, variant)  // mom CN1 (dev -1) → "same"
- * populate_parent_token(kid, "mom", -1, variant)  // mom CN0 (dev -2) → "other"
- * populate_parent_token(kid, "dad", -1, variant)  // duo, no father   → "absent"
- * populate_parent_token(kid, "dad", -1, variant)  // dad CN missing   → "absent"  (T11)
- * // non-PAR chrX: daughter CN3 (kd = +1), dad CN2 (dev +1 against his expected 1)
- * populate_parent_token(kid, "dad", 1, variant)   // → "same"
- */
-function populate_parent_token(kid, which, kd, variant) {
-  if (!has_parent(kid, which) || !has_cn(kid[which])) return "absent"; // no CN: read as a duo (is_cn_missing)
-  var pd = get_cn_dev(kid[which], variant);
-  if (pd === 0) return "normal";
-  if (pd === kd) return "same";
-  if (pd * 2 === kd) return "half";
-  return "other";
-}
-
 // ---------------------------------------------------------------------------
 // Child helpers
 // ---------------------------------------------------------------------------
@@ -605,7 +590,7 @@ function populate_parent_token(kid, which, kd, variant) {
  * copies matter here (get_needed_parents): a missing CN on a parent who passes
  * nothing, or on anyone else in the family, doesn't block the call (P15).
  * A needed parent without CN only blocks it when no needed parent has one:
- * otherwise that parent counts as "absent" (populate_parent_token), as for a
+ * otherwise that parent counts as missing (get_transmission_outcome), as for a
  * duo, the way the SNV pipeline and Radiant treat a parent's no-call.
  * @param {Sample}  kid      an affected child, with at least one parent in the family
  * @param {Variant} variant
@@ -871,8 +856,8 @@ function get_cn_dev(s, variant) {
 
 // ===========================================================================
 // Transmission: what each parent can pass on, and which parent the child's CNV
-// came from. One engine for both the TRIO_TABLE origin column (trio_call) and
-// the per-sample po_* tags (cn_po_origin), so the two can never disagree.
+// came from. One engine, and one TRIO_TABLE row, for both the MoI call (trio_call)
+// and the per-sample po_* tags (cn_po_origin), so the two can never disagree.
 // ===========================================================================
 // A diploid parent passes one of its two haplotypes. Its CN is split into the
 // haplotype copy numbers it implies; CN >= 4 has several splits ([2,2], [3,1],
@@ -883,8 +868,8 @@ var CN_HAPLOTYPES = { 0: [0, 0], 1: [1, 0], 2: [1, 1], 3: [2, 1] };
 
 /**
  * What this parent can pass to this child on this record. One half of the
- * transmission engine (with get_transmission_origin), behind both TRIO_TABLE's
- * origin column and the per-sample po_* tags.
+ * transmission engine (with get_transmission_outcome), behind both the MoI
+ * call and the per-sample po_* tags.
  * @param {Sample}  kid
  * @param {string}  which    "mom" | "dad"
  * @param {Variant} variant
@@ -930,64 +915,164 @@ function get_parent_transmission(kid, which, variant) {
 }
 
 /**
- * Which parent's transmitted copy is abnormal, from every distinct way the
- * parents' copies (get_parent_transmission) can add up to the child's CN:
- *   0 ways -> null       (not explained by transmission: de novo, or a Mendelian error)
- *   2+     -> "ambiguous"
- *   1      -> "maternal" / "paternal" / "both", by which transmitted copy differs
- *             from that parent's normal one
- * @param {Sample}  kid
- * @param {Variant} variant
- * @returns {?string} "maternal" | "paternal" | "both" | "ambiguous" | null
+ * How one passed copy compares with that parent's normal copy, seen from the
+ * child: "normal", a "hit" (it changed the child's way: a deleted copy for a
+ * loss, an extra copy for a gain), or "opposite" (it changed the other way).
+ * @param {number} copy    the copy number passed
+ * @param {number} normal  a normal copy's value for this parent (1, or 0 when it passes nothing)
+ * @param {number} kd      the child's dev
+ * @returns {string} "normal" | "hit" | "opposite"
  * @example
- * // chr7: kid CN1, mom CN1 [1,0], dad CN2 [1,1]  → only mom 0 + dad 1 fits
- * get_transmission_origin(kid, variant)  // → "maternal"
- * // non-PAR chrX: daughter CN3, dad CN2 [2], mom CN2 [1,1]  → only mom 1 + dad 2 fits
- * get_transmission_origin(kid, variant)  // → "paternal"
- * @example
- * // chr7: kid CN1, mom CN1 [1,0], dad CN1 [1,0]  → 0 + 1 or 1 + 0  (T10)
- * get_transmission_origin(kid, variant)  // → "ambiguous"
- * // chr7: kid CN0, mom CN1 [1,0], dad CN1 [1,0]  → only 0 + 0  (T6)
- * get_transmission_origin(kid, variant)  // → "both"
- * // chr7: kid CN1, mom CN1 [1,0], dad CN3 [2,1]  → only 0 + 1 (dad's CN3 is a separate dup)  (Q9)
- * get_transmission_origin(kid, variant)  // → "maternal"
- * // chr7: kid CN1, parents CN2 [1,1]             → no way (de novo)  (T1)
- * get_transmission_origin(kid, variant)  // → null
- * // chr7: kid CN3, mom CN4, dad CN1              → mom's CN4 can't be split  (T17)
- * get_transmission_origin(kid, variant)  // → null
- * // non-PAR chrX: son CN0, mom CN1 [1,0]          → his only X is her deleted copy  (X2)
- * get_transmission_origin(kid, variant)  // → "maternal"
+ * copy_effect(0, 1, -1)  // → "hit"       (a deleted copy, for a child who lost one)
+ * copy_effect(2, 1, -1)  // → "opposite"  (an extra copy, for a child who lost one)
+ * copy_effect(0, 0, -1)  // → "normal"    (a father's "nothing" to a son on non-PAR chrX)
  */
-function get_transmission_origin(kid, variant) {
-  if (!has_cn(kid)) return null;
-  var m = get_parent_transmission(kid, "mom", variant); // m object is : (m.haps, m.normal)
-  var d = get_parent_transmission(kid, "dad", variant); // d object is same as above
-  if (!m || !d) return null;
-  var ways = {},
-    n = 0,
-    fromMom,
-    fromDad;
-  // ex: kid.CN = 1, m.haps = [1, 0] and d.haps = [1, 0]
-  for (var i = 0; i < m.haps.length; i++) {
-    for (var j = 0; j < d.haps.length; j++) {
-      if (m.haps[i] + d.haps[j] !== kid.CN) continue; // stays in the loop, but goes to the next j immediately
-      var key = m.haps[i] + "," + d.haps[j]; // distinct by value: [1,1] gives the same way twice
-      if (!ways[key]) {
-        ways[key] = true;
-        n++;
-        fromMom = m.haps[i];
-        fromDad = d.haps[j];
-      }
+function copy_effect(copy, normal, kd) {
+  if (copy === normal) return "normal";
+  return (copy - normal) * kd > 0 ? "hit" : "opposite";
+}
+
+/**
+ * Can this parent only pass normal copies here? A CN 2 parent ([1,1]), or one
+ * who passes nothing (a father's X to a son, any mother's Y).
+ * @param {{haps: number[], normal: number}} t  get_parent_transmission()'s result
+ * @returns {boolean}
+ * @example
+ * passes_only_normal({haps: [1, 1], normal: 1})  // → true
+ * passes_only_normal({haps: [1, 0], normal: 1})  // → false
+ */
+function passes_only_normal(t) {
+  for (var i = 0; i < t.haps.length; i++) if (t.haps[i] !== t.normal) return false;
+  return true;
+}
+
+/**
+ * Every way one copy from the first parent plus one from the second adds up to
+ * the child's CN, sorted into kinds by which copies are hits (copy_effect):
+ * "first" (only the first parent's), "second", "both", or "opposite" (a copy
+ * changed the other way). Two normal copies can't make a carrier.
+ * @param {Sample}   kid
+ * @param {number}   kd           the child's dev
+ * @param {number[]} firstCopies  what the first parent can pass
+ * @param {number}   firstNormal  its normal copy's value
+ * @param {number[]} secondCopies what the second parent can pass
+ * @param {number}   secondNormal its normal copy's value
+ * @returns {Object} the kinds found, e.g. {first: true, second: true}; {} when no way fits
+ * @example
+ * // kid CN1: mom [1,0], dad [1,1] → only 0 + 1
+ * get_way_kinds(kid, -1, [1, 0], 1, [1, 1], 1)  // → {first: true}
+ * // kid CN1: mom [1,0], dad [1,0] → 0 + 1 or 1 + 0
+ * get_way_kinds(kid, -1, [1, 0], 1, [1, 0], 1)  // → {first: true, second: true}
+ */
+function get_way_kinds(kid, kd, firstCopies, firstNormal, secondCopies, secondNormal) {
+  var kinds = {};
+  for (var i = 0; i < firstCopies.length; i++) {
+    for (var j = 0; j < secondCopies.length; j++) {
+      if (firstCopies[i] + secondCopies[j] !== kid.CN) continue; // this pair doesn't make the child's CN
+      var a = copy_effect(firstCopies[i], firstNormal, kd),
+        b = copy_effect(secondCopies[j], secondNormal, kd);
+      if (a === "opposite" || b === "opposite") kinds.opposite = true;
+      else if (a === "hit" && b === "hit") kinds.both = true;
+      else if (a === "hit") kinds.first = true;
+      else if (b === "hit") kinds.second = true;
     }
   }
-  if (n === 0) return null; // if n == 0, means that we did not find any possible ways of transmission.
-  if (n > 1) return "ambiguous"; // if n > 1, means that there is more than one ways of transmission.
-  var momAbnormal = fromMom !== m.normal,
-    dadAbnormal = fromDad !== d.normal;
-  if (momAbnormal && dadAbnormal) return "both";
-  if (momAbnormal) return "maternal";
-  if (dadAbnormal) return "paternal";
-  return null; // both copies normal: the child isn't a carrier
+  return kinds;
+}
+
+/**
+ * The transmission outcome of one carrier child: TRIO_TABLE's outcome column
+ * (see the legend there). From what each parent can pass
+ * (get_parent_transmission), every way one copy from each adds up to the
+ * child's CN (get_way_kinds). With one parent missing (not in the PED, or no
+ * CN), get_duo_outcome() lets that parent pass any ordinary copy.
+ * @param {Sample}  kid      a carrier child
+ * @param {Variant} variant
+ * @returns {string} "new" | "maternal" | "paternal" | "both" | "ambiguous" |
+ *   "duo_new" | "duo_maternal" | "duo_paternal" | "duo_maternal_two" |
+ *   "duo_paternal_two" | "duo_maybe_maternal" | "duo_maybe_paternal" | "undecided"
+ * @example
+ * // autosome unless noted; mom / dad copies in brackets
+ * get_transmission_outcome(<kid 1, mom 1 [1,0], dad 2 [1,1]>)   // → "maternal"  (only 0 + 1; T4)
+ * get_transmission_outcome(<kid 1, mom 1 [1,0], dad 1 [1,0]>)   // → "ambiguous" (0 + 1 or 1 + 0; T10)
+ * get_transmission_outcome(<kid 0, mom 1 [1,0], dad 1 [1,0]>)   // → "both"      (only 0 + 0; T6)
+ * get_transmission_outcome(<kid 1, mom 2 [1,1], dad 2 [1,1]>)   // → "new"       (no way, both normal; T1)
+ * get_transmission_outcome(<kid 0, mom 2 [1,1], dad 1 [1,0]>)   // → "undecided" (no way, dad carries a CNV; T19)
+ * get_transmission_outcome(<kid 3, mom 4, dad 1>)               // → "undecided" (mom's CN4 can't be split; T17)
+ * get_transmission_outcome(<son 0, mom 1 [1,0]>, <non-PAR chrX>) // → "maternal" (dad passes no X to a son; X2)
+ * get_transmission_outcome(<kid 1, mom 1 [1,0], no father>)     // → "duo_maybe_maternal" (D1)
+ */
+function get_transmission_outcome(kid, variant) {
+  var kd = get_cn_dev(kid, variant);
+  if (!kd) return "undecided"; // no CN, not modellable, or not a carrier: the callers check that first
+  // A founder has no parent in the family: nothing to tell (without this, a male founder on
+  // non-PAR chrX would see his "father" as known, since a father passes no X to a son).
+  if (!has_parent(kid, "mom") && !has_parent(kid, "dad")) return "undecided";
+  var m = get_parent_transmission(kid, "mom", variant); // m object is : (m.haps, m.normal)
+  var d = get_parent_transmission(kid, "dad", variant); // d object is same as above
+  if (m && d) {
+    var k = get_way_kinds(kid, kd, m.haps, m.normal, d.haps, d.normal);
+    var n = Object.keys(k).length;
+    // if n == 0, means that we did not find any possible ways of transmission: new if neither parent
+    // could have passed a hit, otherwise the Mendelian check decides.
+    if (n === 0) return passes_only_normal(m) && passes_only_normal(d) ? "new" : "undecided";
+    if (n > 1) return "ambiguous"; // if n > 1, the ways of transmission disagree.
+    if (k.first) return "maternal";
+    if (k.second) return "paternal";
+    if (k.both) return "both";
+    return "undecided"; // copies changed in opposite directions
+  }
+  if (m && is_parent_missing(kid, "dad", variant)) return get_duo_outcome(kid, kd, m, "maternal");
+  if (d && is_parent_missing(kid, "mom", variant)) return get_duo_outcome(kid, kd, d, "paternal");
+  return "undecided"; // a parent with CN >= 4, or no parent known
+}
+
+/**
+ * The outcome for a child with one parent known and the other missing (not in
+ * the PED, or no CN). The missing parent could have passed an ordinary copy:
+ * 0, 1 or 2, like any parent with CN 0 to 3 (anything up to the child's CN with
+ * MENDEL_ALLOW_RARE_SPLITS). This follows the SNV pipeline and Radiant (a het
+ * child with a het mother and an unknown father is POSSIBLE_MOTHER, a hom-alt
+ * one MOTHER), with a CNV carrier in place of a het.
+ * @param {Sample} kid
+ * @param {number} kd     the child's dev
+ * @param {{haps: number[], normal: number}} known  what the known parent can pass
+ * @param {string} side   "maternal" (the mother is known) | "paternal"
+ * @returns {string} "duo_new" | "duo_<side>" | "duo_<side>_two" | "duo_maybe_<side>" | "undecided"
+ * @example
+ * // autosome, the mother known ([copies]), no father
+ * get_duo_outcome(<kid 1>, -1, <mom 2 [1,1]>, "maternal")  // → "duo_new"            (D3)
+ * get_duo_outcome(<kid 1>, -1, <mom 3 [2,1]>, "maternal")  // → "duo_new"            (only her 1 fits; D7)
+ * get_duo_outcome(<kid 1>, -1, <mom 0 [0,0]>, "maternal")  // → "duo_maternal"       (her 0 + his 1; D5)
+ * get_duo_outcome(<kid 0>, -2, <mom 1 [1,0]>, "maternal")  // → "duo_maternal_two"   (her 0 + his 0; D2)
+ * get_duo_outcome(<kid 1>, -1, <mom 1 [1,0]>, "maternal")  // → "duo_maybe_maternal" (her 0 + his 1, or her 1 + his 0; D1)
+ * get_duo_outcome(<kid 3>, +1, <mom 0 [0,0]>, "maternal")  // → "undecided"          (his copy would need 3)
+ */
+function get_duo_outcome(kid, kd, known, side) {
+  if (passes_only_normal(known)) return "duo_new"; // its normal copy: the CNV is new, or from the missing parent
+  var missing = MENDEL_ALLOW_RARE_SPLITS ? range(0, kid.CN) : [0, 1, 2];
+  var k = get_way_kinds(kid, kd, known.haps, known.normal, missing, 1);
+  if (k.opposite) return "undecided";
+  if (k.first && k.second && !k.both) return "duo_maybe_" + side; // its hit, or its normal copy and the missing parent's hit
+  if (Object.keys(k).length !== 1) return "undecided"; // no ordinary way: the Mendelian check decides
+  if (k.first) return "duo_" + side; // its hit, and the missing parent's normal copy
+  if (k.both) return "duo_" + side + "_two"; // its hit, and the missing parent's hit
+  return "duo_new"; // only its normal copy fits: new, or from the missing parent
+}
+
+/**
+ * Is this parent missing for this child: not in the PED, or in it without a
+ * usable CN? A parent who passes nothing here isn't missing (it counts as
+ * known and normal), and neither is one with CN 4 or more (known, but its
+ * copies can't be told).
+ * @param {Sample}  kid
+ * @param {string}  which    "mom" | "dad"
+ * @param {Variant} variant
+ * @returns {boolean}
+ */
+function is_parent_missing(kid, which, variant) {
+  var st = get_parent_status(kid, which, variant);
+  return st === "absent" || st === "unknown";
 }
 
 /**
@@ -997,23 +1082,23 @@ function get_transmission_origin(kid, variant) {
  * null), and values each po_* tag with the IDs of the samples whose result
  * matches. Affected status plays no part.
  *
- * First, which parent's transmitted copy is abnormal (get_transmission_origin,
- * the same computation as TRIO_TABLE's origin column): "maternal", "paternal",
- * "both" or "ambiguous". With one parent unknown (absent, or no CN),
- * get_one_parent_origin() asks whether the known one passed the CNV: for sure
- * ("maternal" / "paternal") or maybe ("possible_maternal" / "possible_paternal",
- * the SNV pipeline's po_possible_mother / po_possible_father). When no combination of the parents' copies explains
- * the child's CN, get_denovo_origin() decides between "denovo" (both parents
- * known and normal) and "possible_denovo" (one parent normal, the other
- * unknown). A parent carrying a CNV that still can't explain the child's
- * (a Mendelian error) gets null: unlike the SNV pipeline's po_denovo, that
- * isn't called de novo.
+ * It is the parent-of-origin column (4th) of the child's TRIO_TABLE row
+ * (get_trio_row), the row whose child call cnv_moi() gives, so the MoI call and
+ * the parent of origin always agree. "maternal" / "paternal" / "both" /
+ * "ambiguous" come from which copies are hits; "denovo" needs both parents
+ * known and normal, "possible_denovo" one of them missing; "possible_maternal"
+ * / "possible_paternal" (the SNV pipeline's po_possible_mother /
+ * po_possible_father) are for a duo whose known parent may have passed it. A
+ * parent carrying a CNV that still can't explain the child's (a Mendelian
+ * error) gets null: unlike the SNV pipeline's po_denovo, that isn't called de
+ * novo.
  *
  * @param {Sample}  s        the child
  * @param {Variant} variant
  * @returns {?string} "maternal" | "paternal" | "both" | "ambiguous" | "denovo"
- *   | "possible_denovo" | "possible_maternal" | "possible_paternal", or null when it does not apply (not a carrier, no CN,
- *   unmodellable record, founder) or can't be told
+ *   | "possible_denovo" | "possible_maternal" | "possible_paternal", or null when
+ *   it does not apply (not a carrier, no CN, unmodellable record, founder) or
+ *   can't be told
  * @example
  * // kid CN1, mom CN1, dad CN2  → only mom 0 + dad 1 fits
  * cn_po_origin(kid, variant)  // → "maternal"
@@ -1048,99 +1133,7 @@ function get_transmission_origin(kid, variant) {
 function cn_po_origin(s, variant) {
   var exp = get_expected_cn(s, variant);
   if (exp < 0 || !has_cn(s) || s.CN === exp) return null;
-  var origin = get_transmission_origin(s, variant);
-  if (origin !== null) return origin;
-  origin = get_one_parent_origin(s, variant);
-  if (origin !== null) return origin;
-  return get_denovo_origin(s, variant);
-}
-
-/**
- * For a carrier child with one parent known and the other unknown (absent from
- * the PED, or without CN): did the known parent pass the CNV? The unknown parent
- * could have passed any copy number, so each copy the known parent can pass
- * (get_parent_transmission) works as long as it isn't larger than the child's CN.
- * A copy counts as the CNV only if it changed the child's way (a deleted copy
- * for a loss, an extra one for a gain). If every copy that works is the CNV, the
- * known parent surely passed it; if a normal one works too, maybe. This follows the SNV pipeline and Radiant (a
- * het child with a het mother and an unknown father is POSSIBLE_MOTHER; a
- * hom-alt one is MOTHER), with a CNV carrier in place of a het. A known parent
- * who can only have passed a normal copy is left to get_denovo_origin().
- * A parent with CN >= 4 isn't unknown, only undecomposable: no answer then.
- * @param {Sample}  kid      a carrier child (cn_po_origin checked it)
- * @param {Variant} variant
- * @returns {?string} "maternal" | "paternal" | "possible_maternal" | "possible_paternal" | null
- * @example
- * get_one_parent_origin(<kid CN1, mom CN1, no father>, <chr7>)          // → "possible_maternal" (her 0 or her 1)  (D1)
- * get_one_parent_origin(<kid CN0, mom CN1, no father>, <chr7>)          // → "maternal" (only her 0 fits)  (D2)
- * get_one_parent_origin(<kid CN1, no mother, dad CN1>, <chr7>)          // → "possible_paternal"  (D4)
- * get_one_parent_origin(<kid CN1, mom CN1, dad CN missing>, <chr7>)     // → "possible_maternal"
- * get_one_parent_origin(<daughter CN3, no mother, dad CN2>, <non-PAR chrX>) // → "paternal" (her father's single X)
- * get_one_parent_origin(<kid CN1, mom CN2, no father>, <chr7>)          // → null (only a normal copy: possible de novo)
- * get_one_parent_origin(<kid CN1, mom CN3, no father>, <chr7>)          // → null (her 2 is too big, her 1 is normal)
- * get_one_parent_origin(<kid CN3, mom CN0, no father>, <chr7>)          // → null (a deleted copy can't make a gain)
- */
-function get_one_parent_origin(kid, variant) {
-  var m = get_parent_transmission(kid, "mom", variant),
-    d = get_parent_transmission(kid, "dad", variant);
-  var unknown = function (which) {
-    var st = get_parent_status(kid, which, variant);
-    return st === "absent" || st === "unknown";
-  };
-  var known, side;
-  if (m && !d && unknown("dad")) {
-    known = m;
-    side = "maternal";
-  } else if (d && !m && unknown("mom")) {
-    known = d;
-    side = "paternal";
-  } else return null;
-  if (known.normal === 0) return null; // passes nothing here: get_denovo_origin()
-  var kd = get_cn_dev(kid, variant); // its sign is the CNV's direction: < 0 a loss, > 0 a gain
-  var abnormal = false,
-    normal = false;
-  for (var i = 0; i < known.haps.length; i++) {
-    var h = known.haps[i];
-    if (h > kid.CN) continue; // would leave the unknown parent a negative copy number
-    if (h === known.normal) normal = true;
-    else if ((h - known.normal) * kd > 0) abnormal = true; // a copy changed the child's way (a deleted copy for a loss)
-  }
-  if (!abnormal) return null;
-  return normal ? "possible_" + side : side;
-}
-
-/**
- * For a carrier child whose CN no combination of the parents' copies explains:
- * is the CNV new? Both parents known and normal → "denovo"; one known and
- * normal, the other unknown (absent or without CN) → "possible_denovo". A parent
- * who passes nothing here (a father's X to a son, any mother's Y) counts as
- * known and normal, as in TRIO_TABLE, so this always agrees with the denovo /
- * possible_denovo calls. A child with no parent at all in the family gets null.
- * @param {Sample}  kid      a carrier child (cn_po_origin checked it)
- * @param {Variant} variant
- * @returns {?string} "denovo" | "possible_denovo" | null
- * @example
- * get_denovo_origin(<kid CN1, mom CN2, dad CN2>, <chr7>)          // → "denovo"
- * get_denovo_origin(<son CN0, mom CN2, no father>, <non-PAR chrX>) // → "denovo" (a father passes no X)
- * get_denovo_origin(<kid CN1, mom CN2, no father>, <chr7>)        // → "possible_denovo"
- * get_denovo_origin(<kid CN1, mom CN2, dad CN missing>, <chr7>)   // → "possible_denovo"
- * get_denovo_origin(<kid CN0, mom CN2, dad CN1>, <chr7>)          // → null (dad carries a CNV)
- * get_denovo_origin(<son CN2, no mother, dad CN1>, <non-PAR chrX>) // → "possible_denovo" (his X is his mother's)
- * get_denovo_origin(<singleton son CN0>, <non-PAR chrX>)           // → null (no parent in the family)
- */
-function get_denovo_origin(kid, variant) {
-  if (!has_parent(kid, "mom") && !has_parent(kid, "dad")) return null;
-  var mom = get_parent_status(kid, "mom", variant),
-    dad = get_parent_status(kid, "dad", variant);
-  var known = function (st) {
-    return st === "normal" || st === "nothing";
-  };
-  var unknown = function (st) {
-    return st === "absent" || st === "unknown";
-  };
-  if (known(mom) && known(dad)) return "denovo";
-  if ((known(mom) && unknown(dad)) || (known(dad) && unknown(mom))) return "possible_denovo";
-  return null;
+  return get_trio_row(s, variant)[3];
 }
 
 /**
@@ -1264,7 +1257,8 @@ if (typeof module !== "undefined")
     has_moi_call: has_moi_call,
     trio_call: trio_call,
     cn_po_origin: cn_po_origin,
-    get_transmission_origin: get_transmission_origin,
+    get_trio_row: get_trio_row,
+    get_transmission_outcome: get_transmission_outcome,
     get_expected_cn: get_expected_cn,
     get_cn_dev: get_cn_dev,
     has_cn: has_cn,

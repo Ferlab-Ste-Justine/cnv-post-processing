@@ -9,3 +9,4 @@ chr1	3000	famA_T6_recessive	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/1:1	0/1:1	0/1:0
 chr1	4000	famA_T19_mendelian_inconsistent	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/0:2	0/1:1	0/1:0
 chr1	5000	famA_T20_unknown_cn	N	<DUP>	50	PASS	SVTYPE=CNV	GT:CN	0/0:2	0/0:2	./.:.
 chr1	6000	famA_T11_possible_denovo	N	<DEL>	50	PASS	SVTYPE=CNV	GT:CN	0/0:2	./.:.	0/1:1
+chr1	7000	famA_T27_recessive	N	<DEL>	50	PASS	SVTYPE=CNV	GT:CN	1/1:0	0/1:1	1/1:0

@@ -77,7 +77,7 @@ nextflow_process {
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
-            assert lines.size() == 5
+            assert lines.size() == 6
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
             check(byId["famA_T2_denovo"], [denovo: ["famA_kid"], po_denovo: ["famA_kid"]])
@@ -86,6 +86,8 @@ nextflow_process {
             check(byId["famA_T20_unknown_cn"], [unknown_cn: ["famA_kid"]])
             // a father in the VCF without CN counts as absent, as in a duo
             check(byId["famA_T11_possible_denovo"], [possible_denovo: ["famA_kid"], po_possible_denovo: ["famA_kid"]])
+            // a mother with no intact copy and a carrier father: one deleted copy each
+            check(byId["famA_T27_recessive"], [recessive: ["famA_kid"], po_both: ["famA_kid"]])
 
             assert snapshot(process.out.versions).match()
         }
@@ -179,13 +181,18 @@ nextflow_process {
             }
 
             def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
-            assert lines.size() == 3
+            assert lines.size() == 6
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
             // No father: an autosomal origin needs both parents, so only "possibly de novo" can be said (D3).
             check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"], po_mother: ["famC_kid"]])
             check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"], po_possible_mother: ["famC_kid"]])
             check(byId["famC_D3_possible_denovo"], [possible_denovo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
+            // a mother with no intact copy: her deleted copy, and a normal one from the father (D5) or a deleted one (D6)
+            check(byId["famC_D5_inherited_maternal"], [inherited_maternal: ["famC_kid"], po_mother: ["famC_kid"]])
+            check(byId["famC_D6_recessive_lowconf"], [recessive_lowconf: ["famC_kid"], po_mother: ["famC_kid"]])
+            // a mother with a duplication who passed her normal copy: the deletion is new or from the father
+            check(byId["famC_D7_possible_denovo"], [possible_denovo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
         }
     }
 

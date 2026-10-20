@@ -35,13 +35,13 @@ has_moi_call(fam, variant, tag)      true as soon as one member's cnv_moi() is <
    │                      non-PAR X/Y, a daughter on non-PAR Y -> nothing
    ├─ unknown_cn?         the child has no CN, or (for a carrier) none of the parents whose
    │                      copies matter has one; a parent in the VCF without CN otherwise counts
-   │                      as absent, like a parent missing from the PED (as SNV/Radiant read a
+   │                      as missing, like a parent missing from the PED (as SNV/Radiant read a
    │                      parent's no-call)
    ├─ carrier?            CN == expected CN -> nothing
-   └─ TRIO_TABLE          (kid, mom, dad tokens, origin) -> the call, e.g. denovo,
-      │                   inherited_maternal, recessive, possible_denovo; when no specific row
-      │                   fits: mendelian_inconsistent if the child's CN can't come from the
-      │                   parents, inheritance_unresolved otherwise
+   └─ TRIO_TABLE          (the child's deviation, its transmission outcome; see below) -> the
+      │                   call, e.g. denovo, inherited_maternal, recessive, possible_denovo; for
+      │                   an "undecided" outcome: mendelian_inconsistent if the child's CN can't
+      │                   come from the parents, inheritance_unresolved otherwise
       └─ on non-PAR chrX  the SNV pipeline's X-linked name, by the child's sex (X_LINKED_CALLS):
                           son: denovo -> x_linked_recessive_denovo,
                                inherited_maternal -> x_linked_recessive
@@ -59,28 +59,32 @@ cn_po_origin(sample, variant)       maternal / paternal / both / ambiguous / den
                                     possible_denovo / possible_maternal / possible_paternal, or
                                     nothing; for every child, affected or not
 ├─ carrier?                         expected CN known, a usable CN, and CN != expected; else nothing
-├─ get_transmission_origin()        also the TRIO_TABLE origin column, so MoI and PO always agree
-│  └─ get_parent_transmission()     what each parent can pass.
-│                                    * get_transmission_origin() needs both parents' copies (a parent
-│                                      who passes nothing counts). With a parent absent or without CN,
-│                                      it returns null and the next steps decide
-│
-├─ get_one_parent_origin()          one parent known, the other absent or without CN, so it could
-│                                   have passed any copy: which of the known parent's copies still fit
-│                                   the child's CN? A copy counts as the CNV if it changed the child's
-│                                   way (a deleted copy for a loss, an extra copy for a gain).
-│                                   only the CNV -> maternal / paternal (it surely passed it);
-│                                   the CNV or a normal copy -> possible_maternal / possible_paternal;
-│                                   no copy that is the CNV -> the next step.
-│                                   e.g. duo kid 1, mom 1 -> possible_maternal (D1);
-│                                        duo kid 0, mom 1 -> maternal (D2)
-│
-└─ get_denovo_origin()              * get_denovo_origin(): if finds that "no parent in the family" returns null
-                                    when neither step above found an origin: both parents known and
-                                    normal -> denovo; one known and normal, the other unknown (not in
-                                    the PED, or no CN) -> possible_denovo; a parent who passes nothing
-                                    counts as normal; a carrier parent (a Mendelian error), or no
-                                    parent in the family -> nothing
+└─ the TRIO_TABLE row's parent of origin: the same row as the MoI call, so MoI and PO always agree
+   └─ get_transmission_outcome()    * get_transmission_outcome(): if finds that "no parent in the family"
+      │                               returns "undecided" (no tag)
+      ├─ get_parent_transmission()  what each parent can pass: its two copies (CN 3 = [2,1]), a
+      │                             father's single X/Y, or nothing (a father's X to a son, any
+      │                             mother's Y: counts as normal). CN >= 4 can't be split.
+      │                             A copy is a "hit" if it changed the child's way (a deleted copy
+      │                             for a loss, an extra copy for a gain).
+      ├─ both parents known          * needs both parents' copies (a parent who passes nothing
+      │                               counts). With a parent absent or without CN, the duo step
+      │                               below decides.
+      │                             every way mom's copy + dad's copy = the child's CN:
+      │                             no way, both can only pass normal copies -> denovo;
+      │                             only mom's copy a hit -> maternal; only dad's -> paternal;
+      │                             both -> both (recessive); the ways disagree -> ambiguous
+      ├─ duo (one parent missing)   the missing one passed 0, 1 or 2 copies, like a real parent.
+      │                             Which of the known parent's copies still fit the child's CN?
+      │                             only its normal copy -> possible_denovo;
+      │                             only its hit -> maternal / paternal (it surely passed it);
+      │                             its hit, or its normal copy -> possible_maternal / possible_paternal.
+      │                             e.g. duo kid 1, mom 1 -> possible_maternal (D1);
+      │                                  duo kid 0, mom 1 -> maternal (D2);
+      │                                  duo kid 1, mom 0 -> maternal, inherited_maternal (D5)
+      └─ otherwise                  a parent with CN >= 4, no ordinary way, or a copy changed the
+                                    other way -> nothing (and inheritance_unresolved or
+                                    mendelian_inconsistent for the MoI call)
 
 Expected CN: 2 on autosomes and in the GRCh38 PARs; on non-PAR chrX 1 for males and 2 for
 females; on non-PAR chrY 1 for males. Every rule works on the deviation from it. A record that

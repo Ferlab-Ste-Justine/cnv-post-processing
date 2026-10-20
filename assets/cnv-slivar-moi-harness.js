@@ -170,6 +170,8 @@ var scenarios = [
   // At most 2 + 1: only a hidden [3,0] split of mom's CN 3 could give 4 (MENDEL_ALLOW_RARE_SPLITS).
   ["T25 kid CN=4, mom CN=3, dad CN=2 (impossible)", AUTO, { kid: [4, 1], mom: [3, 0], dad: [2, 0] }],
   ["T26 de novo CN=4 (implausible, like T3)", AUTO, { kid: [4, 1], mom: [2, 0], dad: [2, 0] }],
+  // A parent with no intact copy ([0,0]) can only pass a deleted one.
+  ["T27 kid CN=0, mom CN=0, dad CN=1 (one deleted copy each)", AUTO, { kid: [0, 1], mom: [0, 0], dad: [1, 0] }],
   ["X1  chrX MALE kid CN=1, dad CN=1 (normal)", XNP, { kid: [1, 1], kidsex: "male", mom: [2, 0], dad: [1, 0] }],
   [
     "X2  chrX male kid CN=0, carrier mom CN=1, dad CN=1",
@@ -219,6 +221,11 @@ var scenarios = [
     XNP,
     { kid: [0, 1], kidsex: "female", mom: [1, 0], dad: [0, 0] },
   ],
+  [
+    "X11 chrX daughter CN=1, no mother, dad CN=0 (her father's deleted X)",
+    XNP,
+    { kid: [1, 1], kidsex: "female", mom: null, dad: [0, 0] },
+  ],
   // chrY: a daughter has no Y, so she isn't modelled; a son's Y is his father's, and his
   // mother (no CN there) passes nothing.
   [
@@ -247,6 +254,13 @@ var scenarios = [
   ["D2  duo kid CN=0, mom CN=1", AUTO, { kid: [0, 1], mom: [1, 0], dad: null }],
   ["D3  duo kid CN=1, mom CN=2", AUTO, { kid: [1, 1], mom: [2, 0], dad: null }],
   ["D4  duo kid CN=1, AFFECTED dad CN=1", AUTO, { kid: [1, 1], mom: null, dad: [1, 1] }],
+  ["D5  duo kid CN=1, mom CN=0 (she can only pass a deleted copy)", AUTO, { kid: [1, 1], mom: [0, 0], dad: null }],
+  [
+    "D6  duo kid CN=0, mom CN=0 (and the father's copy must be deleted too)",
+    AUTO,
+    { kid: [0, 1], mom: [0, 0], dad: null },
+  ],
+  ["D7  duo kid CN=1, mom CN=3 (she passed her normal copy)", AUTO, { kid: [1, 1], mom: [3, 0], dad: null }],
   ["S1  singleton kid CN=1", AUTO, { kid: [1, 1], mom: null, dad: null }],
   [
     "Q1  quad: recessive + UNAFFECTED CARRIER sib CN=1",
@@ -447,7 +461,7 @@ fs.writeFileSync(
 // ---------------------------------------------------------------------------
 var KNOWN = { unknown_cn: true, inheritance_unresolved: true, mendelian_inconsistent: true };
 T.TRIO_TABLE.forEach(function (row) {
-  if (row[4] !== "no_pattern") KNOWN[row[4]] = true;
+  if (row[2] !== "no_pattern") KNOWN[row[2]] = true;
 });
 ["male", "female"].forEach(function (sex) {
   Object.keys(T.X_LINKED_CALLS[sex]).forEach(function (call) {
@@ -505,6 +519,7 @@ for (var it = 0; it < N; it++) {
       var call = T.cnv_moi(s, v);
       if (!("mom" in s || "dad" in s)) {
         if (call !== null) problem("a founder got a call: " + call, spec, v);
+        if (po !== null) problem("a founder got a parent of origin: " + po, spec, v);
         return;
       }
       if (call !== null && !KNOWN[call]) problem("unknown call: " + call, spec, v);
@@ -598,6 +613,9 @@ Object.keys(wired.moi).forEach(function (call) {
 });
 Object.keys(KNOWN_PO).forEach(function (po) {
   if (po !== "null" && !wired.po[po]) problem_wiring("no --sample-expr for the parent of origin " + po);
+});
+T.TRIO_TABLE.forEach(function (row) {
+  if (row[3] !== null && !KNOWN_PO[row[3]]) problem_wiring("TRIO_TABLE gives an unknown parent of origin " + row[3]);
 });
 Object.keys(wired.po).forEach(function (po) {
   if (!KNOWN_PO[po]) problem_wiring("--sample-expr for an unknown parent of origin " + po);

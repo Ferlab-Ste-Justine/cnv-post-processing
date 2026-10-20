@@ -53,6 +53,20 @@ _Decided 2026-10-20, BIOINFO-214, with the team._
 
 **Consequence:** the two X-linked names are no longer Radiant's `transmission_mode` values verbatim (Radiant spells them `x_linked_recessive_de_novo` / `x_linked_dominant_de_novo`), so reading them into Radiant needs a mapping, or Radiant renames too.
 
+### One computation for the MoI call and the parent of origin
+
+_Decided 2026-10-21, BIOINFO-214, after a colleague's review._
+
+**What:** `TRIO_TABLE` is keyed on the child's deviation and a transmission outcome (`get_transmission_outcome()`): every way one copy from each parent adds up to the child's CN, each passed copy named normal, a hit or opposite. The same row gives the MoI call and the parent of origin. The parent labels (`same`, `half`, `other`), which compared totals, are gone.
+
+**Why:** the labels and the haplotype enumeration could disagree: a parent homozygous for a deletion (CN 0) is neither `same` nor `half`, so the call fell to `inheritance_unresolved` while the parent of origin was known. On the real NA12878 trio that was 139 of 2,532 records, all with a CN 0 parent; they are now `recessive` / `x_linked_recessive`.
+
+**Choices made:**
+
+- A missing parent (not in the PED, or no CN) passes 0, 1 or 2 copies, like any parent with CN 0 to 3. A way that needs more only counts for the Mendelian check (`inheritance_unresolved`), unless `MENDEL_ALLOW_RARE_SPLITS` is on.
+- A copy changed in the opposite direction (a deletion passed to a child with a gain) explains nothing: such a child is `undecided`.
+- A parent with CN 4 or more still can't be split: its child is `undecided`, and `is_mendelian_possible()` decides between `inheritance_unresolved` and `mendelian_inconsistent` (T16, T17).
+
 ## Open questions
 
 ### A parent who passes nothing on chrX/chrY: fixed at zero, or "any value" when absent?
