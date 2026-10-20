@@ -269,8 +269,8 @@ A few patterns and gotchas worth knowing before editing:
     `TRIO_TABLE` row (the child and its parents), at most one per child. There is no family-level
     logic (no `dominant`, no segregation check across sibs): who is affected elsewhere in the
     family is left to whoever reads the tags. On non-PAR chrX, a call takes the SNV pipeline's
-    X-linked name (`X_LINKED_CALLS`: a son's `de_novo` → `x_linked_recessive_de_novo`, a daughter's
-    → `x_linked_dominant_de_novo`, a son's `inherited_maternal` and a daughter's `recessive` →
+    X-linked name (`X_LINKED_CALLS`: a son's `denovo` → `x_linked_recessive_denovo`, a daughter's
+    → `x_linked_dominant_denovo`, a son's `inherited_maternal` and a daughter's `recessive` →
     `x_linked_recessive`; a daughter's single inherited copy keeps `inherited_*`). As in the SNV
     pipeline, the 15 mode-of-inheritance tags are `--family-expr` in `conf/modules.config`: `has_moi_call(fam, variant, tag)` is true
     when any child of the family gets that call, so a family with several affected children can

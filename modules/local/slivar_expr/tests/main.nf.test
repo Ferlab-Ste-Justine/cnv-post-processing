@@ -29,7 +29,7 @@ nextflow_process {
     // `tbi` input, it only satisfies the process's 4-element input tuple.
     //
     // Tags are checked by parsing each row's INFO field into exact key=value pairs, not by
-    // substring search (e.g. "de_novo" is a substring of "possible_de_novo"). Each expected tag is
+    // substring search (e.g. "denovo" is a substring of "possible_denovo"). Each expected tag is
     // checked with the exact sample IDs slivar writes, and every other mode-of-inheritance or
     // parent-of-origin tag must be absent. Mode-of-inheritance tags are --family-expr, valued
     // with the family's affected members (an affected parent too, famB); parent-of-origin tags
@@ -57,10 +57,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -80,12 +80,12 @@ nextflow_process {
             assert lines.size() == 5
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famA_T2_de_novo"], [de_novo: ["famA_kid"], po_denovo: ["famA_kid"]])
+            check(byId["famA_T2_denovo"], [denovo: ["famA_kid"], po_denovo: ["famA_kid"]])
             check(byId["famA_T6_recessive"], [recessive: ["famA_kid"], po_both: ["famA_kid"]])
             check(byId["famA_T19_mendelian_inconsistent"], [mendelian_inconsistent: ["famA_kid"]])
             check(byId["famA_T20_unknown_cn"], [unknown_cn: ["famA_kid"]])
             // a father in the VCF without CN counts as absent, as in a duo
-            check(byId["famA_T11_possible_de_novo"], [possible_de_novo: ["famA_kid"], po_possible_denovo: ["famA_kid"]])
+            check(byId["famA_T11_possible_denovo"], [possible_denovo: ["famA_kid"], po_possible_denovo: ["famA_kid"]])
 
             assert snapshot(process.out.versions).match()
         }
@@ -111,10 +111,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -159,10 +159,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -185,7 +185,7 @@ nextflow_process {
             // No father: an autosomal origin needs both parents, so only "possibly de novo" can be said (D3).
             check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"], po_mother: ["famC_kid"]])
             check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"], po_possible_mother: ["famC_kid"]])
-            check(byId["famC_D3_possible_de_novo"], [possible_de_novo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
+            check(byId["famC_D3_possible_denovo"], [possible_denovo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
         }
     }
 
@@ -209,10 +209,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -263,10 +263,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -286,7 +286,7 @@ nextflow_process {
             assert lines.size() == 2
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famQ_Q5_de_novo_both_sibs"], [de_novo: ["famQ_kid", "famQ_sib"], po_denovo: ["famQ_kid", "famQ_sib"]])
+            check(byId["famQ_Q5_denovo_both_sibs"], [denovo: ["famQ_kid", "famQ_sib"], po_denovo: ["famQ_kid", "famQ_sib"]])
             check(byId["famQ_Q9_maternal_kid_paternal_sib"], [
                 inherited_maternal: ["famQ_kid", "famQ_sib"], inherited_paternal: ["famQ_kid", "famQ_sib"],
                 po_mother: ["famQ_kid"], po_father: ["famQ_sib"]
@@ -318,10 +318,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -341,14 +341,14 @@ nextflow_process {
             assert lines.size() == 8
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famXs_X6_par_de_novo"], [de_novo: ["famXs_son"], po_denovo: ["famXs_son"]])  // inside PAR1: autosomal rules
+            check(byId["famXs_X6_par_denovo"], [denovo: ["famXs_son"], po_denovo: ["famXs_son"]])  // inside PAR1: autosomal rules
             check(byId["famXs_X4_straddle"])                                      // crosses the PAR1 end: not modelled
             check(byId["famXs_X1_normal_boy"])                                    // CN 1 is normal for a male
             check(byId["famXs_X2_inherited_maternal"], [x_linked_recessive: ["famXs_son"], po_mother: ["famXs_son"]])  // his only X is his mother's
-            check(byId["famXs_X3_de_novo"], [x_linked_recessive_de_novo: ["famXs_son"], po_denovo: ["famXs_son"]])
+            check(byId["famXs_X3_denovo"], [x_linked_recessive_denovo: ["famXs_son"], po_denovo: ["famXs_son"]])
             // chrY: his Y is his father's; the mother (no CN on Y) passes none and is read as normal
             check(byId["famXs_Y2_paternal_y_dup"], [inherited_paternal: ["famXs_son"], po_father: ["famXs_son"]])
-            check(byId["famXs_Y3_de_novo_y_dup"], [de_novo: ["famXs_son"], po_denovo: ["famXs_son"]])
+            check(byId["famXs_Y3_denovo_y_dup"], [denovo: ["famXs_son"], po_denovo: ["famXs_son"]])
             check(byId["famXs_M1_chrM"])
         }
     }
@@ -373,10 +373,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -396,7 +396,7 @@ nextflow_process {
             assert lines.size() == 5
             def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
 
-            check(byId["famXd_X7_de_novo"], [x_linked_dominant_de_novo: ["famXd_daughter"], po_denovo: ["famXd_daughter"]])
+            check(byId["famXd_X7_denovo"], [x_linked_dominant_denovo: ["famXd_daughter"], po_denovo: ["famXd_daughter"]])
             check(byId["famXd_X8_inherited_paternal"], [inherited_paternal: ["famXd_daughter"], po_father: ["famXd_daughter"]])
             check(byId["famXd_X9_inherited_maternal"], [inherited_maternal: ["famXd_daughter"], po_mother: ["famXd_daughter"]])  // one copy: keeps inherited_*
             check(byId["famXd_X10_x_linked_recessive"], [x_linked_recessive: ["famXd_daughter"], po_both: ["famXd_daughter"]])  // both of her X copies hit
@@ -442,10 +442,10 @@ nextflow_process {
             assert process.success
 
             def MOI_TAGS = [
-                "de_novo", "de_novo_suspect", "inherited_maternal", "inherited_paternal",
-                "recessive", "recessive_lowconf", "possible_de_novo", "possible_inherited_maternal",
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
                 "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
-                "x_linked_recessive_de_novo", "x_linked_dominant_de_novo", "x_linked_recessive"
+                "x_linked_recessive_denovo", "x_linked_dominant_denovo", "x_linked_recessive"
             ]
             def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
             def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
@@ -468,7 +468,7 @@ nextflow_process {
             def byPos = sexChrom.collectEntries { c -> [("${c[0]}:${c[1]}".toString()): c[7]] }
 
             // Real records, CN given as daughter,father,mother; a normal male has CN 1 on non-PAR chrX.
-            check(byPos["chrX:57696089"], [x_linked_dominant_de_novo: ["NA12878"], po_denovo: ["NA12878"]]) // 1,1,2: both parents normal
+            check(byPos["chrX:57696089"], [x_linked_dominant_denovo: ["NA12878"], po_denovo: ["NA12878"]]) // 1,1,2: both parents normal
             check(byPos["chrX:101800269"], [inherited_paternal: ["NA12878"], po_father: ["NA12878"]])      // 3,2,2: father's duplicated X
             check(byPos["chrX:12415722"], [inherited_maternal: ["NA12878"], po_mother: ["NA12878"]])       // 1,1,1: father's X is normal
             check(byPos["chrX:26792085"], [inherited_maternal: ["NA12878"], po_mother: ["NA12878"]])       // 3,1,3: mother's duplication

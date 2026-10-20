@@ -28,14 +28,14 @@
                 "chrX:30880617:<DEL> -",
                 "chrX:32969425:<DEL> po_both=NA12878,x_linked_recessive",
                 "chrX:34422164:<DEL> inherited_maternal,po_mother=NA12878",
-                "chrX:57696089:<DEL> po_denovo=NA12878,x_linked_dominant_de_novo",
+                "chrX:57696089:<DEL> po_denovo=NA12878,x_linked_dominant_denovo",
                 "chrX:57697146:<DEL> inheritance_unresolved,po_both=NA12878",
                 "chrX:57698274:<DEL> -",
                 "chrX:58488210:<DEL> inherited_maternal,po_mother=NA12878",
-                "chrX:67903111:<DEL> po_denovo=NA12878,x_linked_dominant_de_novo",
+                "chrX:67903111:<DEL> po_denovo=NA12878,x_linked_dominant_denovo",
                 "chrX:67904347:<DEL> inherited_paternal,po_father=NA12878",
-                "chrX:67909767:<DEL> po_denovo=NA12878,x_linked_dominant_de_novo",
-                "chrX:70916139:<DEL> po_denovo=NA12878,x_linked_dominant_de_novo",
+                "chrX:67909767:<DEL> po_denovo=NA12878,x_linked_dominant_denovo",
+                "chrX:70916139:<DEL> po_denovo=NA12878,x_linked_dominant_denovo",
                 "chrX:77864683:<DEL> -",
                 "chrX:77866247:<DEL> inherited_paternal,po_father=NA12878",
                 "chrX:78268391:<DEL> inherited_paternal,po_father=NA12878",
@@ -52,7 +52,7 @@
                 "chrX:115735985:<DEL> inheritance_unresolved,po_both=NA12878",
                 "chrX:119740417:<DEL> inherited_paternal,po_father=NA12878",
                 "chrX:123814852:<DEL> inherited_maternal,po_mother=NA12878",
-                "chrX:125272398:<DUP> po_denovo=NA12878,x_linked_dominant_de_novo",
+                "chrX:125272398:<DUP> po_denovo=NA12878,x_linked_dominant_denovo",
                 "chrX:126777202:<DEL> inherited_maternal,po_mother=NA12878",
                 "chrX:127463154:<DEL> inherited_maternal,po_mother=NA12878",
                 "chrX:129366462:<DEL> inherited_paternal,po_father=NA12878",
@@ -71,7 +71,7 @@
                 "chrY:56822082:<DUP> -"
             ]
         ],
-        "timestamp": "2026-10-10T02:49:36.43724182",
+        "timestamp": "2026-10-20T14:08:13.626229179",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"

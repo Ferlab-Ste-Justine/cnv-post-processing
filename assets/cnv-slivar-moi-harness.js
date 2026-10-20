@@ -520,12 +520,12 @@ for (var it = 0; it < N; it++) {
         problem("inherited_maternal but parent of origin " + po, spec, v);
       if (call === "inherited_paternal" && po !== "paternal")
         problem("inherited_paternal but parent of origin " + po, spec, v);
-      var de_novo_call = /de_novo/.test(call) && !/possible/.test(call); // de_novo, de_novo_suspect, x_linked_*_de_novo
+      var denovo_call = /denovo/.test(call) && !/possible/.test(call); // denovo, denovo_suspect, x_linked_*_denovo
       if (call === "x_linked_recessive" && po !== (s.sex === "male" ? "maternal" : "both"))
         problem("x_linked_recessive (" + s.sex + ") but parent of origin " + po, spec, v);
-      if (de_novo_call !== (po === "denovo")) problem(call + " but parent of origin " + po, spec, v);
-      if (call === "possible_de_novo" && po !== "possible_denovo")
-        problem("possible_de_novo but parent of origin " + po, spec, v);
+      if (denovo_call !== (po === "denovo")) problem(call + " but parent of origin " + po, spec, v);
+      if (call === "possible_denovo" && po !== "possible_denovo")
+        problem("possible_denovo but parent of origin " + po, spec, v);
       // a duo call names the known parent; its parent of origin must name the same one
       var side = !("mom" in s) || !T.has_cn(s.mom) ? "paternal" : "maternal";
       if (/^possible_inherited_|^recessive_lowconf$/.test(call) && po !== side && po !== "possible_" + side)

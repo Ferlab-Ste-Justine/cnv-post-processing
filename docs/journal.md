@@ -43,6 +43,16 @@ _Decided 2026-10-10, BIOINFO-214._
 
 **Where:** `X_LINKED_CALLS`, next to `TRIO_TABLE` in `assets/cnv-slivar-functions.js`. The harness now also checks that `conf/modules.config` has a slivar expression for every call and parent of origin: the first version of this change forgot the three new lines, and the module test caught it.
 
+### "denovo", not "de_novo", in every tag
+
+_Decided 2026-10-20, BIOINFO-214, with the team._
+
+**What:** the de novo mode-of-inheritance tags are spelled like the parent-of-origin ones (`po_denovo`, `po_possible_denovo`): `de_novo` → `denovo`, `de_novo_suspect` → `denovo_suspect`, `possible_de_novo` → `possible_denovo`, `x_linked_recessive_de_novo` → `x_linked_recessive_denovo`, `x_linked_dominant_de_novo` → `x_linked_dominant_denovo`. The decisions above keep their names as they were when written.
+
+**Why:** one spelling across tags. The SNV pipeline is to be renamed the same way, separately.
+
+**Consequence:** the two X-linked names are no longer Radiant's `transmission_mode` values verbatim (Radiant spells them `x_linked_recessive_de_novo` / `x_linked_dominant_de_novo`), so reading them into Radiant needs a mapping, or Radiant renames too.
+
 ## Open questions
 
 ### A parent who passes nothing on chrX/chrY: fixed at zero, or "any value" when absent?

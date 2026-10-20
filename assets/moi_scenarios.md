@@ -8,9 +8,9 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 
 | scenario | region | kid | mom | dad | sib | MoI call per child (cnv_moi) | parent of origin (sample-expr) |
 |---|---|---|---|---|---|---|---|
-| **T1** de novo het deletion (trio) | chr7 | 1 aff | 2 | 2 |  | kid=`de_novo` | kid=denovo |
-| **T2** de novo duplication (trio) | chr7 | 3 aff | 2 | 2 |  | kid=`de_novo` | kid=denovo |
-| **T3** de novo CN=0 (implausible) | chr7 | 0 aff | 2 | 2 |  | kid=`de_novo_suspect` | kid=denovo |
+| **T1** de novo het deletion (trio) | chr7 | 1 aff | 2 | 2 |  | kid=`denovo` | kid=denovo |
+| **T2** de novo duplication (trio) | chr7 | 3 aff | 2 | 2 |  | kid=`denovo` | kid=denovo |
+| **T3** de novo CN=0 (implausible) | chr7 | 0 aff | 2 | 2 |  | kid=`denovo_suspect` | kid=denovo |
 | **T4** het del inherited from UNAFFECTED mom | chr7 | 1 aff | 1 | 2 |  | kid=`inherited_maternal` | kid=maternal |
 | **T5** het del inherited from AFFECTED dad | chr7 | 1 aff | 2 | 1 aff |  | kid=`inherited_paternal` | kid=paternal |
 | **T6** biallelic deletion (CN=0), carrier parents | chr7 | 0 aff | 1 | 1 |  | kid=`recessive` | kid=both |
@@ -18,7 +18,7 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 | **T8** dup, both parents CN=3 | chr7 | 3 aff | 3 | 3 |  | kid=`inheritance_unresolved` | kid=ambiguous |
 | **T9** CN=4 kid, both parents CN=3 | chr7 | 4 aff | 3 | 3 |  | kid=`recessive` | kid=both |
 | **T10** het del kid, both parents CN=1 | chr7 | 1 aff | 1 | 1 |  | kid=`inheritance_unresolved` | kid=ambiguous |
-| **T11** dad CN missing | chr7 | 1 aff | 2 | . |  | kid=`possible_de_novo` | kid=possible_denovo |
+| **T11** dad CN missing | chr7 | 1 aff | 2 | . |  | kid=`possible_denovo` | kid=possible_denovo |
 | **T12** kid CN=2, mom CN=1 | chr7 | 2 aff | 1 | 2 |  | - | kid=null |
 | **T13** unaffected kid CN=1 | chr7 | 1 | 1 | 2 |  | - | kid=maternal |
 | **T14** kid CN=0, mom CN=0, dad CN=2 (impossible) | chr7 | 0 aff | 0 | 2 |  | kid=`mendelian_inconsistent` | kid=null |
@@ -33,33 +33,33 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 | **T23** kid CN=1, mom CN=0, dad CN=2 (mom can only pass a deleted copy) | chr7 | 1 aff | 0 | 2 |  | kid=`inherited_maternal` | kid=maternal |
 | **T24** kid CN=3, mom CN=3, dad CN=1 (dad passed his normal copy) | chr7 | 3 aff | 3 | 1 |  | kid=`inherited_maternal` | kid=maternal |
 | **T25** kid CN=4, mom CN=3, dad CN=2 (impossible) | chr7 | 4 aff | 3 | 2 |  | kid=`mendelian_inconsistent` | kid=null |
-| **T26** de novo CN=4 (implausible, like T3) | chr7 | 4 aff | 2 | 2 |  | kid=`de_novo_suspect` | kid=denovo |
+| **T26** de novo CN=4 (implausible, like T3) | chr7 | 4 aff | 2 | 2 |  | kid=`denovo_suspect` | kid=denovo |
 | **X1** chrX MALE kid CN=1, dad CN=1 (normal) | chrX non-PAR | son 1 aff | 2 | 1 |  | - | kid=null |
 | **X2** chrX male kid CN=0, carrier mom CN=1, dad CN=1 | chrX non-PAR | son 0 aff | 1 | 1 |  | kid=`x_linked_recessive` | kid=maternal |
-| **X3** chrX male kid CN=0, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | son 0 aff | 2 | 1 |  | kid=`x_linked_recessive_de_novo` | kid=denovo |
+| **X3** chrX male kid CN=0, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | son 0 aff | 2 | 1 |  | kid=`x_linked_recessive_denovo` | kid=denovo |
 | **X4** chrX record straddling the PAR1 boundary, son CN=3, parents CN=2 (not modelled) | chrX across the PAR1 end | son 3 aff | 2 | 2 |  | - | kid=null |
 | **X5** chrX record straddling the PAR1 boundary, daughter CN=1, mom CN=1, dad CN=2 (not modelled) | chrX across the PAR1 end | daughter 1 aff | 1 | 2 |  | - | kid=null |
-| **X6** chrX PAR1, son CN=3, parents CN=2 (PAR: autosomal rules) | chrX PAR1 | son 3 aff | 2 | 2 |  | kid=`de_novo` | kid=denovo |
-| **X7** chrX daughter CN=1, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | daughter 1 aff | 2 | 1 |  | kid=`x_linked_dominant_de_novo` | kid=denovo |
+| **X6** chrX PAR1, son CN=3, parents CN=2 (PAR: autosomal rules) | chrX PAR1 | son 3 aff | 2 | 2 |  | kid=`denovo` | kid=denovo |
+| **X7** chrX daughter CN=1, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | daughter 1 aff | 2 | 1 |  | kid=`x_linked_dominant_denovo` | kid=denovo |
 | **X8** chrX daughter CN=3, mom CN=2, dad CN=2 (father's duplicated X) | chrX non-PAR | daughter 3 aff | 2 | 2 |  | kid=`inherited_paternal` | kid=paternal |
 | **X9** chrX daughter CN=1, mom CN=1, dad CN=1 (mother's deletion) | chrX non-PAR | daughter 1 aff | 1 | 1 |  | kid=`inherited_maternal` | kid=maternal |
 | **X10** chrX daughter CN=0, carrier mom CN=1, dad CN=0 (both X copies hit) | chrX non-PAR | daughter 0 aff | 1 | 0 |  | kid=`x_linked_recessive` | kid=both |
 | **Y1** chrY daughter, no CN on Y (not modelled) | chrY non-PAR | daughter . aff | . | 2 |  | - | kid=null |
 | **Y2** chrY son CN=2, dad CN=2 (father's duplicated Y) | chrY non-PAR | son 2 aff | . | 2 |  | kid=`inherited_paternal` | kid=paternal |
-| **Y3** chrY son CN=2, dad CN=1 (de novo duplication) | chrY non-PAR | son 2 aff | . | 1 |  | kid=`de_novo` | kid=denovo |
-| **Y4** chrY son CN=0, dad CN=1 (de novo deletion) | chrY non-PAR | son 0 aff | . | 1 |  | kid=`de_novo` | kid=denovo |
+| **Y3** chrY son CN=2, dad CN=1 (de novo duplication) | chrY non-PAR | son 2 aff | . | 1 |  | kid=`denovo` | kid=denovo |
+| **Y4** chrY son CN=0, dad CN=1 (de novo deletion) | chrY non-PAR | son 0 aff | . | 1 |  | kid=`denovo` | kid=denovo |
 | **Y5** chrY son CN=0, dad CN=0 (father's deleted Y) | chrY non-PAR | son 0 aff | . | 0 |  | kid=`inherited_paternal` | kid=paternal |
 | **M1** chrM son CN=0, parents CN=2 (not modelled) | chrM | son 0 aff | 2 | 2 |  | - | kid=null |
 | **D1** duo kid CN=1, mom CN=1 | chr7 | 1 aff | 1 | absent |  | kid=`possible_inherited_maternal` | kid=possible_maternal |
 | **D2** duo kid CN=0, mom CN=1 | chr7 | 0 aff | 1 | absent |  | kid=`recessive_lowconf` | kid=maternal |
-| **D3** duo kid CN=1, mom CN=2 | chr7 | 1 aff | 2 | absent |  | kid=`possible_de_novo` | kid=possible_denovo |
+| **D3** duo kid CN=1, mom CN=2 | chr7 | 1 aff | 2 | absent |  | kid=`possible_denovo` | kid=possible_denovo |
 | **D4** duo kid CN=1, AFFECTED dad CN=1 | chr7 | 1 aff | absent | 1 aff |  | kid=`possible_inherited_paternal` | kid=possible_paternal |
 | **S1** singleton kid CN=1 | chr7 | 1 aff | absent | absent |  | - | - |
 | **Q1** quad: recessive + UNAFFECTED CARRIER sib CN=1 | chr7 | 0 aff | 1 | 1 | 1 | kid=`recessive` | kid=both sib1=ambiguous |
 | **Q2** quad: recessive + unaffected sib CN=2 | chr7 | 0 aff | 1 | 1 | 2 | kid=`recessive` | kid=both sib1=null |
 | **Q3** quad: kid CN=1 from AFFECTED dad CN=1, unaffected sib CN=1 | chr7 | 1 aff | 2 | 1 aff | 1 | kid=`inherited_paternal` | kid=paternal sib1=paternal |
-| **Q4** quad: de novo, unaffected sib CN=2 | chr7 | 1 aff | 2 | 2 | 2 | kid=`de_novo` | kid=denovo sib1=null |
-| **Q5** quad: two affected sibs CN=1, parents CN=2 | chr7 | 1 aff | 2 | 2 | 1 aff | kid=`de_novo` sib1=`de_novo` | kid=denovo sib1=denovo |
+| **Q4** quad: de novo, unaffected sib CN=2 | chr7 | 1 aff | 2 | 2 | 2 | kid=`denovo` | kid=denovo sib1=null |
+| **Q5** quad: two affected sibs CN=1, parents CN=2 | chr7 | 1 aff | 2 | 2 | 1 aff | kid=`denovo` sib1=`denovo` | kid=denovo sib1=denovo |
 | **Q8** quad: AFFECTED kid CN=2, unaffected sib CN=1 from mom | chr7 | 2 aff | 1 | 2 | 1 | - | kid=null sib1=maternal |
 | **Q9** quad: mom 1 dad 3; kid 1 (mat), sib 3 (pat) | chr7 | 1 aff | 1 | 3 | 3 aff | kid=`inherited_maternal` sib1=`inherited_paternal` | kid=maternal sib1=paternal |
 | **Q10** quad: two affected sibs CN=1, both from AFFECTED dad CN=1 | chr7 | 1 aff | 2 | 1 aff | 1 aff | kid=`inherited_paternal` sib1=`inherited_paternal` | kid=paternal sib1=paternal |
