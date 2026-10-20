@@ -16,11 +16,10 @@ inheritance is wired like the SNV pipeline, as one --family-expr per tag:
   --sample-expr  po_*:cn_po_origin(sample, variant) == "<origin>" parent of origin, valued with
                                                                  the children it resolves
 
-  15 MoI tags   denovo, denovo_suspect, inherited_maternal, inherited_paternal, recessive,
+  14 MoI tags   denovo, denovo_suspect, inherited_maternal, inherited_paternal, recessive,
                 recessive_lowconf, possible_denovo, possible_inherited_maternal,
                 possible_inherited_paternal, inheritance_unresolved, mendelian_inconsistent,
-                unknown_cn, and on non-PAR chrX x_linked_recessive_denovo,
-                x_linked_dominant_denovo, x_linked_recessive
+                unknown_cn, and on non-PAR chrX x_linked_denovo, x_linked_recessive
   8 PO tags     po_mother, po_father, po_both, po_ambiguous, po_denovo, po_possible_denovo,
                 po_possible_mother, po_possible_father (the SNV pipeline's names)
 
@@ -42,12 +41,12 @@ has_moi_call(fam, variant, tag)      true as soon as one member's cnv_moi() is <
       │                   call, e.g. denovo, inherited_maternal, recessive, possible_denovo; for
       │                   an "undecided" outcome: mendelian_inconsistent if the child's CN can't
       │                   come from the parents, inheritance_unresolved otherwise
-      └─ on non-PAR chrX  the SNV pipeline's X-linked name, by the child's sex (X_LINKED_CALLS):
-                          son: denovo -> x_linked_recessive_denovo,
-                               inherited_maternal -> x_linked_recessive
-                          daughter: denovo -> x_linked_dominant_denovo,
-                                    recessive -> x_linked_recessive
-                          (a daughter's single inherited copy keeps inherited_*)
+      └─ on non-PAR chrX  the X-linked name (X_LINKED_CALLS):
+                          son or daughter: denovo -> x_linked_denovo
+                          daughter: recessive -> x_linked_recessive (both X copies hit)
+                          (a single inherited X copy keeps inherited_*, a son's like a
+                          daughter's: dominant or recessive would depend on the zygosity and
+                          on who is affected, and a son's gain, CN 2, is neither)
 
 The call looks at the child and its parents only. Who is affected elsewhere in the family (is
 the transmitting parent affected, do sibs carry the CNV) is left to whoever reads the tags.

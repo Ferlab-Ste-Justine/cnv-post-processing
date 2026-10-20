@@ -278,11 +278,13 @@ A few patterns and gotchas worth knowing before editing:
     `mendelian_inconsistent`.
   - `cnv_moi(sample, variant)` gives each affected carrier child its row's call, at most one per
     child. There is no family-level logic (no `dominant`, no segregation check across sibs): who is
-    affected elsewhere in the family is left to whoever reads the tags. On non-PAR chrX, a call
-    takes the SNV pipeline's X-linked name (`X_LINKED_CALLS`: a son's `denovo` →
-    `x_linked_recessive_denovo`, a daughter's → `x_linked_dominant_denovo`, a son's
-    `inherited_maternal` and a daughter's `recessive` → `x_linked_recessive`; a daughter's single
-    inherited copy keeps `inherited_*`). As in the SNV pipeline, the 15 mode-of-inheritance tags
+    affected elsewhere in the family is left to whoever reads the tags. On non-PAR chrX, two calls
+    take an X-linked name (`X_LINKED_CALLS`): a son's or a daughter's `denovo` → `x_linked_denovo`,
+    a daughter's `recessive` → `x_linked_recessive`. A single inherited X copy keeps
+    `inherited_*`, a son's like a daughter's: the SNV pipeline's sex-specific names
+    (`x_linked_recessive_de_novo`, `x_linked_dominant_de_novo`, a son's `x_linked_recessive`) read
+    dominant or recessive off the zygosity and who is affected, which doesn't fit a son's gain
+    (CN 2) and which the calls don't look at. As in the SNV pipeline, the 14 mode-of-inheritance tags
     are `--family-expr` in `conf/modules.config`: `has_moi_call(fam, variant, tag)` is true when
     any child of the family gets that call, so a family with several affected children can carry
     several tags, and slivar values them with the family's affected members.

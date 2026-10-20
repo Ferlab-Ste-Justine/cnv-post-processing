@@ -36,16 +36,18 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 | **T26** de novo CN=4 (implausible, like T3) | chr7 | 4 aff | 2 | 2 |  | kid=`denovo_suspect` | kid=denovo |
 | **T27** kid CN=0, mom CN=0, dad CN=1 (one deleted copy each) | chr7 | 0 aff | 0 | 1 |  | kid=`recessive` | kid=both |
 | **X1** chrX MALE kid CN=1, dad CN=1 (normal) | chrX non-PAR | son 1 aff | 2 | 1 |  | - | kid=null |
-| **X2** chrX male kid CN=0, carrier mom CN=1, dad CN=1 | chrX non-PAR | son 0 aff | 1 | 1 |  | kid=`x_linked_recessive` | kid=maternal |
-| **X3** chrX male kid CN=0, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | son 0 aff | 2 | 1 |  | kid=`x_linked_recessive_denovo` | kid=denovo |
+| **X2** chrX male kid CN=0, carrier mom CN=1, dad CN=1 | chrX non-PAR | son 0 aff | 1 | 1 |  | kid=`inherited_maternal` | kid=maternal |
+| **X3** chrX male kid CN=0, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | son 0 aff | 2 | 1 |  | kid=`x_linked_denovo` | kid=denovo |
 | **X4** chrX record straddling the PAR1 boundary, son CN=3, parents CN=2 (not modelled) | chrX across the PAR1 end | son 3 aff | 2 | 2 |  | - | kid=null |
 | **X5** chrX record straddling the PAR1 boundary, daughter CN=1, mom CN=1, dad CN=2 (not modelled) | chrX across the PAR1 end | daughter 1 aff | 1 | 2 |  | - | kid=null |
 | **X6** chrX PAR1, son CN=3, parents CN=2 (PAR: autosomal rules) | chrX PAR1 | son 3 aff | 2 | 2 |  | kid=`denovo` | kid=denovo |
-| **X7** chrX daughter CN=1, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | daughter 1 aff | 2 | 1 |  | kid=`x_linked_dominant_denovo` | kid=denovo |
+| **X7** chrX daughter CN=1, mom CN=2, dad CN=1 (de novo) | chrX non-PAR | daughter 1 aff | 2 | 1 |  | kid=`x_linked_denovo` | kid=denovo |
 | **X8** chrX daughter CN=3, mom CN=2, dad CN=2 (father's duplicated X) | chrX non-PAR | daughter 3 aff | 2 | 2 |  | kid=`inherited_paternal` | kid=paternal |
 | **X9** chrX daughter CN=1, mom CN=1, dad CN=1 (mother's deletion) | chrX non-PAR | daughter 1 aff | 1 | 1 |  | kid=`inherited_maternal` | kid=maternal |
 | **X10** chrX daughter CN=0, carrier mom CN=1, dad CN=0 (both X copies hit) | chrX non-PAR | daughter 0 aff | 1 | 0 |  | kid=`x_linked_recessive` | kid=both |
 | **X11** chrX daughter CN=1, no mother, dad CN=0 (her father's deleted X) | chrX non-PAR | daughter 1 aff | absent | 0 |  | kid=`inherited_paternal` | kid=paternal |
+| **X12** chrX son CN=2, mom CN=2, dad CN=1 (de novo duplication) | chrX non-PAR | son 2 aff | 2 | 1 |  | kid=`x_linked_denovo` | kid=denovo |
+| **X13** chrX son CN=2, mom CN=3, dad CN=1 (his mother's duplicated X) | chrX non-PAR | son 2 aff | 3 | 1 |  | kid=`inherited_maternal` | kid=maternal |
 | **Y1** chrY daughter, no CN on Y (not modelled) | chrY non-PAR | daughter . aff | . | 2 |  | - | kid=null |
 | **Y2** chrY son CN=2, dad CN=2 (father's duplicated Y) | chrY non-PAR | son 2 aff | . | 2 |  | kid=`inherited_paternal` | kid=paternal |
 | **Y3** chrY son CN=2, dad CN=1 (de novo duplication) | chrY non-PAR | son 2 aff | . | 1 |  | kid=`denovo` | kid=denovo |

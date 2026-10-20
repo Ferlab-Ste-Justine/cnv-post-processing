@@ -35,7 +35,7 @@ _Decided 2026-10-10, BIOINFO-214._
 
 ### X-linked names on non-PAR chrX, as in the SNV pipeline
 
-_Decided 2026-10-10, BIOINFO-214._
+_Decided 2026-10-10, BIOINFO-214. Partly replaced on 2026-10-20: see "One X-linked de novo name, and a son's inherited X keeps inherited_maternal" below._
 
 **What:** on non-PAR chrX, the clear-cut calls take the SNV pipeline's X-linked names (Radiant's transmission modes), by the child's sex, in place of the generic ones: a son's `de_novo` is `x_linked_recessive_de_novo`, a daughter's `x_linked_dominant_de_novo`; a son's `inherited_maternal` (his only X is his mother's) and a daughter's `recessive` (both of her X copies hit) are `x_linked_recessive`. PAR records keep the autosomal names, and chrY is unchanged (SNV has no Y-linked tags).
 
@@ -55,7 +55,7 @@ _Decided 2026-10-20, BIOINFO-214, with the team._
 
 ### One computation for the MoI call and the parent of origin
 
-_Decided 2026-10-21, BIOINFO-214, after a colleague's review._
+_Decided 2026-10-20, BIOINFO-214, after a colleague's review._
 
 **What:** `TRIO_TABLE` is keyed on the child's deviation and a transmission outcome (`get_transmission_outcome()`): every way one copy from each parent adds up to the child's CN, each passed copy named normal, a hit or opposite. The same row gives the MoI call and the parent of origin. The parent labels (`same`, `half`, `other`), which compared totals, are gone.
 
@@ -66,6 +66,21 @@ _Decided 2026-10-21, BIOINFO-214, after a colleague's review._
 - A missing parent (not in the PED, or no CN) passes 0, 1 or 2 copies, like any parent with CN 0 to 3. A way that needs more only counts for the Mendelian check (`inheritance_unresolved`), unless `MENDEL_ALLOW_RARE_SPLITS` is on.
 - A copy changed in the opposite direction (a deletion passed to a child with a gain) explains nothing: such a child is `undecided`.
 - A parent with CN 4 or more still can't be split: its child is `undecided`, and `is_mendelian_possible()` decides between `inheritance_unresolved` and `mendelian_inconsistent` (T16, T17).
+
+### One X-linked de novo name, and a son's inherited X keeps inherited_maternal
+
+_Decided 2026-10-20, BIOINFO-214, after a colleague's review._
+
+**What:** on non-PAR chrX, a de novo CNV is `x_linked_denovo` for a son or a daughter, in place of `x_linked_recessive_denovo` (son) and `x_linked_dominant_denovo` (daughter). A son's CNV inherited from his mother keeps `inherited_maternal` instead of becoming `x_linked_recessive`, so `x_linked_recessive` is only a daughter with both X copies hit. 14 mode-of-inheritance tags instead of 15.
+
+**Why:** the SNV pipeline's names (Radiant's `transmission_mode`) read dominant or recessive off the zygosity and who is affected. Radiant's lookup gives a hemizygous son (1/1) with ref parents `x_linked_recessive_de_novo`, a het daughter `x_linked_dominant_de_novo`, and a son `x_linked_recessive` only when his het mother is unaffected. For CNVs that breaks twice:
+
+- A son's gain (CN 2 on non-PAR X: his normal X plus an extra copy) matches no SNV genotype, and "recessive" says nothing true about it (harness X12, de novo; X13, from his mother). This was the colleague's point.
+- The calls don't look at who is affected, so a son who inherits a deletion from an affected mother got `x_linked_recessive` where the SNV side wouldn't. That is why a daughter's single inherited copy already kept `inherited_*` (2026-10-10).
+
+The CN and the sex already say what the names inferred.
+
+**Consequence:** the X-linked tags now leave the SNV names. Since the `denovo` rename, Radiant needs a mapping to read them anyway. On the real NA12878 trio, the daughter's 5 de novo records on non-PAR chrX change from `x_linked_dominant_denovo` to `x_linked_denovo`; nothing else changes.
 
 ## Open questions
 
@@ -101,7 +116,7 @@ _Noted 2026-10-06, BIOINFO-214._
 
 **What to hand over:**
 
-- `assets/moi_scenarios.md`: the 51 named scenarios (trios, duos, a singleton, families with two children, chrX/chrY/chrM), each with its family (region, each member's CN and affected status), the MoI call per child and the parent of origin.
+- `assets/moi_scenarios.md`: the 62 named scenarios (trios, duos, a singleton, families with two children, chrX/chrY/chrM), each with its family (region, each member's CN and affected status), the MoI call per child and the parent of origin.
 - `assets/trio_lookup_table.tsv`: every autosomal kid/mom/dad CN combination with its child call and parent of origin, all 144 rows. For example, its first row says kid CN 0, mom CN 0, dad CN 0 → `inheritance_unresolved`, origin `both`. A geneticist can check calls like that at a glance. These calls are the MoI tags the pipeline writes for an affected child (see Decisions: there is no family-level tag).
 - The open questions above.
 

@@ -226,6 +226,18 @@ var scenarios = [
     XNP,
     { kid: [1, 1], kidsex: "female", mom: null, dad: [0, 0] },
   ],
+  // A son's gain on non-PAR chrX: he keeps his normal X and gains a copy, so no zygosity word
+  // (recessive, dominant) fits; his calls keep the generic names.
+  [
+    "X12 chrX son CN=2, mom CN=2, dad CN=1 (de novo duplication)",
+    XNP,
+    { kid: [2, 1], kidsex: "male", mom: [2, 0], dad: [1, 0] },
+  ],
+  [
+    "X13 chrX son CN=2, mom CN=3, dad CN=1 (his mother's duplicated X)",
+    XNP,
+    { kid: [2, 1], kidsex: "male", mom: [3, 0], dad: [1, 0] },
+  ],
   // chrY: a daughter has no Y, so she isn't modelled; a son's Y is his father's, and his
   // mother (no CN there) passes nothing.
   [
@@ -535,8 +547,8 @@ for (var it = 0; it < N; it++) {
         problem("inherited_maternal but parent of origin " + po, spec, v);
       if (call === "inherited_paternal" && po !== "paternal")
         problem("inherited_paternal but parent of origin " + po, spec, v);
-      var denovo_call = /denovo/.test(call) && !/possible/.test(call); // denovo, denovo_suspect, x_linked_*_denovo
-      if (call === "x_linked_recessive" && po !== (s.sex === "male" ? "maternal" : "both"))
+      var denovo_call = /denovo/.test(call) && !/possible/.test(call); // denovo, denovo_suspect, x_linked_denovo
+      if (call === "x_linked_recessive" && (s.sex !== "female" || po !== "both"))
         problem("x_linked_recessive (" + s.sex + ") but parent of origin " + po, spec, v);
       if (denovo_call !== (po === "denovo")) problem(call + " but parent of origin " + po, spec, v);
       if (call === "possible_denovo" && po !== "possible_denovo")

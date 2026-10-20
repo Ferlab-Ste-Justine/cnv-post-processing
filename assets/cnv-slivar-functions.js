@@ -33,8 +33,7 @@
 //   --family-expr 'inheritance_unresolved:has_moi_call(fam, variant, "inheritance_unresolved")' \
 //   --family-expr 'mendelian_inconsistent:has_moi_call(fam, variant, "mendelian_inconsistent")' \
 //   --family-expr 'unknown_cn:has_moi_call(fam, variant, "unknown_cn")' \
-//   --family-expr 'x_linked_recessive_denovo:has_moi_call(fam, variant, "x_linked_recessive_denovo")' \
-//   --family-expr 'x_linked_dominant_denovo:has_moi_call(fam, variant, "x_linked_dominant_denovo")' \
+//   --family-expr 'x_linked_denovo:has_moi_call(fam, variant, "x_linked_denovo")' \
 //   --family-expr 'x_linked_recessive:has_moi_call(fam, variant, "x_linked_recessive")' \
 //   --sample-expr 'po_mother:cn_po_origin(sample, variant) == "maternal"' \
 //   --sample-expr 'po_father:cn_po_origin(sample, variant) == "paternal"' \
@@ -277,9 +276,9 @@
 // prettier-ignore
 var TRIO_TABLE = [
   // kid     outcome                 child call                     parent of origin      harness rows
-  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X6 X7 Y3 Y4, Q4 Q5
+  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X6 X7 X12 Y3 Y4, Q4 Q5
   ["±2+",    "new",                  "denovo_suspect",              "denovo"],            // T3 T26 (P5: two hits at one locus is implausible)
-  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T18 T23 T24 X2 X9, Q9 kid
+  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T18 T23 T24 X2 X9 X13, Q9 kid
   ["any",    "paternal",             "inherited_paternal",          "paternal"],          // T5 X8 Y2 Y5, Q3 Q10, Q9 sib
   ["even",   "both",                 "recessive",                   "both"],              // T6 T9 T27 X10, Q1 Q2 (T9 = CN4 from two CN3, see P7)
   ["any",    "both",                 "inheritance_unresolved",      "both"],
@@ -294,17 +293,18 @@ var TRIO_TABLE = [
   ["any",    "any",                  "no_pattern",                  null]                 // -> inheritance_unresolved (T16 T17) or mendelian_inconsistent (T14 T19 T25)
 ];
 
-// On non-PAR chrX, a child's call takes the SNV pipeline's X-linked name (Radiant's
-// transmission modes, spelled "denovo": see docs/journal.md), by the child's sex; other
-// calls, PAR and the other chromosomes keep the names above (get_x_linked_call). A
-// daughter with one inherited copy keeps inherited_*: dominant or carrier would depend
-// on who is affected, which the calls don't look at. denovo_suspect and the duo calls
-// keep their names too.
+// On non-PAR chrX, a de novo call is x_linked_denovo, for a son or a daughter (the CN and
+// the sex say the rest), and a daughter with both X copies hit is x_linked_recessive; other
+// calls, PAR and the other chromosomes keep the names above (get_x_linked_call). The SNV
+// pipeline's other X-linked names (Radiant's transmission modes) read dominant or recessive
+// off the zygosity and who is affected: they don't fit a son's gain (CN 2: his normal X plus
+// an extra copy, X12 X13), and the calls don't look at who is affected. So a child with one
+// inherited X copy keeps inherited_*, a son (X2) like a daughter (X9). denovo_suspect and
+// the duo calls keep their names too. See docs/journal.md.
 // prettier-ignore
 var X_LINKED_CALLS = {
-  male:   { denovo: "x_linked_recessive_denovo",                         // X3: his only X changed
-            inherited_maternal: "x_linked_recessive" },                  // X2: his only X is his mother's
-  female: { denovo: "x_linked_dominant_denovo",                          // X7
+  male:   { denovo: "x_linked_denovo" },                                 // X3 X12: his only X changed
+  female: { denovo: "x_linked_denovo",                                   // X7
             recessive: "x_linked_recessive" }                            // X10: both of her X copies hit
 };
 
@@ -359,7 +359,7 @@ function has_moi_call(fam, variant, call) {
  *
  * for each CNV record:
  *    for each family:
- *       for each of the 15 MoI --family-expr:  ← slivar
+ *       for each of the 14 MoI --family-expr:  ← slivar
  *          has_moi_call(fam, variant, tag)
  *             for each member s:
  *                cnv_moi(s, variant)           ← steps ①–⑤
@@ -390,9 +390,9 @@ function has_moi_call(fam, variant, call) {
  * // duo: kid 1, mom 2, no father in the PED     (D3)
  * cnv_moi(kid, variant)  // → "possible_denovo"
  * // non-PAR chrX: son 0, carrier mom 1, dad 1   his only X is hers  (X2)
- * cnv_moi(son, variant)  // → "x_linked_recessive"
+ * cnv_moi(son, variant)  // → "inherited_maternal"
  * // non-PAR chrX: daughter 1, mom 2, dad 1      de novo in a daughter  (X7)
- * cnv_moi(daughter, variant)  // → "x_linked_dominant_denovo"
+ * cnv_moi(daughter, variant)  // → "x_linked_denovo"
  * // non-PAR chrY: son 2, mom (no Y CN), dad 2   his Y is his father's  (Y2)
  * cnv_moi(son, variant)  // → "inherited_paternal"
  * // singleton kid 1 (S1), or any child on chrM (M1)
@@ -522,9 +522,9 @@ function get_trio_row(kid, variant) {
     var row = TRIO_TABLE[i];
     // excerpt from the TRIO table.
     // kid      outcome      child call             parent of origin   harness rows
-    // ["±1",   "new",       "denovo",              "denovo"],         // T1 T2 X3 X6 X7 Y3 Y4, Q4 Q5
+    // ["±1",   "new",       "denovo",              "denovo"],         // T1 T2 X3 X6 X7 X12 Y3 Y4, Q4 Q5
     // ["±2+",  "new",       "denovo_suspect",      "denovo"],         // T3 T26 (P5: two hits at one locus is implausible)
-    // ["any",  "maternal",  "inherited_maternal",  "maternal"],       // T4 T7 T18 T23 T24 X2 X9, Q9 kid
+    // ["any",  "maternal",  "inherited_maternal",  "maternal"],       // T4 T7 T18 T23 T24 X2 X9 X13, Q9 kid
     if (
       // ex: is "±1" found in ["any", "±1"]
       kidTok.indexOf(row[0]) >= 0 && // is the row's kid value in the kidTok's list? again kid's list could be  ["any", "±1"]. yes ->
@@ -543,10 +543,10 @@ function get_trio_row(kid, variant) {
  * @param {string}  call     trio_call()'s result
  * @returns {string}
  * @example
- * get_x_linked_call(<son>, <non-PAR chrX>, "denovo")                 // → "x_linked_recessive_denovo"
- * get_x_linked_call(<daughter>, <non-PAR chrX>, "denovo")            // → "x_linked_dominant_denovo"
- * get_x_linked_call(<son>, <non-PAR chrX>, "inherited_maternal")      // → "x_linked_recessive"
- * get_x_linked_call(<daughter>, <non-PAR chrX>, "inherited_maternal") // → "inherited_maternal" (unchanged)
+ * get_x_linked_call(<son>, <non-PAR chrX>, "denovo")                 // → "x_linked_denovo"
+ * get_x_linked_call(<daughter>, <non-PAR chrX>, "denovo")            // → "x_linked_denovo"
+ * get_x_linked_call(<daughter>, <non-PAR chrX>, "recessive")         // → "x_linked_recessive"
+ * get_x_linked_call(<son>, <non-PAR chrX>, "inherited_maternal")      // → "inherited_maternal" (unchanged)
  * get_x_linked_call(<son>, <chrX PAR1>, "denovo")                    // → "denovo" (PAR: autosomal names)
  * get_x_linked_call(<kid>, <chr7>, "recessive")                       // → "recessive"
  */
