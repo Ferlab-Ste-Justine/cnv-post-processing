@@ -82,6 +82,18 @@ The CN and the sex already say what the names inferred.
 
 **Consequence:** the X-linked tags now leave the SNV names. Since the `denovo` rename, Radiant needs a mapping to read them anyway. On the real NA12878 trio, the daughter's 5 de novo records on non-PAR chrX change from `x_linked_dominant_denovo` to `x_linked_denovo`; nothing else changes.
 
+### The cohort collapse keeps the proband's call
+
+_Decided 2026-10-27, BIOINFO-214._
+
+**What:** in `TRUVARI_COLLAPSE_COHORT`, a cluster that contains a proband's call keeps that call as its representative: its `POS`, `END`, `ID`, `ALT` and `INFO`, with the other samples' genotypes filled in from the calls folded into it. The probands are the PED's affected children (`pedAffectedChildren()`: phenotype 2 with a father or mother named); with several affected sibs, all count, and the leftmost of their calls wins. Clusters without a proband call, and families without a `familyPed` or an affected child, keep the leftmost call, as before.
+
+**Why:** truvari collapse compares each call with the cluster's representative only (no `--chain`), and with its default `--keep first` the representative is the leftmost call, often a parent's. A parent's call could then pull in the proband's call and the other parent's even when those two don't match each other, so the proband's row said the other parent carried the CNV (module test `trio_proband`). With the proband's call as representative, a parent's call only joins it if it matches that call directly, which is what the inheritance tags read.
+
+**How:** truvari can't prefer a sample. `bin/proband_priority.py` saves the real QUAL in `INFO/ORIG_QUAL`, sets QUAL to 1 on records a proband carries and 0 on the others, truvari runs with `--keep maxqual` (ties fall back to the leftmost call), and the real QUAL is put back afterwards. Rejected: swapping in the proband's call after a normal collapse. It's simpler to write, but the members were matched against the old representative, so the problem above stays.
+
+**Not covered:** DRAGEN writes `SVTYPE=CNV` for deletions and duplications alike, and truvari reads both as the same (unknown) type, so a proband's DUP can still absorb a parent's DEL at the same locus. That needs its own fix (e.g. set `SVTYPE` from `ALT` before the collapse).
+
 ## Open questions
 
 ### A parent who passes nothing on chrX/chrY: fixed at zero, or "any value" when absent?

@@ -6,6 +6,7 @@
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { validatePedAgainstVcf  } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { pedAffectedChildren    } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { EXOMISER } from '../modules/local/exomiser/main.nf'
 include { EXOMISER as EXOMISER_SINGLE } from '../modules/local/exomiser/main.nf'
 include { NORMALIZE_CNV } from '../modules/local/normalize_cnv/main.nf'
@@ -244,10 +245,21 @@ workflow CNV_POST_PROCESSING {
         .join(BCFTOOLS_MERGE.out.tbi)
         .mix(ch_grouped_by_family.solo)
 
-    TRUVARI_COLLAPSE_COHORT(ch_family_vcf)
+    // The PED's affected children become the cluster representatives of the cohort collapse
+    // (proband priority, see conf/modules.config). Only this step needs meta.probands, so it's
+    // dropped again right after: every later family-level task keeps the same meta (and -resume
+    // hash) as before.
+    TRUVARI_COLLAPSE_COHORT(
+        ch_family_vcf.map { meta, vcf, tbi ->
+            def probands = meta.familyPed ? pedAffectedChildren(file(meta.familyPed)) : []
+            [meta + [probands: probands], vcf, tbi]
+        }
+    )
 
     // truvari collapse's output isn't guaranteed sorted/indexed -- see BCFTOOLS_SORT_INDEX
-    BCFTOOLS_SORT_INDEX_COHORT(TRUVARI_COLLAPSE_COHORT.out.vcf)
+    BCFTOOLS_SORT_INDEX_COHORT(
+        TRUVARI_COLLAPSE_COHORT.out.vcf.map { meta, vcf -> [meta.findAll { entry -> entry.key != 'probands' }, vcf] }
+    )
 
     //
     // STAGE 3 -- Depth-based genotype refinement (mosdepth), family-level. Joint families never
