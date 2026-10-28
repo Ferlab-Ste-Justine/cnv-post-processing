@@ -36,9 +36,7 @@ route applicable to it, decided per-row/per-family purely from which optional co
 **Family route** (a family with `sampleSize > 1`, or a solo row that documents `familyPed`/`familyPheno`):
 
 1. `NORMALIZE_CNV` (bcftools norm/view) → `TRUVARI_COLLAPSE_PERSAMPLE`, per sample
-2. `BCFTOOLS_MERGE` across a family's per-sample VCFs → `TRUVARI_COLLAPSE_COHORT`, which keeps
-   the proband's call (the PED's affected children, `pedAffectedChildren`) as each cluster's
-   representative via `bin/proband_priority.py` + `--keep maxqual`. Families
+2. `BCFTOOLS_MERGE` across a family's per-sample VCFs → `TRUVARI_COLLAPSE_COHORT`. Families
    supplied as an already jointly-called `caller=DRAGEN_JOINT` multi-sample VCF skip merge+collapse
    entirely (lightweight prep only: drop non-variant records, split multiallelics) and rejoin at
    step 4
@@ -79,7 +77,6 @@ modules/nf-core/                           # ensemblvep/{vep,download}, tabix/ta
 conf/                                      # base.config, modules.config, test.config, test_full.config
 assets/                                    # samplesheet.csv, schema_input.json, exomiser/ (default analysis YAMLs), cnv-slivar-functions.js (slivar rules) + cnv-slivar-moi-harness.js (its test bench; golden file moi_scenarios.expected.tsv)
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE
-bin/proband_priority.py                    # QUAL rewrite/restore around TRUVARI_COLLAPSE_COHORT so the proband's call is kept
 docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram)
 scripts/                                   # run-test-suite.sh, run-smoke-tests.sh (see below)
 ```

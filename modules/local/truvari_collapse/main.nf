@@ -25,34 +25,15 @@ process TRUVARI_COLLAPSE {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    // Proband priority (TRUVARI_COLLAPSE_COHORT, see conf/modules.config): when the family has
-    // probands (meta.probands, from its PED), keep a proband's CNV as the representative of every
-    // cluster it's in, instead of the leftmost call. truvari can't prefer a sample, so
-    // bin/proband_priority.py rewrites QUAL (proband records 1, others 0, real QUAL saved in
-    // INFO) for --keep maxqual, and puts the real QUAL back afterwards. Ties fall back to
-    // truvari's leftmost rule, so clusters without a proband call are unchanged.
-    def prioritize = task.ext.proband_priority && meta.probands
-    def input_vcf = prioritize ? "${prefix}.proband_marked.vcf.gz" : "${vcf}"
-    def keep_args = prioritize ? '--keep maxqual' : ''
-    def mark = prioritize
-        ? "proband_priority.py mark --vcf-in ${vcf} --vcf-out ${input_vcf} ${meta.probands.collect { p -> "--proband '${p}'" }.join(' ')}"
-        : ''
-    def restore = prioritize
-        ? "proband_priority.py restore ${prefix}.collapsed.vcf.gz ${prefix}.removed.vcf.gz"
-        : ''
 
     """
     #!/bin/bash -eo pipefail
 
-    ${mark}
-
     truvari collapse \\
-        -i ${input_vcf} \\
+        -i ${vcf} \\
         -o ${prefix}.collapsed.vcf.gz \\
         -c ${prefix}.removed.vcf.gz \\
-        ${args} ${keep_args}
-
-    ${restore}
+        ${args}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

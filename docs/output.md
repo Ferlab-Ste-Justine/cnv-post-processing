@@ -29,7 +29,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - `merged/`
   - `<familyId>.merged.vcf.gz`, `<familyId>.merged.vcf.gz.tbi`: a family's per-sample CNV VCFs merged into one multi-sample VCF (`bcftools merge`). Not produced for families supplied as an already jointly-called (`caller=DRAGEN_JOINT`) VCF.
 - `truvari/`
-  - `<familyId>.sorted.vcf.gz`, `<familyId>.sorted.vcf.gz.tbi`: the merged family VCF (or, for a true standalone sample, its own collapsed VCF) after cohort-level [truvari](https://github.com/ACEnglish/truvari) collapse of redundant/overlapping CNV calls. Each collapsed record keeps one original call's coordinates: the proband's call when the family's PED has an affected child carrying it, otherwise the leftmost call.
+  - `<familyId>.sorted.vcf.gz`, `<familyId>.sorted.vcf.gz.tbi`: the merged family VCF (or, for a true standalone sample, its own collapsed VCF) after cohort-level [truvari](https://github.com/ACEnglish/truvari) collapse of redundant/overlapping CNV calls.
 - `joint/`
   - `<familyId>.sorted.vcf.gz`, `<familyId>.sorted.vcf.gz.tbi`: for `caller=DRAGEN_JOINT` families, the family's already jointly-called VCF after lightweight prep only (drop non-variant records, split multiallelic sites) -- no merge or collapse needed.
 
