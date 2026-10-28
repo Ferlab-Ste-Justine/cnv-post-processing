@@ -82,6 +82,18 @@ The CN and the sex already say what the names inferred.
 
 **Consequence:** the X-linked tags now leave the SNV names. Since the `denovo` rename, Radiant needs a mapping to read them anyway. On the real NA12878 trio, the daughter's 5 de novo records on non-PAR chrX change from `x_linked_dominant_denovo` to `x_linked_denovo`; nothing else changes.
 
+### Each sample keeps its own call ID in FORMAT/OID
+
+_Decided 2026-10-28, BIOINFO-214, after a colleague's suggestion._
+
+**What:** `NORMALIZE_CNV` copies each per-sample record's `ID` into that sample's `FORMAT/OID` (`bin/add_original_id.awk`, set by `ext.original_id`). The collapses still keep one `ID` per cluster, the leftmost call's, but `OID` names each sample's own call in every family-level VCF. `:` is percent-encoded as `%3A`, since it separates FORMAT values and DRAGEN IDs contain it. Joint-called VCFs don't get `OID`: they skip the collapses, so their `ID` is already the caller's.
+
+**Why:** after `TRUVARI_COLLAPSE_COHORT`, a record's `ID` is one sample's call, often a parent's, and nothing in the record said which call each other sample contributed. The link existed only in truvari's removed VCF (`MatchId` against the kept record's `CollapseId`), which nothing downstream reads. truvari keeps one `ID`, but it copies all FORMAT fields of each call it folds in (into samples that are still ref or missing), so a per-sample `OID` travels with the genotype. On the real NA12878 trio the published slivar VCF is unchanged apart from `OID`; at chr22:17.29M, for example, the record's `ID` is NA12891's call while NA12878's and NA12892's `OID` both name `17288730-17294633`.
+
+**Rejected:** making the proband's call each cluster's representative (QUAL rewrite + `--keep maxqual`, briefly on this branch). It changed which coordinates a record shows but still lost the other samples' IDs; `OID` keeps all of them without changing the collapse.
+
+**Not covered:** a sample with two calls in one cluster (e.g. a fragmented CNV) keeps only the first one's `OID`; the second survives only in the removed VCF. The collapse membership itself is unchanged: a call is still compared with the cluster's representative only, and DRAGEN's `SVTYPE=CNV` still lets a DEL and a DUP at the same locus collapse together.
+
 ## Open questions
 
 ### A parent who passes nothing on chrX/chrY: fixed at zero, or "any value" when absent?

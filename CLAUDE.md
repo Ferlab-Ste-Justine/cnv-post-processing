@@ -35,7 +35,8 @@ route applicable to it, decided per-row/per-family purely from which optional co
 
 **Family route** (a family with `sampleSize > 1`, or a solo row that documents `familyPed`/`familyPheno`):
 
-1. `NORMALIZE_CNV` (bcftools norm/view) → `TRUVARI_COLLAPSE_PERSAMPLE`, per sample
+1. `NORMALIZE_CNV` (bcftools norm/view; also copies each call's ID into `FORMAT/OID` via
+   `bin/add_original_id.awk`) → `TRUVARI_COLLAPSE_PERSAMPLE`, per sample
 2. `BCFTOOLS_MERGE` across a family's per-sample VCFs → `TRUVARI_COLLAPSE_COHORT`. Families
    supplied as an already jointly-called `caller=DRAGEN_JOINT` multi-sample VCF skip merge+collapse
    entirely (lightweight prep only: drop non-variant records, split multiallelics) and rejoin at
@@ -76,6 +77,7 @@ modules/local/                             # normalize_cnv, truvari_collapse, bc
 modules/nf-core/                           # ensemblvep/{vep,download}, tabix/tabix
 conf/                                      # base.config, modules.config, test.config, test_full.config
 assets/                                    # samplesheet.csv, schema_input.json, exomiser/ (default analysis YAMLs), cnv-slivar-functions.js (slivar rules) + cnv-slivar-moi-harness.js (its test bench; golden file moi_scenarios.expected.tsv)
+bin/add_original_id.awk                    # Copies each call's ID into FORMAT/OID in NORMALIZE_CNV
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE
 docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram)
 scripts/                                   # run-test-suite.sh, run-smoke-tests.sh (see below)

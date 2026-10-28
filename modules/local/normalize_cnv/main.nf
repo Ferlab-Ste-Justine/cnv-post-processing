@@ -33,6 +33,11 @@ process NORMALIZE_CNV {
     // DRAGEN_JOINT path). SVLEN isn't needed downstream anyway -- VEP/Exomiser derive size from
     // POS/END/SVTYPE.
     def strip_svlen = task.ext.strip_svlen ? '| bcftools annotate --no-version -x INFO/SVLEN' : ''
+    // Per-sample path only (task.ext.original_id, see conf/modules.config): copy each record's ID
+    // into FORMAT/OID, so the cohort VCF still names every sample's own call after truvari keeps
+    // one ID per cluster. bcftools can't copy ID into FORMAT itself ("Cannot rename"), hence the
+    // awk step, which also needs the plain-text VCF.
+    def original_id = task.ext.original_id ? '| bcftools view --no-version - | add_original_id.awk' : ''
 
     // Only DRAGEN's CNV VCF conventions have been validated against this normalization step so
     // far (see /cephfs/jtrembla/projects/bioinfo-214-CNV-post-processing/preprocessing.sh). Fail
@@ -63,6 +68,7 @@ process NORMALIZE_CNV {
         | bcftools sort -O u \\
         | bcftools norm --no-version -m -any -O u ${args} - \\
         ${strip_svlen} \\
+        ${original_id} \\
         | bcftools view --no-version -O z -o ${prefix}.normalized.vcf.gz -
 
     tabix -p vcf ${prefix}.normalized.vcf.gz
