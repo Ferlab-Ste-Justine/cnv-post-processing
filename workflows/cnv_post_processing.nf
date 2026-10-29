@@ -6,12 +6,15 @@
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { validatePedAgainstVcf  } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { vcfSampleNames         } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { pedAffectedChildren    } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { EXOMISER } from '../modules/local/exomiser/main.nf'
 include { EXOMISER as EXOMISER_SINGLE } from '../modules/local/exomiser/main.nf'
 include { NORMALIZE_CNV } from '../modules/local/normalize_cnv/main.nf'
 include { NORMALIZE_CNV as NORMALIZE_CNV_JOINT } from '../modules/local/normalize_cnv/main.nf'
 include { TRUVARI_COLLAPSE as TRUVARI_COLLAPSE_PERSAMPLE } from '../modules/local/truvari_collapse/main.nf'
 include { TRUVARI_COLLAPSE as TRUVARI_COLLAPSE_COHORT    } from '../modules/local/truvari_collapse/main.nf'
+include { RESTORE_COLLAPSED_FORMAT } from '../modules/local/restore_collapsed_format/main.nf'
 include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_PERSAMPLE } from '../modules/local/bcftools_sort_index/main.nf'
 include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_COHORT    } from '../modules/local/bcftools_sort_index/main.nf'
 include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_JOINT     } from '../modules/local/bcftools_sort_index/main.nf'
@@ -22,6 +25,7 @@ include { VCF_ANNOTATE_ENSEMBLVEP } from '../subworkflows/nf-core/vcf_annotate_e
 include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
 include { ENSEMBLVEP_DOWNLOAD } from '../modules/nf-core/ensemblvep/download/main.nf'
 include { SLIVAR_EXPR } from '../modules/local/slivar_expr/main.nf'
+include { JOIN_PROBAND_CNV } from '../modules/local/join_proband_cnv/main.nf'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RUN MAIN WORKFLOW
@@ -246,8 +250,12 @@ workflow CNV_POST_PROCESSING {
 
     TRUVARI_COLLAPSE_COHORT(ch_family_vcf)
 
+    // Copy back the FORMAT of absorbed calls truvari reads as unset (DRAGEN's `./1`, haploid `1`),
+    // which it would otherwise drop with the sample's call -- see RESTORE_COLLAPSED_FORMAT
+    RESTORE_COLLAPSED_FORMAT(TRUVARI_COLLAPSE_COHORT.out.vcf.join(TRUVARI_COLLAPSE_COHORT.out.removed))
+
     // truvari collapse's output isn't guaranteed sorted/indexed -- see BCFTOOLS_SORT_INDEX
-    BCFTOOLS_SORT_INDEX_COHORT(TRUVARI_COLLAPSE_COHORT.out.vcf)
+    BCFTOOLS_SORT_INDEX_COHORT(RESTORE_COLLAPSED_FORMAT.out.vcf)
 
     //
     // STAGE 3 -- Depth-based genotype refinement (mosdepth), family-level. Joint families never
@@ -382,6 +390,27 @@ workflow CNV_POST_PROCESSING {
     // doesn't reorder records, so this is a plain re-index, not a re-sort (same reasoning as
     // BCFTOOLS_INDEX's other use after DEPTH_GENOTYPE_REFINE).
     BCFTOOLS_INDEX_SLIVAR(SLIVAR_EXPR.out.vcf)
+
+    //
+    // STAGE 7 -- One VCF per proband (the PED's affected children): each slivar record where the
+    // proband has a call becomes that call itself (its own ID, POS, END, QUAL, FILTER, INFO, from
+    // its samplesheet vcf), with the family's slivar tags and FORMAT, joined through the
+    // proband's FORMAT/OID. The truvari-kept call, often a parent's, otherwise hides it.
+    // DRAGEN_JOINT families have no per-sample vcf (nor OID) and drop out at the combine below,
+    // as do PED children who weren't sequenced. A PED names samples by their VCF name, hence
+    // vcfSampleNames() rather than the samplesheet's sample column.
+    //
+    def ch_proband_vcf = ch_samplesheet_branched.persample
+        .map { meta, vcf, _cram -> [meta.familyId, vcfSampleNames(vcf)[0], vcf] }
+
+    def ch_join_proband_input = BCFTOOLS_INDEX_SLIVAR.out.vcf_tbi
+        .flatMap { meta, vcf, tbi ->
+            pedAffectedChildren(file(meta.familyPed)).collect { proband -> [meta.familyId, proband, meta, vcf, tbi] }
+        }
+        .combine(ch_proband_vcf, by: [0, 1])
+        .map { _familyId, proband, meta, vcf, tbi, proband_vcf -> [meta + [proband: proband], vcf, tbi, proband_vcf] }
+
+    JOIN_PROBAND_CNV(ch_join_proband_input)
 
     //
     // Collate and save software versions

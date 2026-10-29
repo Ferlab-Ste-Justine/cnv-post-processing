@@ -47,6 +47,16 @@
          │ (merge near-dupes   │                              │
          │  across samples)    │                              │
          └──────────┬──────────┘                              │
+                    │ kept + removed VCFs                     │
+                    ▼                                         │
+         ┌─────────────────────┐                              │
+         │RESTORE_COLLAPSED_   │                              │
+         │    FORMAT           │                              │
+         │ (gives back absorbed│                              │
+         │  ./1 & haploid calls│                              │
+         │  truvari drops; see │                              │
+         │  detail at the end) │                              │
+         └──────────┬──────────┘                              │
                     │                                         │
                     ▼                                         │
          ┌─────────────────────┐                              │
@@ -62,9 +72,14 @@
     │  - MOSDEPTH_RATIO (per sample)      │                   │
     │  - DEPTH_GENOTYPE_REFINE            │                   │
     │  - BCFTOOLS_INDEX                   │                   │
-    │  resolves ./. → 0/0 where depth     │                   │
-    │  supports it (fixes the missing-    │                   │
-    │  genotype cost of post-hoc merging) │                   │
+    │  resolves ./. → 0/0 + expected CN   │                   │
+    │  (sex-aware on X/Y, from PED) where │                   │
+    │  depth supports it (fixes the       │                   │
+    │  missing-genotype cost of post-hoc  │                   │
+    │  merging; slivar reads CN, not GT)  │                   │
+    │  only records >= 5 kb (smaller:     │                   │
+    │  depth can't tell normal from a     │                   │
+    │  missed loss)                       │                   │
     └───────────────┬─────────────────────┘                   │
                     │                                         │
                     └───────────────────┬─────────────────────┘
@@ -90,4 +105,75 @@
                              ┌─────────────────────┐
                              │        SLIVAR       │
                              │                     │
-                             └─────────────────────┘
+                             └──────────┬──────────┘
+                                        ▼
+                        ┌───────────────────────────────┐
+                        │      JOIN_PROBAND_CNV         │
+                        │ (per affected child in PED:   │
+                        │  its own input calls joined   │
+                        │  to slivar records via OID;   │
+                        │  DRAGEN families only)        │
+                        └───────────────────────────────┘
+
+
+RESTORE_COLLAPSED_FORMAT in detail (bin/restore_collapsed_format.py)
+════════════════════════════════════════════════════════════════════
+
+truvari collapse copies an absorbed call's FORMAT into the kept record only when it reads that
+call's GT as set: DRAGEN's ./1 (gain of unknown zygosity) and haploid 1 (a male's chrX) read as
+unset, so they were dropped. Example: a real chr10 cluster of the NA12878 trio.
+
+ INPUT 1: truvari collapse -o  (kept records)                INPUT 2: truvari collapse -c  (removed = absorbed calls)
+ ─────────────────────────────────────────────               ───────────────────────────────────────────────────────
+ chr10:38954276  NA12891's gain                               NA12892's gain   MatchId=1.0  TruScore=60
+ INFO  CollapseId=1.0  NumConsolidated=0                        NA12878 ./.        NA12891 ./.     NA12892 ./1:CN3:OID_C
+ FORMAT                                                       NA12878's gain   MatchId=1.0  TruScore=56
+   NA12878  ./.:.:.          <- empty                           NA12878 ./1:CN3:OID_A  NA12891 ./.     NA12892 ./.
+   NA12891  ./1:3:OID_B      (truvari's kept call)
+   NA12892  ./.:.:.          <- empty                         (truvari left both out: it reads ./1 as unset)
+            │                                                            │
+            │                                                            ▼
+            │                                ┌────────────────────────────────────────────────────┐
+            │                                │ 1. index the absorbed calls by MatchId             │
+            │                                │    keep only samples with a GT allele set          │
+            │                                │    (./1, 0/1, 1/1, haploid 1 ... not ./.)          │
+            │                                │    sort each list: TruScore high -> low            │
+            │                                │                                                    │
+            │                                │    "1.0" -> [ (60, {NA12892: FORMAT_C}),           │
+            │                                │               (56, {NA12878: FORMAT_A}) ]          │
+            │                                └─────────────────────────┬──────────────────────────┘
+            │                                                          │
+            ▼                                                          │
+ ┌──────────────────────────────────────────────────────────┐          │
+ │ 2. for each kept record: CollapseId "1.0" ─── lookup ────┼──────────┘
+ │                                                          │
+ │    for each sample:                                      │
+ │      has a GT allele set? ──yes──> keep as is (NA12891)  │
+ │            │no                                          │
+ │            ▼                                             │
+ │      first absorbed call (highest TruScore) that has     │
+ │      this sample? ──none──> stays ./. (no call there)    │
+ │            │found                                       │
+ │            ▼                                             │
+ │      copy its whole FORMAT (GT, CN, OID, ...) + phase    │
+ │      NA12878 <- FORMAT_A    NA12892 <- FORMAT_C          │
+ │                                                          │
+ │    NumConsolidated += number of samples restored (2)     │
+ └──────────────────────────┬───────────────────────────────┘
+                            ▼
+ OUTPUT: <id>.restored.vcf.gz  (same records, same order, unsorted -> BCFTOOLS_SORT_INDEX_COHORT)
+ ─────────────────────────────────────────────
+ chr10:38954276  NA12891's gain
+ INFO  CollapseId=1.0  NumConsolidated=2
+ FORMAT
+   NA12878  ./1:3:OID_A      <- restored
+   NA12891  ./1:3:OID_B
+   NA12892  ./1:3:OID_C      <- restored
+
+ OID_A = DRAGEN%3AGAIN%3Achr10%3A38956085-38966576   (NA12878's own call)
+ OID_B = DRAGEN%3AGAIN%3Achr10%3A38954277-38966576   (NA12891's, the kept one)
+ OID_C = DRAGEN%3AGAIN%3Achr10%3A38956085-38968564   (NA12892's own call)
+
+ - TruScore only decides when one sample has several absorbed calls in the cluster.
+ - A sample that already has a call (incl. one truvari copied in itself) is never overwritten.
+ - ID, POS, END and the rest of INFO stay the kept call's; only NumConsolidated changes.

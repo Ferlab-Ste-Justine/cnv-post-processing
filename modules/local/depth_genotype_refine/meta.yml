@@ -32,6 +32,10 @@ input:
         type: file
         description: One "<sample>.ratio.bed" file per family member (from MOSDEPTH_RATIO); the sample name is parsed from each filename
         pattern: "*.ratio.bed"
+    - ped:
+        type: file
+        description: Optional family PED (an empty list when there is none); its sex column gives each VCF sample's expected CN on non-PAR chrX/chrY, which are left missing without it
+        pattern: "*.ped"
 
 output:
   - vcf:
@@ -40,7 +44,7 @@ output:
           description: Groovy Map containing family information
       - "*.refined.vcf.gz":
           type: file
-          description: Family VCF with depth-confirmed missing genotypes rewritten to 0/0
+          description: Family VCF with depth-confirmed missing genotypes rewritten to hom-ref, with FORMAT/CN set to the expected CN
           pattern: "*.refined.vcf.gz"
   - versions:
       - "versions.yml":

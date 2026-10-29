@@ -1,0 +1,16 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000000>
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=DUP,Description="Duplication">
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=cnvBinSupportRatio,Description="Low bin support">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="SV type">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
+##INFO=<ID=REFLEN,Number=1,Type=Integer,Description="Reference length">
+##INFO=<ID=GCP,Number=1,Type=Float,Description="GC proportion">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	MOM
+chr1	1000	DRAGEN:REF:chr1:1001-10500	N	.	20	PASS	END=10500;REFLEN=9500	GT:CN	./.:2
+chr1	80000	toy%call:80001	N	<DEL>	12	PASS	SVTYPE=CNV;SVLEN=-5000;END=85000;REFLEN=5000;GCP=0.39	GT:CN	0/1:1

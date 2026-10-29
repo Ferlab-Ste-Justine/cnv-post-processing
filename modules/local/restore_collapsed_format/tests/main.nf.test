@@ -1,0 +1,78 @@
+nextflow_process {
+
+    name "Test Process RESTORE_COLLAPSED_FORMAT"
+    script "../main.nf"
+    process "RESTORE_COLLAPSED_FORMAT"
+
+    tag "modules"
+    tag "modules_"
+    tag "restore_collapsed_format"
+
+    // Fixtures in ./data/: real truvari 5.4.0 output (TRUVARI_COLLAPSE_COHORT's ext.args) on 9
+    // records of the NA12878 trio's full-genome merged VCF (samples NA12878, NA12891, NA12892),
+    // the calls whose FORMAT truvari left out:
+    // 1. chr10, kept NA12891's ./1 gain; absorbed NA12878's and NA12892's ./1 gains.
+    // 2. chr16, kept NA12891's and NA12892's ./1 gain; absorbed NA12878's ./1 gain.
+    // 3. chrX:67903111, kept NA12878's 0/1 loss; absorbed NA12891's haploid "1" loss. NA12892
+    //    has no call in the cluster: stays empty.
+    // 4. chrX:82726584, kept NA12892's 0/1 loss; absorbed one record with NA12878 1/1 (truvari
+    //    consolidated it: NumConsolidated=1) and NA12891's haploid "1".
+
+    test("NA12878 trio: every absorbed call truvari reads as unset is restored") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1" ],
+                    file("\${projectDir}/modules/local/restore_collapsed_format/tests/data/fam1.collapsed.vcf.gz", checkIfExists: true),
+                    file("\${projectDir}/modules/local/restore_collapsed_format/tests/data/fam1.removed.vcf.gz", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == [ id: "fam1" ]
+                assert file(vcf.get(0)[1]).name == "fam1.restored.vcf.gz"
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip
+            assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["NA12878", "NA12891", "NA12892"]
+            def records = lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }.collectEntries { [it[1], it] }
+            assert records.size() == 4
+            // GT:CN:OID of each sample, and NumConsolidated
+            def calls = { pos -> records[pos].drop(9).collect { s -> def f = s.split(":"); [f[0], f[2], f[6]].join(":") } }
+            def consolidated = { pos -> records[pos][7].split(";").find { it.startsWith("NumConsolidated=") } }
+
+            assert calls("38954276") == [
+                "./1:3:DRAGEN%3AGAIN%3Achr10%3A38956085-38966576",
+                "./1:3:DRAGEN%3AGAIN%3Achr10%3A38954277-38966576",
+                "./1:3:DRAGEN%3AGAIN%3Achr10%3A38956085-38968564",
+            ]
+            assert consolidated("38954276") == "NumConsolidated=2"
+
+            assert calls("22545168")[0] == "./1:4:DRAGEN%3AGAIN%3Achr16%3A22545169-22698638"
+            assert consolidated("22545168") == "NumConsolidated=1"
+
+            assert calls("67903111") == [
+                "0/1:1:DRAGEN%3ALOSS%3AchrX%3A67903112-67910767",
+                "1:0:DRAGEN%3ALOSS%3AchrX%3A67904348-67909767",
+                "./.:.:.",
+            ]
+            assert consolidated("67903111") == "NumConsolidated=1"
+
+            assert calls("82726584") == [
+                "1/1:0:DRAGEN%3ALOSS%3AchrX%3A82726585-82732011",
+                "1:0:DRAGEN%3ALOSS%3AchrX%3A82726585-82732011",
+                "0/1:1:DRAGEN%3ALOSS%3AchrX%3A82726585-82733473",
+            ]
+            assert consolidated("82726584") == "NumConsolidated=2"
+
+            assert path(process.out.versions[0]).text.contains("pysam:")
+        }
+    }
+}

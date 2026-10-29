@@ -1,0 +1,18 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000000>
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=DUP,Description="Duplication">
+##FILTER=<ID=PASS,Description="All filters passed">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="SV type">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
+##INFO=<ID=NumCollapsed,Number=1,Type=Integer,Description="Number of calls collapsed into this call by truvari">
+##INFO=<ID=denovo,Number=.,Type=String,Description="slivar family expression">
+##INFO=<ID=inherited_maternal,Number=.,Type=String,Description="slivar family expression">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">
+##FORMAT=<ID=OID,Number=1,Type=String,Description="ID of the original caller record">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	DAD	KID	MOM
+chr1	10000	DRAGEN:GAIN:chr1:10001-20000	N	<DUP>	50	PASS	SVTYPE=CNV;SVLEN=10000;END=20000;NumCollapsed=2;inherited_maternal=KID	GT:CN:OID	0/0:2:.	0/1:3:DRAGEN%3AGAIN%3Achr1%3A10501-21900	0/1:3:DRAGEN%3AGAIN%3Achr1%3A10001-20000
+chr1	50000	DRAGEN:GAIN:chr1:50001-60000	N	<DUP>	50	PASS	SVTYPE=CNV;SVLEN=10000;END=60000;NumCollapsed=1	GT:CN:OID	0/1:3:DRAGEN%3AGAIN%3Achr1%3A50201-60100	./.:.:.	0/1:3:DRAGEN%3AGAIN%3Achr1%3A50001-60000
+chr1	80000	toy%call:80001	N	<DEL>	30	PASS	SVTYPE=CNV;SVLEN=-5000;END=85000	GT:CN:OID	0/0:2:.	0/1:1:toy%25call%3A80001	0/0:2:.

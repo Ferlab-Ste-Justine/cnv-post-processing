@@ -276,6 +276,17 @@ def vcfSampleNames(vcf) {
     }
 }
 
+// The probands of a family for JOIN_PROBAND_CNV: the PED's affected (phenotype 2) samples with a
+// father or mother named. A founder isn't one, even if affected. Several affected sibs are all
+// returned.
+def pedAffectedChildren(ped) {
+    return ped.readLines()
+        .findAll { line -> !line.startsWith('#') }
+        .collect { line -> line.trim().split(/\s+/) }
+        .findAll { cols -> cols.size() >= 6 && cols[5] == '2' && (cols[2] != '0' || cols[3] != '0') }
+        .collect { cols -> cols[1] }
+}
+
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -9,7 +9,7 @@ process DEPTH_GENOTYPE_REFINE {
         'quay.io/biocontainers/pysam:0.24.0--py312hf5ad864_1' }"
 
     input:
-    tuple val(meta), path(vcf), path(tbi), path(ratio_beds)
+    tuple val(meta), path(vcf), path(tbi), path(ratio_beds), path(ped) // ped: [] when the family has none
 
     output:
     tuple val(meta), path("*.refined.vcf.gz") , emit: vcf
@@ -28,6 +28,13 @@ process DEPTH_GENOTYPE_REFINE {
     // clinically.
     def low = task.ext.low ?: '0.8'
     def high = task.ext.high ?: '1.2'
+    // Records under 5 kb are left missing: at that size depth can't tell a normal parent from a
+    // one-copy loss the caller missed, which turned inherited CNVs into `denovo` (see
+    // docs/journal.md, "Depth refinement only on records of 5 kb or more").
+    def min_size = task.ext.min_size != null ? task.ext.min_size : 5000
+    // The PED's sex column gives each sample's expected CN on non-PAR chrX/chrY (see
+    // bin/refine_genotypes.py); without one, those records are left missing.
+    def ped_arg = ped ? "--ped ${ped}" : ''
 
     """
     #!/bin/bash -eo pipefail
@@ -36,6 +43,8 @@ process DEPTH_GENOTYPE_REFINE {
         --vcf-in ${vcf} \\
         --vcf-out ${prefix}.refined.vcf.gz \\
         --low ${low} --high ${high} \\
+        --min-size ${min_size} \\
+        ${ped_arg} \\
         ${ratio_beds}
 
     cat <<-END_VERSIONS > versions.yml

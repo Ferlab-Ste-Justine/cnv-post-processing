@@ -1,7 +1,8 @@
 //
 // Depth-based genotype refinement: resolves missing (./.) genotypes at cohort-collapsed CNV
-// sites into either an explicit hom-ref call (when depth confirms it) or leaves them missing
-// (schema.txt's "missing -> hom-ref vs missing -> no-data" goal).
+// sites into either an explicit hom-ref call with the expected CN (when depth confirms it) or
+// leaves them missing (schema.txt's "missing -> hom-ref vs missing -> no-data" goal). The
+// family's PED, when it has one, gives each sample's sex for chrX/chrY.
 //
 // Depth is inherently per-sample, so this fans a family-level cohort VCF back out to one
 // mosdepth run per sample (each against the *same* shared site set, using that sample's own
@@ -92,7 +93,7 @@ workflow BAM_VCF_DEPTH_GENOTYPE_REFINEMENT {
                 .groupTuple(),
             by: 0
         )
-        .map { _family, meta, vcf, tbi, beds -> [meta, vcf, tbi, beds] }
+        .map { _family, meta, vcf, tbi, beds -> [meta, vcf, tbi, beds, meta.familyPed ? file(meta.familyPed) : []] }
 
     DEPTH_GENOTYPE_REFINE(ch_refine_input)
 

@@ -32,6 +32,9 @@
                 "EXOMISER_SINGLE": {
                     "exomiser": "14.0.0"
                 },
+                "JOIN_PROBAND_CNV": {
+                    "pysam": "0.24.0"
+                },
                 "MOSDEPTH_RATIO": {
                     "mosdepth": "0.3.11"
                 },
@@ -40,6 +43,9 @@
                 },
                 "NORMALIZE_CNV_JOINT": {
                     "bcftools": "1.23.1"
+                },
+                "RESTORE_COLLAPSED_FORMAT": {
+                    "pysam": "0.24.0"
                 },
                 "SLIVAR_EXPR": {
                     "slivar": "0.3.1"
@@ -103,6 +109,8 @@
                 "pipeline_info/configs/nextflow.config",
                 "pipeline_info/nextflow.log",
                 "slivar",
+                "slivar/fam1.NA12878.cnv.proband.vcf.gz",
+                "slivar/fam1.NA12878.cnv.proband.vcf.gz.tbi",
                 "slivar/fam1.cnv.slivar.vcf.gz",
                 "slivar/fam1.cnv.slivar.vcf.gz.tbi",
                 "slivar/fam1_joint.cnv.slivar.vcf.gz",

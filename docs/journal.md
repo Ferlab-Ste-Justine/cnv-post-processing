@@ -88,11 +88,60 @@ _Decided 2026-10-28, BIOINFO-214, after a colleague's suggestion._
 
 **What:** `NORMALIZE_CNV` copies each per-sample record's `ID` into that sample's `FORMAT/OID` (`bin/add_original_id.awk`, set by `ext.original_id`). The collapses still keep one `ID` per cluster, the leftmost call's, but `OID` names each sample's own call in every family-level VCF. `:` is percent-encoded as `%3A`, since it separates FORMAT values and DRAGEN IDs contain it. Joint-called VCFs don't get `OID`: they skip the collapses, so their `ID` is already the caller's.
 
-**Why:** after `TRUVARI_COLLAPSE_COHORT`, a record's `ID` is one sample's call, often a parent's, and nothing in the record said which call each other sample contributed. The link existed only in truvari's removed VCF (`MatchId` against the kept record's `CollapseId`), which nothing downstream reads. truvari keeps one `ID`, but it copies all FORMAT fields of each call it folds in (into samples that are still ref or missing), so a per-sample `OID` travels with the genotype. On the real NA12878 trio the published slivar VCF is unchanged apart from `OID`; at chr22:17.29M, for example, the record's `ID` is NA12891's call while NA12878's and NA12892's `OID` both name `17288730-17294633`.
+**Why:** after `TRUVARI_COLLAPSE_COHORT`, a record's `ID` is one sample's call, often a parent's, and nothing in the record said which call each other sample contributed. The link existed only in truvari's removed VCF (`MatchId` against the kept record's `CollapseId`), which nothing downstream reads. truvari keeps one `ID`, but it copies all FORMAT fields of each call it folds in (into samples that are still ref or missing), so a per-sample `OID` travels with the genotype. (Except for calls whose GT truvari reads as unset, `./1` and haploid `1`: `RESTORE_COLLAPSED_FORMAT` puts those back, see below.) On the real NA12878 trio the published slivar VCF is unchanged apart from `OID`; at chr22:17.29M, for example, the record's `ID` is NA12891's call while NA12878's and NA12892's `OID` both name `17288730-17294633`.
 
 **Rejected:** making the proband's call each cluster's representative (QUAL rewrite + `--keep maxqual`, briefly on this branch). It changed which coordinates a record shows but still lost the other samples' IDs; `OID` keeps all of them without changing the collapse.
 
 **Not covered:** a sample with two calls in one cluster (e.g. a fragmented CNV) keeps only the first one's `OID`; the second survives only in the removed VCF. The collapse membership itself is unchanged: a call is still compared with the cluster's representative only, and DRAGEN's `SVTYPE=CNV` still lets a DEL and a DUP at the same locus collapse together.
+
+### Each proband gets its own calls back, joined to the slivar VCF through OID
+
+_Decided 2026-10-28, BIOINFO-214._
+
+**What:** `JOIN_PROBAND_CNV` (`bin/join_proband_cnv.py`) runs after slivar, once per affected child in the PED (`pedAffectedChildren`). For each slivar record where the proband's `OID` isn't `.`, it writes the proband's own call from its input VCF (ID, coordinates, QUAL, FILTER, INFO), plus the INFO keys only the slivar record has and the family's FORMAT. `COHORT_ID`/`COHORT_POS`/`COHORT_END` point back to the slivar record. Published as `slivar/<familyId>.<proband>.cnv.proband.vcf.gz`.
+
+**Why:** the slivar record shows the call truvari kept, often a parent's, so the proband's own coordinates and caller metrics were hidden. Downstream (Radiant) wanted to join the proband's input VCF to the slivar VCF on `ID` = decoded `OID`; this does it once, in the pipeline. The join key is the proband's own column, since DRAGEN gives identical calls in different samples the same ID (18 of the trio's chr22 IDs are in more than one sample).
+
+**Rejected:** rewriting the slivar record's ID and coordinates to the proband's call. Each member of a cluster was matched against the kept call only, so a parent's call can fail to match the proband's call it would then be shown with; and VEP, depth refinement and slivar would have to rerun on the new interval. Also rejected: matching on start-end, since the record's `POS`/`END` aren't the proband's, and DRAGEN's `POS` is one base before the start in its ID.
+
+**Accepted:** `CSQ` and the slivar tags describe the truvari cluster, computed on the interval of the call kept to represent it, which may be a parent's. That's intended: the proband's call is in the cluster because it matched that call, and the slivar tags come from each sample's copy number, not from the interval. The one gap is `CSQ`: with `--pctovl 0.3`, the proband's interval can extend well beyond the kept call, and a gene overlapped only by that extra part isn't listed. Radiant has to be told.
+
+### Calls truvari drops from the cohort collapse are copied back from its removed VCF
+
+_Decided 2026-10-29, BIOINFO-214, from the first full-genome NA12878 trio run._
+
+**What:** `RESTORE_COLLAPSED_FORMAT` (`bin/restore_collapsed_format.py`) runs between `TRUVARI_COLLAPSE_COHORT` and its sort. For each kept record, every sample with no GT allele set gets the FORMAT of its call among the absorbed ones (truvari's removed VCF, `MatchId` = the kept record's `CollapseId`), the highest `TruScore` first, and `NumConsolidated` counts it.
+
+**Why:** truvari's `collapse_into_entry` only copies FORMAT from an absorbed call whose GT `truvari.get_gt()` reads as set. DRAGEN writes `./1` for a gain of unknown zygosity (CN 3+), which it reads as `GT.NON`, and `1` for a haploid call, which it reads as `GT.UNK`. Such a call absorbed into another sample's was dropped with its CN and OID: the sample looked like it had no call, slivar tagged it `unknown_cn`, and the proband VCF left the call out. On the full-genome NA12878 trio: 36 calls (NA12878 9, NA12891 15 with 2 haploid chrX, NA12892 12), exactly the 726 - 717 gap between NA12878's input calls and its proband VCF; the fix restores all 36, record count unchanged.
+
+**Rejected:** rewriting GT before the collapse (`./1` -> `0/1`): it changes the GT Exomiser reads, and there's no honest diploid rewrite of a haploid `1`. Swapping GT out for truvari and back: fragile.
+
+### Depth refinement writes the expected CN, sex-aware on chrX/chrY
+
+_Decided 2026-10-29, BIOINFO-214, from the first full-genome NA12878 trio run._
+
+**What:** when `bin/refine_genotypes.py` resolves a missing genotype to hom-ref, it also sets `FORMAT/CN` to the sample's expected CN, computed like `get_expected_cn()` in `assets/cnv-slivar-functions.js` (same GRCh38 PARs; sex from the family's PED, now an input of `DEPTH_GENOTYPE_REFINE`). The depth ratio is divided by (expected CN / 2) before the 0.8-1.2 band check, and the GT has as many alleles as the expected CN. No expected CN (chrM, PAR-straddling, unknown sex on non-PAR X/Y, a female's Y): left missing.
+
+**Why:** slivar reads CN only. A `0/0:.` sample was still unknown to it, so on the full-genome trio 656 of 1212 records were `unknown_cn`, 207 `possible_inherited_*`, and `denovo` (both parents known and normal) never fired, against 0 `unknown_cn` and 43 `denovo` on the same trio's DRAGEN joint VCF, which gives every sample a CN. The band was also wrong for a male's non-PAR chrX: his ratio there is half a female's (median 0.34 for NA12891 against 0.55 and 0.59), so only 5% of his chrX regions fell in the band.
+
+**Rejected:** forcing every `.` CN to 2. A `./.` that depth didn't confirm as normal may be a CNV the caller missed in a parent; writing 2 there would turn the child's inherited CNV into a `denovo`. Also rejected: having slivar read `0/0` with no CN as normal, which would make the rules depend on GT.
+
+**Not covered:** whether a child with no call of its own should get any MoI tag at all (it gets `unknown_cn` when its CN is missing; see the open question "A child with no call of its own: `unknown_cn`, or no MoI tag?"); the 0.8-1.2 band itself is still an unvalidated default.
+
+### Depth refinement only on records of 5 kb or more
+
+_Decided 2026-10-29, BIOINFO-214, from the first full-genome NA12878 trio run._
+
+**What:** `DEPTH_GENOTYPE_REFINE` leaves records shorter than 5 kb (END - POS) missing (`ext.min_size`, default 5000; `--min-size` in `bin/refine_genotypes.py`). Samples with no call of their own there stay `./.` with no CN, so slivar gives the child `possible_*` or `unknown_cn` instead of `denovo`.
+
+**Why:** once refinement wrote CN, 28 records got `denovo`, both parents read as CN 2 by depth (ratios 0.81-1.13). Against the trio's DRAGEN joint VCF, only 10 were `denovo` there too; 8 were inherited (a parent CN 1), 8 had all three samples CN 1, 2 had no match. 21 of the 28 were under 5 kb, and 13 of the 16 that disagree with the joint VCF. Two measurements on the same run say small records are where both the caller and depth fail:
+
+- Depth ratio by the sample's own call (autosomes): a real one-copy loss reads 0.54-0.59 at the median, but 5-7% of them fall in the 0.8-1.2 band. Samples with no call read a median 0.76 under 5 kb against 1.04 at 5-50 kb, so many small "no call" regions are probably losses the per-sample caller missed.
+- truvari bench of each sample's calls in the final VCF against the joint VCF (`--pctseq 0 --pctovl 0.5 --pctsize 0.5 --refdist 2000`): precision 0.97, recall 0.68-0.75 over all sizes; 84% of the missed joint calls are under 5 kb, 85% of them losses. At 5 kb and more: precision 0.89-0.90, recall 0.87, F1 0.88. The final VCF scores within 4 calls of the raw per-sample DRAGEN VCFs, so this is the per-sample caller against the joint caller, not something the pipeline adds or loses.
+
+**Rejected:** tightening the band (e.g. 0.9-1.1): most of the misread parents were at 0.85-0.98, and it would leave many truly normal parents missing. Marking depth-inferred CN (e.g. `FORMAT/CNSRC`) and downgrading `denovo` built on it to `denovo_suspect`: still possible on top of this, but it changes the slivar rules and needs a geneticist's review.
+
+**Note:** DRAGEN's per-sample caller sets `cnvLength` on every call under 10 kb, while its joint caller lets small calls PASS, so a PASS-only filter downstream (Radiant, Exomiser) never sees our sub-10 kb calls. At 10 kb and more, PASS only, our calls score precision 0.92-0.95, recall 0.76-0.79 against the joint VCF.
 
 ## Open questions
 
@@ -117,6 +166,36 @@ _Noted 2026-10-05, BIOINFO-214. To discuss with the team._
 - Parent of origin on chrY never resolves for anyone, and a son's chrY MoI call would need a rule for his mother: DRAGEN reports no CN for females on chrY, so she would always count as unknown. If we want "any value", it should probably apply to an absent parent only, not to a parent with no CN on a chromosome they don't carry.
 
 **Where to change it:** the first `if (hemi)` block in `get_parent_transmission()`; `transmissions()`, `get_transmission_origin()` and `does_parent_pass_nothing()` follow from it.
+
+### A child with no call of its own: `unknown_cn`, or no MoI tag?
+
+_Noted 2026-10-29, BIOINFO-214, from the full-genome NA12878 trio run. To decide with the geneticists and Radiant._
+
+**Context:** `cnv_moi()` checks for a missing CN before it checks whether the child carries anything:
+
+```js
+if (is_cn_missing(s, variant)) return "unknown_cn"; // a CN we need is missing (P15)
+if (get_cn_dev(s, variant) === 0) return null; // not a carrier
+```
+
+So a child with no CN gets `unknown_cn`, whether or not it has a call. A family record exists because some sample has a CNV there; when that's only a parent, the child has no call of its own (`./.`) and gets a CN only if depth refinement confirms it's normal, which it never does under 5 kb (see "Depth refinement only on records of 5 kb or more").
+
+**On the full-genome trio** (after the 5 kb floor), 538 of 1212 records are `unknown_cn`, all for NA12878:
+
+| NA12878 at the record             | Parents' CN                  | Records                                  |
+| --------------------------------- | ---------------------------- | ---------------------------------------- |
+| no call of its own (`./.`, no CN) | at least one parent has a CN | 383 (321 under 5 kb, 63 at 5 kb or more) |
+| its own call                      | both parents missing         | 155 (141 under 5 kb, 14 at 5 kb or more) |
+
+The 383 are mostly a parent's CNV the child didn't inherit. `unknown_cn` is true of them (the child's CN is unknown) but it's a third of the family VCF's records, tagged "unknown" where the proband has nothing. The proband VCF (`JOIN_PROBAND_CNV`) only keeps records where the proband has a call, so there it's already the 155 meaningful ones only.
+
+**Options:**
+
+1. Keep as is: honest, and the proband VCF already hides the 383.
+2. No MoI tag for a child with no CN (`return null` instead of `unknown_cn` when the child's own CN is missing); `unknown_cn` then only means "the child carries a CNV but the parents' CN we need is missing" (the 155). A child carrying a CNV the caller missed loses nothing, since there's no call to classify. Changes the meaning of a tag: one line in `cnv_moi()`, scenario P15 in `assets/cnv-slivar-moi-harness.js`, and the golden file re-accepted.
+3. A separate tag (e.g. `child_no_call`) for "a parent's CNV, the child's status unknown"; the parents' own genotypes already say as much.
+
+Leaning towards 2, pending that discussion.
 
 ## TODO
 

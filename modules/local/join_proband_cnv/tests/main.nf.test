@@ -1,0 +1,101 @@
+nextflow_process {
+
+    name "Test Process JOIN_PROBAND_CNV"
+    script "../main.nf"
+    process "JOIN_PROBAND_CNV"
+
+    tag "modules"
+    tag "modules_"
+    tag "join_proband_cnv"
+
+    // Toy fixtures in ./data/, plain-text VCFs (bin/join_proband_cnv.py reads plain or bgzipped):
+    // - fam1.slivar.vcf: a trio (DAD, KID, MOM) after slivar, with FORMAT/OID.
+    //   1. chr1:10000, kept call MOM's (10001-20000); KID's own call is 10501-21900.
+    //   2. chr1:50000, no KID call (OID "."): left out.
+    //   3. chr1:80000, KID's own call, with an ID holding "%" and ":" (OID toy%25call%3A80001).
+    // - KID.cnv.vcf: KID's caller VCF, with a ref block (ALT "."), a FILTER and INFO keys
+    //   (cnvBinSupportRatio, REFLEN, GCP) the slivar VCF doesn't define.
+    // - MOM.cnv.vcf: KID.cnv.vcf without the 10501-21900 call, as the wrong sample's VCF.
+    // fam1.slivar.vcf.tbi is an empty placeholder: the script never reads it.
+
+    test("toy trio: each KID call takes its own coordinates and INFO, plus slivar's tags and FORMAT") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.cnv.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf_tbi.size() == 1
+                assert vcf_tbi.get(0)[0] == [ id: "fam1", familyId: "fam1", proband: "KID" ]
+                assert file(vcf_tbi.get(0)[1]).name == "fam1.KID.cnv.proband.vcf.gz"
+                assert file(vcf_tbi.get(0)[2]).name == "fam1.KID.cnv.proband.vcf.gz.tbi"
+            }
+
+            def lines = path(process.out.vcf_tbi.get(0)[1]).linesGzip
+            def header = lines.findAll { it.startsWith("##") }
+            assert header.any { it.startsWith("##FILTER=<ID=cnvBinSupportRatio,") }
+            assert header.any { it.startsWith("##INFO=<ID=GCP,") }
+            ["COHORT_ID", "COHORT_POS", "COHORT_END"].each { key ->
+                assert header.any { it.startsWith("##INFO=<ID=${key},") }
+            }
+            assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["DAD", "KID", "MOM"]
+
+            def records = lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            assert records.size() == 2
+            def info = { cols -> cols[7].split(";").collectEntries { kv -> def p = kv.split("=", 2); [p[0], p.size() > 1 ? p[1] : true] } }
+
+            // 1. KID's own call, not MOM's kept one; the family's tags and FORMAT from slivar
+            def first = records[0]
+            assert first[0..6] == ["chr1", "10500", "DRAGEN:GAIN:chr1:10501-21900", "N", "<DUP>", "77", "cnvBinSupportRatio"]
+            def first_info = info(first)
+            assert first_info.END == "21900"
+            assert first_info.SVLEN == "11400"
+            assert first_info.GCP == "0.41"
+            assert first_info.NumCollapsed == "2"
+            assert first_info.inherited_maternal == "KID"
+            assert first_info.COHORT_ID == "DRAGEN%3AGAIN%3Achr1%3A10001-20000"
+            assert first_info.COHORT_POS == "10000"
+            assert first_info.COHORT_END == "20000"
+            assert first.drop(8) == ["GT:CN:OID", "0/0:2:.", "0/1:3:DRAGEN%3AGAIN%3Achr1%3A10501-21900", "0/1:3:DRAGEN%3AGAIN%3Achr1%3A10001-20000"]
+
+            // 3. OID decoded in one pass: toy%25call%3A80001 -> toy%call:80001
+            def second = records[1]
+            assert second[0..6] == ["chr1", "80000", "toy%call:80001", "N", "<DEL>", "12", "PASS"]
+            assert info(second).COHORT_ID == "toy%25call%3A80001"
+
+            assert path(process.out.versions[0]).text.contains("pysam:")
+        }
+    }
+
+    test("wrong proband VCF: an OID that isn't in it stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/MOM.cnv.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.stdout.any { it.contains("isn't in MOM.cnv.vcf") } || process.errorReport.contains("isn't in MOM.cnv.vcf")
+        }
+    }
+}

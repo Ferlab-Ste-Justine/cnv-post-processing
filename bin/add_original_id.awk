@@ -14,7 +14,7 @@ BEGIN { FS = OFS = "\t" }
         print "add_original_id.awk: expected exactly one sample column, got " (NF - 9) > "/dev/stderr"
         exit 1
     }
-    print "##FORMAT=<ID=OID,Number=1,Type=String,Description=\"ID of this sample's own caller record, kept through the truvari collapses (':' percent-encoded as %3A)\">"
+    print "##FORMAT=<ID=OID,Number=1,Type=String,Description=\"ID of the original caller record\">"
     print
     next
 }
