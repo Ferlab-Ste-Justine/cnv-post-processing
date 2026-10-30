@@ -35,8 +35,10 @@ route applicable to it, decided per-row/per-family purely from which optional co
 
 **Family route** (a family with `sampleSize > 1`, or a solo row that documents `familyPed`/`familyPheno`):
 
-1. `NORMALIZE_CNV` (bcftools norm/view; also copies each call's ID into `FORMAT/OID` via
-   `bin/add_original_id.awk`) → `TRUVARI_COLLAPSE_PERSAMPLE`, per sample
+1. `NORMALIZE_CNV` (bcftools norm/view; sets `INFO/SVTYPE` from the ALT, `DEL`/`DUP` instead of
+   DRAGEN's `CNV`, via `bin/svtype_from_alt.awk`, so truvari doesn't collapse a loss with a gain;
+   also copies each call's ID into `FORMAT/OID` via `bin/add_original_id.awk`) →
+   `TRUVARI_COLLAPSE_PERSAMPLE`, per sample
 2. `BCFTOOLS_MERGE` across a family's per-sample VCFs → `TRUVARI_COLLAPSE_COHORT` →
    `RESTORE_COLLAPSED_FORMAT` (`bin/restore_collapsed_format.py`: copies back the FORMAT of
    absorbed calls truvari reads as unset, DRAGEN's `./1` and haploid `1`, from its removed VCF). Families
@@ -96,6 +98,7 @@ modules/nf-core/                           # ensemblvep/{vep,download}, tabix/ta
 conf/                                      # base.config, modules.config, test.config, test_full.config
 assets/                                    # samplesheet.csv, schema_input.json, exomiser/ (default analysis YAMLs), cnv-slivar-functions.js (slivar rules) + cnv-slivar-moi-harness.js (its test bench; golden file moi_scenarios.expected.tsv)
 bin/add_original_id.awk                    # Copies each call's ID into FORMAT/OID in NORMALIZE_CNV
+bin/svtype_from_alt.awk                    # Sets INFO/SVTYPE from a <DEL>/<DUP> ALT in NORMALIZE_CNV
 bin/join_proband_cnv.py                    # Joins a proband's own calls to the slivar VCF through FORMAT/OID (JOIN_PROBAND_CNV)
 bin/restore_collapsed_format.py            # Restores the FORMAT truvari's cohort collapse drops for ./1 and haploid calls (RESTORE_COLLAPSED_FORMAT)
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE

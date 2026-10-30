@@ -14,6 +14,8 @@
          │   (REF blocks)      │              │   (REF blocks)          │
          │ - sort              │              │ - sort                  │
          │ - split multiallelic│              │ - split multiallelic    │
+         │ - SVTYPE from ALT   │              │ - SVTYPE from ALT       │
+         │   (DEL / DUP)       │              │   (DEL / DUP)           │
          └──────────┬──────────┘              │ - strip INFO/SVLEN      │
                     │                         │   (DRAGEN joint-only    │
                     ▼                         │   Number=. bug, breaks  │

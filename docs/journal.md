@@ -169,6 +169,18 @@ _Noted 2026-10-05 as an open question; decided 2026-10-30, BIOINFO-214, from rev
 
 **Caveats:** this, like the whole expected-CN model, trusts the PED's sex column: a wrong sex makes every non-PAR chrX/chrY call of that family wrong (see the TODO "Check the PED sex against the data"). It also assumes 46,XX or 46,XY children; XXY, XYY or X0 break the expected-CN model everywhere, not just this rule.
 
+### SVTYPE is set from the ALT, so truvari keeps losses and gains apart
+
+_Decided 2026-10-30, BIOINFO-214._
+
+**What:** `NORMALIZE_CNV` (both paths) sets `INFO/SVTYPE` to `DEL` or `DUP` from the split `<DEL>` / `<DUP>` ALT (`bin/svtype_from_alt.awk`), replacing DRAGEN's `SVTYPE=CNV`. Other ALTs are left as they are.
+
+**Why:** truvari 5.4.0 takes a record's type from `INFO/SVTYPE` before the ALT (`VariantRecord.var_type()`), and `CNV` isn't one of its types, so every DRAGEN call was `UNK` and `same_type()` always passed: in effect `--typeignore`. DRAGEN's `GAIN` / `LOSS` are only in the ID, which truvari never reads. On the full-genome trio, 4 of the 168 calls the cohort collapse absorbed had joined a call of the other type; the absorbed sample's FORMAT was kept, so its GT then pointed at the wrong ALT (chr14:73530575: the father's CN 3 gain as `./1` on NA12878's `<DEL>`). slivar was right (it reads CN), but anything reading GT (Exomiser's segregation, Radiant) saw him as a deletion carrier, and VEP described the record as the loss only. Tested both ways in `modules/local/truvari_collapse/tests` (toy_loss_gain).
+
+**Rejected:** putting `CNV` back after the collapse, for VEP and Exomiser: they gave the same output on the trio's joint VCF with `DEL` / `DUP` (same VEP consequences, Exomiser read every record), and `DEL` / `DUP` is the usual SVTYPE for CNVs.
+
+**Accepted:** a sample whose call of the other type now has its own record is `./.` on the first one, and depth refinement doesn't fill it in (a gain's ratio is outside the hom-ref band). At chr14:73530575 NA12878 goes from `inherited_maternal` to `possible_inherited_maternal`; it's the only tag change on the trio. The proband VCF keeps the proband's own INFO from its input VCF, so its `SVTYPE` is still `CNV`.
+
 ## Open questions
 
 ### A child with no call of its own: `unknown_cn`, or no MoI tag?

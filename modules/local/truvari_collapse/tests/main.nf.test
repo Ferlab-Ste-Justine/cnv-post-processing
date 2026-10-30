@@ -240,4 +240,59 @@ nextflow_process {
             assert removedIds == ["toy_dup_b"] as Set
         }
     }
+
+    // A loss in one sample and a gain in another at the same interval, as bcftools merge leaves
+    // them. truvari reads the variant type from INFO/SVTYPE before the ALT: with DRAGEN's
+    // SVTYPE=CNV on both, they're one unknown type and collapse, the gain sample's GT then pointing
+    // at the kept <DEL>. NORMALIZE_CNV sets SVTYPE from the ALT (bin/svtype_from_alt.awk) so they
+    // stay apart.
+    test("toy_loss_gain: a loss and a gain collapse together with DRAGEN's SVTYPE=CNV (cohort thresholds)") {
+
+        config "./nextflow_cohort.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_loss_gain_cnv"],
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_loss_gain_cnv.vcf.gz"),
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_loss_gain_cnv.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def collapsedIds = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[2] }
+            def removedIds = path(process.out.removed.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[2] }
+            assert collapsedIds == ["toy_loss"]
+            assert removedIds == ["toy_gain"]
+        }
+    }
+
+    test("toy_loss_gain: with SVTYPE=DEL / DUP the loss and the gain stay apart (cohort thresholds)") {
+
+        config "./nextflow_cohort.config"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_loss_gain_typed"],
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_loss_gain_typed.vcf.gz"),
+                    file("${projectDir}/modules/local/truvari_collapse/tests/data/toy_loss_gain_typed.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def collapsedIds = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[2] }
+            def removedIds = path(process.out.removed.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert collapsedIds.sort() == ["toy_gain", "toy_loss"]
+            assert removedIds.isEmpty()
+        }
+    }
 }

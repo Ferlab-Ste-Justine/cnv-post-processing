@@ -36,8 +36,8 @@ process NORMALIZE_CNV {
     // Per-sample path only (task.ext.original_id, see conf/modules.config): copy each record's ID
     // into FORMAT/OID, so the cohort VCF still names every sample's own call after truvari keeps
     // one ID per cluster. bcftools can't copy ID into FORMAT itself ("Cannot rename"), hence the
-    // awk step, which also needs the plain-text VCF.
-    def original_id = task.ext.original_id ? '| bcftools view --no-version - | add_original_id.awk' : ''
+    // awk step, on the plain-text VCF.
+    def original_id = task.ext.original_id ? '| add_original_id.awk' : ''
 
     // Only DRAGEN's CNV VCF conventions have been validated against this normalization step so
     // far (see /cephfs/jtrembla/projects/bioinfo-214-CNV-post-processing/preprocessing.sh). Fail
@@ -59,6 +59,10 @@ process NORMALIZE_CNV {
     #
     # DRAGEN CNV VCFs can also carry multiallelic <DEL>,<DUP> records at a single site, which
     # breaks downstream truvari comparisons unless split first.
+    #
+    # Then SVTYPE is set from the split ALT (svtype_from_alt.awk): DRAGEN writes SVTYPE=CNV on
+    # losses and gains alike, which truvari reads as one unknown type, so a loss could collapse
+    # with a gain.
     # --no-version on every view/norm/annotate call below: bcftools appends a
     # "##bcftools_<cmd>Command=...; Date=<now>" header line by default, which made every
     # normalized VCF differ byte-for-byte between otherwise-identical runs (confirmed directly --
@@ -68,6 +72,8 @@ process NORMALIZE_CNV {
         | bcftools sort -O u \\
         | bcftools norm --no-version -m -any -O u ${args} - \\
         ${strip_svlen} \\
+        | bcftools view --no-version - \\
+        | svtype_from_alt.awk \\
         ${original_id} \\
         | bcftools view --no-version -O z -o ${prefix}.normalized.vcf.gz -
 

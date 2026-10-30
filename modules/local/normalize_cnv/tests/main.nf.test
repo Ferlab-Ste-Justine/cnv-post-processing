@@ -61,6 +61,13 @@ nextflow_process {
             assert alts.count { it == "<DEL>" } == 12
             assert alts.count { it == "<DUP>" } == 10
 
+            // SVTYPE set from the ALT (svtype_from_alt.awk): DRAGEN's SVTYPE=CNV becomes DEL / DUP
+            def svtypes = lines.collect { line ->
+                def cols = line.split("\t")
+                [cols[4], cols[7].tokenize(';').findAll { kv -> kv.startsWith("SVTYPE=") }]
+            }
+            assert svtypes.every { alt, sv -> sv == ["SVTYPE=" + alt[1..-2]] }
+
             // ext.original_id (nextflow_original_id.config): every record carries its own ID in
             // FORMAT/OID, with ":" percent-encoded, e.g. DRAGEN:LOSS:chr22:... ->
             // DRAGEN%3ALOSS%3Achr22%3A...
@@ -154,6 +161,13 @@ nextflow_process {
             assert alts.every { !it.contains(",") }
             assert alts.count { it == "<DEL>" } == 1065
             assert alts.count { it == "<DUP>" } == 194
+
+            // SVTYPE set from the ALT (svtype_from_alt.awk): DRAGEN's SVTYPE=CNV becomes DEL / DUP
+            def svtypes = lines.collect { line ->
+                def cols = line.split("\t")
+                [cols[4], cols[7].tokenize(';').findAll { kv -> kv.startsWith("SVTYPE=") }]
+            }
+            assert svtypes.every { alt, sv -> sv == ["SVTYPE=" + alt[1..-2]] }
 
             // task.ext.strip_svlen drops INFO/SVLEN entirely -- confirmed against real output: no
             // record's INFO field carries an SVLEN key at all once this is applied.
