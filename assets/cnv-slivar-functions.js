@@ -279,9 +279,9 @@
 // prettier-ignore
 var TRIO_TABLE = [
   // kid     outcome                 child call                     parent of origin      harness rows
-  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X6 X7 X12 Y3 Y4, Q4 Q5
+  ["±1",     "new",                  "denovo",                      "denovo"],            // T1 T2 X3 X6 X7 X12 X15 Y3 Y4, Q4 Q5
   ["±2+",    "new",                  "denovo_suspect",              "denovo"],            // T3 T26 (P5: two hits at one locus is implausible)
-  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T18 T23 T24 X2 X9 X13, Q9 kid
+  ["any",    "maternal",             "inherited_maternal",          "maternal"],          // T4 T7 T18 T23 T24 X2 X9 X13 X14, Q9 kid
   ["any",    "paternal",             "inherited_paternal",          "paternal"],          // T5 X8 Y2 Y5, Q3 Q10, Q9 sib
   ["even",   "both",                 "recessive",                   "both"],              // T6 T9 T27 X10, Q1 Q2 (T9 = CN4 from two CN3, see P7)
   ["any",    "both",                 "inheritance_unresolved",      "both"],
@@ -293,7 +293,7 @@ var TRIO_TABLE = [
   ["even",   "duo_paternal_two",     "recessive_lowconf",           "paternal"],
   ["any",    "duo_maybe_maternal",   "possible_inherited_maternal", "possible_maternal"], // D1
   ["any",    "duo_maybe_paternal",   "possible_inherited_paternal", "possible_paternal"], // D4
-  ["any",    "any",                  "no_pattern",                  null]                 // -> inheritance_unresolved (T16 T17) or mendelian_inconsistent (T14 T19 T25)
+  ["any",    "any",                  "no_pattern",                  null]                 // -> inheritance_unresolved (T16 T17 D9) or mendelian_inconsistent (T14 T19 T25 X16 D8)
 ];
 
 // On non-PAR chrX, a de novo call is x_linked_denovo, for a son or a daughter (the CN and
@@ -306,7 +306,7 @@ var TRIO_TABLE = [
 // the duo calls keep their names too. See docs/journal.md.
 // prettier-ignore
 var X_LINKED_CALLS = {
-  male:   { denovo: "x_linked_denovo" },                                 // X3 X12: his only X changed
+  male:   { denovo: "x_linked_denovo" },                                 // X3 X12 X15: his only X changed
   female: { denovo: "x_linked_denovo",                                   // X7
             recessive: "x_linked_recessive" }                            // X10: both of her X copies hit
 };
