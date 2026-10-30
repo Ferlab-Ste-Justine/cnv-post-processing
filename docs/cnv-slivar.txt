@@ -51,7 +51,7 @@ has_moi_call(fam, variant, tag)      true as soon as one member's cnv_moi() is <
 The call looks at the child and its parents only. Who is affected elsewhere in the family (is
 the transmitting parent affected, do sibs carry the CNV) is left to whoever reads the tags.
 A parent who passes nothing (a father's X to a son, any mother's Y) is read as "normal", and
-their CN isn't needed. Here remember that --sample-expr will call cn_po_origin() for each family member(sample) for each compared tag.
+their CN isn't needed, even when absent from the PED or without CN (harness X14-X16). Here remember that --sample-expr will call cn_po_origin() for each family member(sample) for each compared tag.
 For a trio, that is 3 family members x 8 possible tags = 24. In practice
 
 cn_po_origin(sample, variant)       maternal / paternal / both / ambiguous / denovo /

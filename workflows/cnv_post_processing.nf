@@ -9,6 +9,7 @@ include { validatePedAgainstVcf  } from '../subworkflows/local/utils_nfcore_cnv_
 include { vcfSampleNames         } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { pedAffectedChildren    } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { phenopacketProbandId   } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { vcfFormatIds           } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { EXOMISER } from '../modules/local/exomiser/main.nf'
 include { EXOMISER as EXOMISER_SINGLE } from '../modules/local/exomiser/main.nf'
 include { NORMALIZE_CNV } from '../modules/local/normalize_cnv/main.nf'
@@ -346,7 +347,8 @@ workflow CNV_POST_PROCESSING {
     // e.g. the possible_* tags for duos. No family-shape pre-check needed here, matching the
     // sibling SNV pipeline's convention -- only familyPed presence is required. The PED is checked
     // against this family VCF's sample names, though (validatePedAgainstVcf): slivar silently
-    // mishandles a PED that doesn't match. The check stays here rather than in a subworkflow, so
+    // mishandles a PED that doesn't match. So is FORMAT/CN, which the rules read: without it,
+    // slivar tags nothing (vcfFormatIds). The checks stay here rather than in a subworkflow, so
     // module and subworkflow tests can still feed slivar deliberately inconsistent PEDs.
     //
     def ch_slivar_input = VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi
@@ -358,6 +360,9 @@ workflow CNV_POST_PROCESSING {
             true
         }
         .map { meta, vcf, tbi ->
+            if (!('CN' in vcfFormatIds(vcf))) {
+                error("Family '${meta.id}': the family VCF declares no FORMAT/CN (${vcf.name}). The slivar rules read copy number from FORMAT/CN only; without it slivar would write every record with no inheritance or parental-origin tag. Check the caller's VCFs.")
+            }
             def ped = file(meta.familyPed)
             validatePedAgainstVcf(meta.id, vcf, ped, params.skip_ped_validation)
             [meta, vcf, tbi, ped]

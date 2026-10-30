@@ -54,9 +54,10 @@ route applicable to it, decided per-row/per-family purely from which optional co
 5. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`. Its
    output is the family's final VCF, so it gets an explicit indexing step of its own
    (`BCFTOOLS_INDEX_SLIVAR`) rather than relying on a downstream stage to need/produce one.
-   Before it, `validatePedAgainstVcf` (in the workflow's slivar-input `.map`, not in a
-   subworkflow, so tests can still feed slivar inconsistent PEDs) checks the PED against the family
-   VCF's `#CHROM` names and stops the run on a mismatch, or only warns under `--skip_ped_validation`.
+   Before it, in the workflow's slivar-input `.map` (not in a subworkflow, so tests can still feed
+   slivar inconsistent PEDs), the run stops if the family VCF declares no `FORMAT/CN`
+   (`vcfFormatIds()`), and `validatePedAgainstVcf` checks the PED against the family VCF's
+   `#CHROM` names and stops the run on a mismatch, or only warns under `--skip_ped_validation`.
 6. `JOIN_PROBAND_CNV` (`bin/join_proband_cnv.py`) — one VCF per proband (`pedAffectedChildren`:
    the PED's affected children), joining the proband's own input-VCF calls to the slivar records
    they're in through the decoded `FORMAT/OID`. Per-sample families only: `DRAGEN_JOINT` ones have
@@ -322,12 +323,14 @@ A few patterns and gotchas worth knowing before editing:
     and 2 for a female, on non-PAR chrY 1 for a male. chrM, PAR-straddling records, unknown sex on
     non-PAR chrX/chrY and a female on non-PAR chrY aren't modelled (no tag). A parent who passes
     nothing (a father's X to a son, any mother's Y) is read as normal and their CN isn't needed
-    (`does_parent_pass_nothing()`). The PARs are hard-coded GRCh38, hence the startup guard on
+    (`does_parent_pass_nothing()`), even when absent from the PED or without CN: biology, not
+    missing data (decided, harness X14-X16). The PARs are hard-coded GRCh38, hence the startup guard on
     `vep_genome` in `validateInputSamplesheet`; the PED sex column must be right.
   - The file is ES5, for slivar's JS engine (duktape). Reading an attribute slivar didn't set
     (`s.mom` on a founder, `INFO.END` on a record without one) throws there, and slivar then
     writes the record with no tag, silently: test parents with `has_parent()` (`in`) and read the
-    CNV end from `variant.stop`.
+    CNV end from `variant.stop`. `has_cn()` tests `"CN" in s` the same way, and the workflow
+    stops before `SLIVAR_EXPR` when the family VCF declares no `FORMAT/CN` (`vcfFormatIds()`).
   - `TRIO_TABLE` is hand-aligned under `// prettier-ignore`; keep it aligned.
     The worked-example notes inside `cnv_moi()`, `trio_call()` and `get_trio_row()` are kept on purpose.
   - Tests: `node assets/cnv-slivar-moi-harness.js` runs every named scenario against the golden file

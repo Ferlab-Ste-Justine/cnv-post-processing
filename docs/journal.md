@@ -157,29 +157,19 @@ _Decided 2026-10-30, BIOINFO-214._
 
 **Accepted:** this differs from the SNV pipeline, which runs Exomiser on the family VCF, in parallel with slivar. Exomiser's scores stay in its own reports and aren't written into the proband VCF; doing that would be a further step joining on the proband's call IDs.
 
+### A parent who passes nothing on chrX/chrY passes nothing even when absent or without CN
+
+_Noted 2026-10-05 as an open question; decided 2026-10-30, BIOINFO-214, from review v2 (R2, 2026-10-23)._
+
+**What:** in `get_parent_transmission()` (`assets/cnv-slivar-functions.js`), on non-PAR chrX a father passes nothing to a son and, on non-PAR chrY, a mother passes nothing to anyone, whether or not that parent is in the PED or has a CN. `does_parent_pass_nothing()`, `get_transmission_outcome()` and `is_mendelian_possible()` follow from it: such a parent reads as known and normal, and their CN is never needed. Harness scenarios X14-X16 lock it in: a mother-son duo on chrX is judged on the mother alone (son CN 0, mother CN 1, father CN missing: `inherited_maternal` / `po_mother`; son CN 0, mother CN 2, no father: `x_linked_denovo` / `po_denovo`; son CN 2, mother CN 0, no father: `mendelian_inconsistent`).
+
+**Why:** it's biology, not missing data. A son's X can only be his mother's and his Y his father's, so a father's X and a mother's Y never reach him, whatever the PED says. A mother-son duo is a complete trio for non-PAR chrX.
+
+**Rejected:** treating such a parent as "could have passed anything" when absent or without CN. A mother-son duo on chrX would get `possible_*` calls and no parent of origin, as if the X could have come from the father, and since DRAGEN gives mothers no CN on chrY, every son's chrY call would become unresolved.
+
+**Caveats:** this, like the whole expected-CN model, trusts the PED's sex column: a wrong sex makes every non-PAR chrX/chrY call of that family wrong (see the TODO "Check the PED sex against the data"). It also assumes 46,XX or 46,XY children; XXY, XYY or X0 break the expected-CN model everywhere, not just this rule.
+
 ## Open questions
-
-### A parent who passes nothing on chrX/chrY: fixed at zero, or "any value" when absent?
-
-_Noted 2026-10-05, BIOINFO-214. To discuss with the team._
-
-**Context:** in `assets/cnv-slivar-functions.js`, `get_parent_transmission()` says what a parent can pass to a child on a given record. Three things build on it: `get_transmission_origin()`, behind the `TRIO_TABLE` origin column and the parent-of-origin tags (`po_mother`, `po_father`, ...), `transmissions()`, behind the `mendelian_inconsistent` check, and `does_parent_pass_nothing()`, behind how `TRIO_TABLE` reads that parent and whether their CN is needed. On non-PAR chrX/chrY some parents pass nothing at all, biologically: a father passes no X to a son, and a mother passes no Y.
-
-**Current behaviour (since the transmission-engine change):** such a parent counts as passing nothing (`[0]`) even when they are absent from the PED or have no CN. Before, an absent or CN-less parent always counted as "could have passed any value" (`0..kid CN`), whoever they were.
-
-**What it changes:**
-
-- Mendelian check: a son on non-PAR X whose father isn't in the PED is now judged on his mother's copies alone. Example: son CN 2, mother CN 0, no father → was `inheritance_unresolved`, now `mendelian_inconsistent`. Since MoI tags became per child (2026-10-09), the same goes for a father in the PED without a CN: he used to give `unknown_cn`, and his CN is no longer needed.
-- MoI calls: `TRIO_TABLE` reads such a parent as "normal", and their CN isn't needed. So a mother–son duo on chrX, or a father–son duo on chrY, can get `de_novo` rather than `possible_de_novo`, and a son on chrY gets a call although DRAGEN gives his mother no CN there.
-- Parent of origin: a son's X origin resolves from his mother alone (a mother–son duo gets `po_mother`), and a son's Y origin from his father alone.
-
-**If we switch to "any value" instead:**
-
-- The example above goes back to `inheritance_unresolved`.
-- A mother–son duo on chrX no longer gets a parent of origin.
-- Parent of origin on chrY never resolves for anyone, and a son's chrY MoI call would need a rule for his mother: DRAGEN reports no CN for females on chrY, so she would always count as unknown. If we want "any value", it should probably apply to an absent parent only, not to a parent with no CN on a chromosome they don't carry.
-
-**Where to change it:** the first `if (hemi)` block in `get_parent_transmission()`; `transmissions()`, `get_transmission_origin()` and `does_parent_pass_nothing()` follow from it.
 
 ### A child with no call of its own: `unknown_cn`, or no MoI tag?
 
@@ -212,6 +202,12 @@ The 383 are mostly a parent's CNV the child didn't inherit. `unknown_cn` is true
 Leaning towards 2, pending that discussion.
 
 ## TODO
+
+### Check the PED sex against the data
+
+_Noted 2026-10-30, BIOINFO-214, from review v2 (R2)._
+
+The slivar rules and depth refinement take each sample's sex from the PED, and nothing checks it. A wrong sex silently makes every non-PAR chrX/chrY call of the family wrong. Compare the PED sex with the data before slivar (DRAGEN's own sex/ploidy estimate, or chrX depth or heterozygosity), and stop on a mismatch, like `validatePedAgainstVcf`.
 
 ### Have a geneticist review the slivar MoI scenarios
 

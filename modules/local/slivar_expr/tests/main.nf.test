@@ -420,6 +420,8 @@ nextflow_process {
     // the raw file gives different results.
     test("fam1_joint: real DRAGEN joint trio VCF, chrX/chrY classification") {
 
+        config "./nextflow_joint.config"
+
         setup {
             run("NORMALIZE_CNV") {
                 script "../../normalize_cnv/main.nf"

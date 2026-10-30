@@ -48,6 +48,9 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 | **X11** chrX daughter CN=1, no mother, dad CN=0 (her father's deleted X) | chrX non-PAR | daughter 1 aff | absent | 0 |  | kid=`inherited_paternal` | kid=paternal |
 | **X12** chrX son CN=2, mom CN=2, dad CN=1 (de novo duplication) | chrX non-PAR | son 2 aff | 2 | 1 |  | kid=`x_linked_denovo` | kid=denovo |
 | **X13** chrX son CN=2, mom CN=3, dad CN=1 (his mother's duplicated X) | chrX non-PAR | son 2 aff | 3 | 1 |  | kid=`inherited_maternal` | kid=maternal |
+| **X14** chrX son CN=0, mom CN=1, dad CN missing (his X is hers; dad irrelevant) | chrX non-PAR | son 0 aff | 1 | . |  | kid=`inherited_maternal` | kid=maternal |
+| **X15** chrX son CN=0, mom CN=2, no father in PED (de novo on his only X) | chrX non-PAR | son 0 aff | 2 | absent |  | kid=`x_linked_denovo` | kid=denovo |
+| **X16** chrX son CN=2, mom CN=0, no father in PED (she cannot pass a 2) | chrX non-PAR | son 2 aff | 0 | absent |  | kid=`mendelian_inconsistent` | kid=null |
 | **Y1** chrY daughter, no CN on Y (not modelled) | chrY non-PAR | daughter . aff | . | 2 |  | - | kid=null |
 | **Y2** chrY son CN=2, dad CN=2 (father's duplicated Y) | chrY non-PAR | son 2 aff | . | 2 |  | kid=`inherited_paternal` | kid=paternal |
 | **Y3** chrY son CN=2, dad CN=1 (de novo duplication) | chrY non-PAR | son 2 aff | . | 1 |  | kid=`denovo` | kid=denovo |
@@ -61,6 +64,8 @@ Family columns: each member's CN (`.` = missing), `aff` = affected, `absent` = n
 | **D5** duo kid CN=1, mom CN=0 (she can only pass a deleted copy) | chr7 | 1 aff | 0 | absent |  | kid=`inherited_maternal` | kid=maternal |
 | **D6** duo kid CN=0, mom CN=0 (and the father's copy must be deleted too) | chr7 | 0 aff | 0 | absent |  | kid=`recessive_lowconf` | kid=maternal |
 | **D7** duo kid CN=1, mom CN=3 (she passed her normal copy) | chr7 | 1 aff | 3 | absent |  | kid=`possible_denovo` | kid=possible_denovo |
+| **D8** duo kid CN=0, mom CN=2 (she has no deleted copy to pass) | chr7 | 0 aff | 2 | absent |  | kid=`mendelian_inconsistent` | kid=null |
+| **D9** duo kid CN=4, mom CN=2 (his copy would need 3) | chr7 | 4 aff | 2 | absent |  | kid=`inheritance_unresolved` | kid=null |
 | **S1** singleton kid CN=1 | chr7 | 1 aff | absent | absent |  | - | - |
 | **Q1** quad: recessive + UNAFFECTED CARRIER sib CN=1 | chr7 | 0 aff | 1 | 1 | 1 | kid=`recessive` | kid=both sib1=ambiguous |
 | **Q2** quad: recessive + unaffected sib CN=2 | chr7 | 0 aff | 1 | 1 | 2 | kid=`recessive` | kid=both sib1=null |

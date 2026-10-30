@@ -148,7 +148,7 @@
 //       │     ├ non-PAR X: dad → son (or unknown sex)      → {haps: [0], normal: 0}  passes nothing
 //       │     ├ non-PAR Y: dad → daughter, or mom → anyone → {haps: [0], normal: 0}  passes nothing
 //       │     │    (these two hold even if that parent is absent / has no CN:
-//       │     │     open question, ** see docs/journal.md) **
+//       │     │     biology, not missing data; see docs/journal.md, X14-X16)
 //       │     ├ parent missing, or no [has_cn]             → null
 //       │     ├ non-PAR X/Y: the father's single copy      → {haps: [dad.CN], normal: 1}
 //       │     │    (his X to a daughter, his Y to a son)
@@ -161,8 +161,8 @@
 //       │     the ways disagree ─────────────────────────────────► "ambiguous"
 //       │     only mom's copy a hit / only dad's / both ─────────► "maternal" / "paternal" / "both"
 //       ├ one known, the other missing (get_duo_outcome): the missing parent passes 0, 1 or 2
-//       │     the known parent only passes normal copies, or only
-//       │     its normal copy fits ──────────────────────────────► "duo_new"
+//       │     only its normal copy fits (a CN 2 parent, or one
+//       │     whose hit can't fit) ──────────────────────────────► "duo_new"
 //       │     its hit fits, the missing parent's copy normal ────► "duo_maternal" / "duo_paternal"
 //       │     its hit and the missing parent's hit ──────────────► "duo_maternal_two" / "duo_paternal_two"
 //       │     its hit, or its normal copy and the missing hit ───► "duo_maybe_maternal" / "duo_maybe_paternal"
@@ -178,6 +178,7 @@
 //     kid 1, mom 2 [1,1], dad 2 [1,1]       no way, both normal   new       → "denovo"     (T1)
 //     kid 0, mom 2 [1,1], dad 1 [1,0]       no way, dad carrier   undecided → null         (T19)
 //     duo: kid 1, mom 2 [1,1], no father    her normal copy       duo_new   → "possible_denovo"   (D3)
+//     duo: kid 0, mom 2 [1,1], no father    no way (1 + 0 is 1)   undecided → null (mendelian_inconsistent; D8)
 //     duo: kid 1, mom 1 [1,0], no father    her 0 + 1, or 1 + 0   duo_maybe_maternal → "possible_maternal" (D1)
 //     duo: kid 0, mom 1 [1,0], no father    her 0 + his 0         duo_maternal_two   → "maternal" (D2)
 //     duo: kid 1, mom 0 [0,0], no father    her 0 + his 1         duo_maternal       → "maternal" (D5)
@@ -263,7 +264,9 @@
 //   One parent known, the other missing (not in the PED, or no CN): the missing
 //   parent could have passed 0, 1 or 2 copies, like any parent with CN 0 to 3.
 //     "duo_new"            the known parent only passed a normal copy: the CNV is
-//                          new, or from the missing parent
+//                          new, or from the missing parent. Only when a copy of 0, 1
+//                          or 2 from the missing parent reaches the child's CN: a CN 0
+//                          or CN 4 child of a CN 2 parent is "undecided" (D8, D9)
 //     "duo_maternal"       the mother surely passed it; the father's copy was normal
 //     "duo_maternal_two"   two hits: the mother's, and the father's
 //     "duo_maybe_maternal" the mother's hit, or her normal copy and the father's hit
@@ -667,7 +670,7 @@ function get_needed_parents(kid, variant) {
  * Does this parent give this child no copy at all of this chromosome? A father
  * passes no X to a son and a mother passes no Y, so on non-PAR chrX / chrY that
  * parent counts as passing nothing, whatever their own CN and even when they
- * aren't in the PED (open question, see docs/journal.md). Read straight from
+ * aren't in the PED: their copy never reaches this child (X14-X16; see docs/journal.md). Read straight from
  * get_parent_transmission(), which returns {haps: [0], normal: 0} for exactly
  * these parents, so the MoI calls and the parent of origin can't disagree.
  * @param {Sample}  kid
@@ -810,6 +813,8 @@ function get_expected_cn(s, variant) {
   if (chrom !== "X" && chrom !== "Y") return 2;
   var start1 = variant.start + 1;
   var end1 = variant.stop; // not INFO.END: it throws when missing (Variant typedef)
+  // In a PAR, 2 for anyone, a female's chrY PAR included: never reached, since the GRCh38
+  // analysis set hard-masks the chrY PARs (reads align to chrX's), so no chrY PAR record exists.
   if (is_cnv_in_par(chrom, start1, end1)) return 2;
   if (is_cnv_straddles_par(chrom, start1, end1)) return -1; // no single normal CN: not modelled, for anyone
   if (s.sex !== "male" && s.sex !== "female") return -1;
@@ -827,9 +832,10 @@ function get_expected_cn(s, variant) {
  * has_cn(<CN 0>)     // → true  (a homozygous deletion is a real value)
  * has_cn(<CN -2147483648>)  // → false (what slivar passes when FORMAT/CN is "."). htslib's 32-bit "missing" marker, which slivar passes to the script when FORMAT/CN is .
  * has_cn(<CN 1.5>)   // → false (fractional, e.g. a mosaic call)
+ * has_cn(<no FORMAT/CN in the VCF>)  // → false (reading s.CN would throw; the pipeline also stops before slivar)
  */
 function has_cn(s) {
-  return typeof s.CN === "number" && s.CN >= 0 && s.CN === Math.round(s.CN);
+  return "CN" in s && typeof s.CN === "number" && s.CN >= 0 && s.CN === Math.round(s.CN);
 }
 
 /**
@@ -900,9 +906,9 @@ function get_parent_transmission(kid, which, variant) {
   var hemi = sexChrom && !is_cnv_in_par(chrom, variant.start + 1, variant.stop);
   if (hemi) {
     // i.e. one gene on one chromo
-    // Parents who pass nothing here, whatever their own CN (or whether they're in the PED).
-    // Open question for the team: "any value" instead when the parent is absent / has no CN?
-    // See docs/journal.md ("A parent who passes nothing on chrX/chrY").
+    // Parents who pass nothing here, whatever their own CN (or whether they're in the PED):
+    // their copy never reaches this child. See docs/journal.md ("A parent who passes nothing
+    // on chrX/chrY passes nothing even when absent or without CN") and X14-X16.
     if (which === "dad" && (chrom === "X" ? kid.sex !== "female" : kid.sex !== "male")) return { haps: [0], normal: 0 };
     if (which === "mom" && chrom === "Y") return { haps: [0], normal: 0 };
   }
@@ -1047,9 +1053,10 @@ function get_transmission_outcome(kid, variant) {
  * get_duo_outcome(<kid 0>, -2, <mom 1 [1,0]>, "maternal")  // → "duo_maternal_two"   (her 0 + his 0; D2)
  * get_duo_outcome(<kid 1>, -1, <mom 1 [1,0]>, "maternal")  // → "duo_maybe_maternal" (her 0 + his 1, or her 1 + his 0; D1)
  * get_duo_outcome(<kid 3>, +1, <mom 0 [0,0]>, "maternal")  // → "undecided"          (his copy would need 3)
+ * get_duo_outcome(<kid 0>, -2, <mom 2 [1,1]>, "maternal")  // → "undecided"          (she has no 0 to pass; D8)
+ * get_duo_outcome(<kid 4>, +2, <mom 2 [1,1]>, "maternal")  // → "undecided"          (his copy would need 3; D9)
  */
 function get_duo_outcome(kid, kd, known, side) {
-  if (passes_only_normal(known)) return "duo_new"; // its normal copy: the CNV is new, or from the missing parent
   var missing = MENDEL_ALLOW_RARE_SPLITS ? range(0, kid.CN) : [0, 1, 2];
   var k = get_way_kinds(kid, kd, known.haps, known.normal, missing, 1);
   if (k.opposite) return "undecided";
@@ -1195,7 +1202,7 @@ var MENDEL_ALLOW_RARE_SPLITS = false;
  * // chr7 duo: kid CN0, mom CN2, no father (he could have passed anything, but she can't pass 0)
  * is_mendelian_possible(kid, variant)  // → false
  * // non-PAR chrX: son CN2, mom CN0, no father (a father passes no X to a son anyway)
- * is_mendelian_possible(son, variant)  // → false (see the open question in docs/journal.md)
+ * is_mendelian_possible(son, variant)  // → false (X16; see docs/journal.md)
  */
 function is_mendelian_possible(kid, variant) {
   if (!has_cn(kid)) return true; // With no CN there's nothing to test, so it can't prove anything is wrong, and it answers "possible" (true).

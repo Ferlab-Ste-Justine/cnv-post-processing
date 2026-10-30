@@ -276,6 +276,24 @@ def vcfSampleNames(vcf) {
     }
 }
 
+// FORMAT IDs the VCF header declares (bgzipped or plain), e.g. ['GT', 'CN']. The workflow checks
+// for CN before SLIVAR_EXPR: with no FORMAT/CN, reading it throws in slivar's JavaScript, and
+// slivar writes every record untagged rather than failing.
+def vcfFormatIds(vcf) {
+    def input = vcf.toString().endsWith('.gz') ? new java.util.zip.GZIPInputStream(vcf.newInputStream()) : vcf.newInputStream()
+    return input.withReader { reader ->
+        def ids = []
+        def line
+        while ((line = reader.readLine()) != null && line.startsWith('##')) {
+            def match = line =~ /^##FORMAT=<ID=([^,>]+)/
+            if (match) {
+                ids << match[0][1]
+            }
+        }
+        return ids
+    }
+}
+
 // The probands of a family for JOIN_PROBAND_CNV: the PED's affected (phenotype 2) samples with a
 // father or mother named. A founder isn't one, even if affected. Several affected sibs are all
 // returned.

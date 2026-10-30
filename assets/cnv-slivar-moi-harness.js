@@ -66,11 +66,11 @@ function link(kid, mom, dad) {
   }
 }
 // spec: { kid: [CN, affected], kidsex, mom: [CN, affected] | null, dad: [CN, affected] | null,
-//         sibs: [[CN, affected, sex], ...] }     CN null = missing
+//         sibs: [[CN, affected, sex], ...], dadsex (default "male") }     CN null = missing
 function family(spec) {
   var fam = [];
   var mom = spec.mom ? mk("mom", spec.mom[0], spec.mom[1]) : null;
-  var dad = spec.dad ? mk("dad", spec.dad[0], spec.dad[1], "male") : null;
+  var dad = spec.dad ? mk("dad", spec.dad[0], spec.dad[1], spec.dadsex || "male") : null;
   var kid = mk("kid", spec.kid[0], spec.kid[1], spec.kidsex);
   link(kid, mom, dad);
   fam.push(kid);
@@ -238,6 +238,23 @@ var scenarios = [
     XNP,
     { kid: [2, 1], kidsex: "male", mom: [3, 0], dad: [1, 0] },
   ],
+  // A son's X is his mother's whether or not his father is in the PED or has a CN: the
+  // father passes nothing, so a mother-son duo is a complete trio on non-PAR chrX.
+  [
+    "X14 chrX son CN=0, mom CN=1, dad CN missing (his X is hers; dad irrelevant)",
+    XNP,
+    { kid: [0, 1], kidsex: "male", mom: [1, 0], dad: [null, 0] },
+  ],
+  [
+    "X15 chrX son CN=0, mom CN=2, no father in PED (de novo on his only X)",
+    XNP,
+    { kid: [0, 1], kidsex: "male", mom: [2, 0], dad: null },
+  ],
+  [
+    "X16 chrX son CN=2, mom CN=0, no father in PED (she cannot pass a 2)",
+    XNP,
+    { kid: [2, 1], kidsex: "male", mom: [0, 0], dad: null },
+  ],
   // chrY: a daughter has no Y, so she isn't modelled; a son's Y is his father's, and his
   // mother (no CN there) passes nothing.
   [
@@ -273,6 +290,9 @@ var scenarios = [
     { kid: [0, 1], mom: [0, 0], dad: null },
   ],
   ["D7  duo kid CN=1, mom CN=3 (she passed her normal copy)", AUTO, { kid: [1, 1], mom: [3, 0], dad: null }],
+  // A normal known parent passes 1, so a missing parent's 0, 1 or 2 only reaches CN 1 to 3.
+  ["D8  duo kid CN=0, mom CN=2 (she has no deleted copy to pass)", AUTO, { kid: [0, 1], mom: [2, 0], dad: null }],
+  ["D9  duo kid CN=4, mom CN=2 (his copy would need 3)", AUTO, { kid: [4, 1], mom: [2, 0], dad: null }],
   ["S1  singleton kid CN=1", AUTO, { kid: [1, 1], mom: null, dad: null }],
   [
     "Q1  quad: recessive + UNAFFECTED CARRIER sib CN=1",
@@ -515,13 +535,14 @@ function problem(msg, spec, v) {
 }
 
 for (var it = 0; it < N; it++) {
-  var v = pick([AUTO, AUTO, XNP, XNP, YNP, XSTRADDLE, AUTO_NO_END]);
+  var v = pick([AUTO, AUTO, XNP, XNP, YNP, XSTRADDLE, AUTO_NO_END, XPAR, MT]);
   var spec = {
     kid: [pick(CNPOOL), 1],
-    kidsex: pick(["male", "female"]),
+    kidsex: pick(["male", "female", "unknown"]),
+    dadsex: pick(["male", "male", "unknown"]),
     mom: rnd(5) ? [pick(CNPOOL), rnd(4) === 0 ? 1 : 0] : null,
     dad: rnd(5) ? [pick(CNPOOL), rnd(4) === 0 ? 1 : 0] : null,
-    sibs: rnd(2) ? [[pick(CNPOOL), rnd(2), pick(["male", "female"])]] : [],
+    sibs: rnd(2) ? [[pick(CNPOOL), rnd(2), pick(["male", "female", "unknown"])]] : [],
   };
   var fam = family(spec);
   try {
@@ -538,6 +559,13 @@ for (var it = 0; it < N; it++) {
       counts[call || "-"] = (counts[call || "-"] || 0) + 1;
       var d = T.get_cn_dev(s, v);
       if (!(s.affected && d !== null && d !== 0)) return;
+      // A father of unknown sex can't be modelled where his copy matters (his X to a
+      // daughter, his Y to a son): is_modellable() gives the child no tag.
+      var hemiFromDad = (v === XNP && s.sex === "female") || (v === YNP && s.sex === "male");
+      if (hemiFromDad && "dad" in s && s.dad.sex !== "male") {
+        if (call !== null) problem("a child of a father of unknown sex got a call: " + call, spec, v);
+        return;
+      }
       if (typeof call !== "string") {
         // every affected carrier child must get a call ...
         problem("an affected carrier child got no call", spec, v);
