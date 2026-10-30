@@ -1,0 +1,57 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE phenopacketProbandId function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "phenopacketProbandId"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    test("Test Function phenopacketProbandId - YAML family phenopacket") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/data-test/pheno/trio_NA12878_91_92.yaml", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == "NA12878" }
+            )
+        }
+    }
+
+    test("Test Function phenopacketProbandId - JSON family phenopacket") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/family_proband.json", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == "kid" }
+            )
+        }
+    }
+
+    test("Test Function phenopacketProbandId - a single-sample phenopacket has no proband") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/no_proband.json", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == null }
+            )
+        }
+    }
+}

@@ -222,7 +222,7 @@
                 "exomiser_start_from_vep": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Run exomiser off the VEP-annotated VCF instead of the pre-VEP depth-refined VCF.",
+                    "description": "For families that Exomiser runs on the family VCF (no proband VCF), use the VEP-annotated VCF instead of the pre-VEP depth-refined one.",
                     "fa_icon": "fas fa-dna"
                 }
             }

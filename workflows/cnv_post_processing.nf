@@ -8,6 +8,7 @@ include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pi
 include { validatePedAgainstVcf  } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { vcfSampleNames         } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { pedAffectedChildren    } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { phenopacketProbandId   } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { EXOMISER } from '../modules/local/exomiser/main.nf'
 include { EXOMISER as EXOMISER_SINGLE } from '../modules/local/exomiser/main.nf'
 include { NORMALIZE_CNV } from '../modules/local/normalize_cnv/main.nf'
@@ -49,8 +50,9 @@ workflow EXOMISER_WORKFLOW {
     cadd_indel_filename
 
     main:
-    // Family mode: ch_input is family-level (multi-sample VCF + family-level phenopacket),
-    // matching the sibling SNV pipeline's EXOMISER wiring (workflows/postprocessing.nf:308-357).
+    // Family mode: ch_input is a multi-sample VCF (a proband VCF or the family VCF, see STAGE 8)
+    // + the family-level phenopacket, as in the sibling SNV pipeline's EXOMISER wiring
+    // (workflows/postprocessing.nf:308-357), which only ever uses the family VCF.
     def ch_input_for_exomiser = ch_input
         .filter { meta, _vcf, _tbi ->
             if (!meta.familyPheno) {
@@ -335,28 +337,6 @@ workflow CNV_POST_PROCESSING {
     )
     ch_versions = ch_versions.mix(VCF_ANNOTATE_ENSEMBLVEP.out.versions)
 
-    // Exomiser can run off either the VEP-annotated VCF or the pre-VEP family VCF (both are
-    // family-level, indexed), matching the sibling's exomiser_start_from_vep toggle.
-    def ch_exomiser_input = params.exomiser_start_from_vep
-        ? VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi
-        : ch_family_vcf_for_vep
-
-    EXOMISER_WORKFLOW(
-        ch_exomiser_input,
-        params.exomiser_genome,
-        params.exomiser_data_version,
-        exomiser_data_dir,
-        exomiser_analysis_wes_path,
-        exomiser_analysis_wgs_path,
-        exomiser_local_frequency_file,
-        exomiser_local_frequency_index_file,
-        params.exomiser_remm_version,
-        params.exomiser_remm_filename,
-        params.exomiser_cadd_version,
-        params.exomiser_cadd_snv_filename,
-        params.exomiser_cadd_indel_filename
-    )
-
     //
     // STAGE 6 -- Slivar mode-of-inheritance classification, on the VEP-annotated family VCF.
     // The rules in assets/cnv-slivar-functions.js decide per child (cnv_moi, cn_po_origin); the
@@ -411,6 +391,40 @@ workflow CNV_POST_PROCESSING {
         .map { _familyId, proband, meta, vcf, tbi, proband_vcf -> [meta + [proband: proband], vcf, tbi, proband_vcf] }
 
     JOIN_PROBAND_CNV(ch_join_proband_input)
+
+    //
+    // STAGE 8 -- Exomiser, family mode, on the proband VCF of the child the familyPheno
+    // phenopacket is about (proband.subject.id): the proband's own calls and intervals, with the
+    // family's FORMAT for its pedigree analysis. A family with no such proband VCF (DRAGEN_JOINT,
+    // no familyPed, phenopacket proband not one of the PED's sequenced affected children) runs on
+    // the family VCF instead, the VEP-annotated one or the pre-VEP one per
+    // exomiser_start_from_vep, matching the sibling's toggle. Families without familyPheno are
+    // dropped (with a warning) inside EXOMISER_WORKFLOW.
+    //
+    def ch_exomiser_proband = JOIN_PROBAND_CNV.out.vcf_tbi
+        .filter { meta, _vcf, _tbi -> meta.familyPheno && meta.proband == phenopacketProbandId(file(meta.familyPheno)) }
+
+    def ch_exomiser_family = (params.exomiser_start_from_vep ? VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi : ch_family_vcf_for_vep)
+        .map { meta, vcf, tbi -> [meta.id, meta, vcf, tbi] }
+        .join(ch_exomiser_proband.map { meta, _vcf, _tbi -> [meta.id, true] }, remainder: true)
+        .filter { _id, _meta, _vcf, _tbi, has_proband_vcf -> !has_proband_vcf }
+        .map { _id, meta, vcf, tbi, _has_proband_vcf -> [meta, vcf, tbi] }
+
+    EXOMISER_WORKFLOW(
+        ch_exomiser_proband.mix(ch_exomiser_family),
+        params.exomiser_genome,
+        params.exomiser_data_version,
+        exomiser_data_dir,
+        exomiser_analysis_wes_path,
+        exomiser_analysis_wgs_path,
+        exomiser_local_frequency_file,
+        exomiser_local_frequency_index_file,
+        params.exomiser_remm_version,
+        params.exomiser_remm_filename,
+        params.exomiser_cadd_version,
+        params.exomiser_cadd_snv_filename,
+        params.exomiser_cadd_indel_filename
+    )
 
     //
     // Collate and save software versions

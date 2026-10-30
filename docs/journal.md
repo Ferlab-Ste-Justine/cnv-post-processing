@@ -143,6 +143,20 @@ _Decided 2026-10-29, BIOINFO-214, from the first full-genome NA12878 trio run._
 
 **Note:** DRAGEN's per-sample caller sets `cnvLength` on every call under 10 kb, while its joint caller lets small calls PASS, so a PASS-only filter downstream (Radiant, Exomiser) never sees our sub-10 kb calls. At 10 kb and more, PASS only, our calls score precision 0.92-0.95, recall 0.76-0.79 against the joint VCF.
 
+### Family-mode Exomiser runs on the proband VCF
+
+_Decided 2026-10-30, BIOINFO-214._
+
+**What:** `EXOMISER_WORKFLOW` now runs after `JOIN_PROBAND_CNV`, on the proband VCF of the child the `familyPheno` phenopacket is about (`proband.subject.id`, read by `phenopacketProbandId()`). Its reports are `<familyId>.<proband>.exomiser.*`. A family with no such VCF (`DRAGEN_JOINT`, no `familyPed`, or a phenopacket proband who isn't a sequenced affected PED child) runs on the family VCF as before, `<familyId>.exomiser.*`, and `--exomiser_start_from_vep` only applies to those families.
+
+**Why:** on the family VCF, Exomiser scored the truvari-kept call, often a parent's, so a gene overlapped only by the proband's own interval could be missed: the same gap as `CSQ` in the previous decision. The proband VCF has the proband's own calls and intervals, and every family member's FORMAT, so the pedigree analysis is unchanged. On the full-genome NA12878 trio, Exomiser read all 726 of NA12878's calls (1237 variant-gene pairs: a CNV counts once per gene it overlaps) with the trio pedigree. Its reports were empty, as on the family VCF: with the test phenotype data, the test analysis file's `priorityScoreFilter` keeps 2 of 19,171 genes. Rerun by hand without that filter: 261 pairs from the 151 `PASS` calls passed the failed-variant filter (`PASS_ONLY`; the other 575 calls are `cnvLength`), 18 passed the inheritance filter, and the 5 CNVs in Exomiser's VCF carry the proband's own call IDs.
+
+**Rejected:** one Exomiser run per affected child: the family phenopacket describes one proband's phenotypes (the Phenopacket schema's `Family.proband` isn't repeated), and another child's calls would be scored against them. The other affected children still count through the pedigree, in Exomiser's segregation filters.
+
+**Not done (yet):** a report for each affected child, from the `pheno` column of its own row (ignored on family rows today): Exomiser on that child's proband VCF with its own phenopacket, the family PED for segregation (`--ped` with `--sample`, to be checked). Worth it for affected sibs with different phenotypes, much less for identical twins. Decided 2026-10-30 to keep one run per family for now.
+
+**Accepted:** this differs from the SNV pipeline, which runs Exomiser on the family VCF, in parallel with slivar. Exomiser's scores stay in its own reports and aren't written into the proband VCF; doing that would be a further step joining on the proband's call IDs.
+
 ## Open questions
 
 ### A parent who passes nothing on chrX/chrY: fixed at zero, or "any value" when absent?

@@ -287,6 +287,14 @@ def pedAffectedChildren(ped) {
         .collect { cols -> cols[1] }
 }
 
+// The proband a family phenopacket (YAML or JSON) is about: its proband.subject.id, or null when
+// it has none. Family-mode Exomiser runs on this child's JOIN_PROBAND_CNV VCF only: another
+// affected child's VCF would be scored against this child's phenotypes.
+def phenopacketProbandId(pheno) {
+    def doc = new org.yaml.snakeyaml.Yaml().load(pheno.text)
+    return doc instanceof Map ? doc.proband?.subject?.id : null
+}
+
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

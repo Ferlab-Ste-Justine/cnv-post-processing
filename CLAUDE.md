@@ -51,18 +51,23 @@ route applicable to it, decided per-row/per-family purely from which optional co
    (`ext.min_size`) are never refined: depth there can't tell normal from a missed loss, which
    made false `denovo` calls
 4. `VCF_ANNOTATE_ENSEMBLVEP`, family-level
-5. `EXOMISER_WORKFLOW` — only for families with `familyPheno`
-6. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`. Its
+5. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`. Its
    output is the family's final VCF, so it gets an explicit indexing step of its own
    (`BCFTOOLS_INDEX_SLIVAR`) rather than relying on a downstream stage to need/produce one.
    Before it, `validatePedAgainstVcf` (in the workflow's slivar-input `.map`, not in a
    subworkflow, so tests can still feed slivar inconsistent PEDs) checks the PED against the family
    VCF's `#CHROM` names and stops the run on a mismatch, or only warns under `--skip_ped_validation`.
-7. `JOIN_PROBAND_CNV` (`bin/join_proband_cnv.py`) — one VCF per proband (`pedAffectedChildren`:
+6. `JOIN_PROBAND_CNV` (`bin/join_proband_cnv.py`) — one VCF per proband (`pedAffectedChildren`:
    the PED's affected children), joining the proband's own input-VCF calls to the slivar records
    they're in through the decoded `FORMAT/OID`. Per-sample families only: `DRAGEN_JOINT` ones have
    no per-sample VCF or `OID`. The PED names VCF samples, so the proband's input VCF is found by
    `vcfSampleNames()`, not the samplesheet's `sample` column.
+7. `EXOMISER_WORKFLOW` — only for families with `familyPheno`. Runs on the `JOIN_PROBAND_CNV` VCF
+   of the phenopacket's proband (`phenopacketProbandId()`: `proband.subject.id`), output
+   `<familyId>.<proband>.exomiser.*`; a family with no such VCF (`DRAGEN_JOINT`, no `familyPed`,
+   proband not a sequenced affected PED child) falls back to the family VCF (pre-VEP, or VEP's
+   under `--exomiser_start_from_vep`) through a `join(..., remainder: true)`. Unlike the SNV
+   pipeline, which always runs Exomiser on the family VCF, in parallel with slivar.
 
 **Solo route** (true singletons: `sampleSize==1`, no `familyPed`, no `familyPheno` — the family
 route would add nothing over this for them, so they're dropped from `ch_grouped_by_family`

@@ -66,17 +66,22 @@ By default, VEP output is saved in the `ensemblvep` subfolder within the main ou
 <summary>Output files</summary>
 
 - `exomiser/`
-  - `<familyId>.exomiser.genes.tsv`
-  - `<familyId>.exomiser.html`
-  - `<familyId>.exomiser.json`
-  - `<familyId>.exomiser.variants.tsv`
-  - `<familyId>.exomiser.vcf.gz`
-  - `<familyId>.exomiser.vcf.gz.tbi`
+  - `<familyId>.<proband>.exomiser.genes.tsv`
+  - `<familyId>.<proband>.exomiser.html`
+  - `<familyId>.<proband>.exomiser.json`
+  - `<familyId>.<proband>.exomiser.variants.tsv`
+  - `<familyId>.<proband>.exomiser.vcf.gz`
+  - `<familyId>.<proband>.exomiser.vcf.gz.tbi`
+  - `<familyId>.exomiser.{genes.tsv,html,json,variants.tsv,vcf.gz,vcf.gz.tbi}`: same six reports, for a family run on its family VCF (see below).
   - `single_sample/<sample>.exomiser.{genes.tsv,html,json,variants.tsv,vcf.gz,vcf.gz.tbi}`: same six reports, for standalone samples run in single-sample mode instead of family mode.
 
 </details>
 
 The Exomiser analysis generates six reports, stored in the exomiser subfolder for each family (or, under `single_sample/`, each standalone sample). Each report uses the family or sample identifier as a filename prefix for easy identification.
+
+In family mode, Exomiser runs on the proband VCF of the child the `familyPheno` phenopacket is about (its `proband.subject.id`), `slivar/<familyId>.<proband>.cnv.proband.vcf.gz`: the proband's own calls and intervals, with every family member's genotypes for the pedigree analysis. Its reports are named `<familyId>.<proband>.exomiser.*`. A family with no such proband VCF (a `DRAGEN_JOINT` family, no `familyPed`, or a phenopacket proband who isn't one of the PED's sequenced affected children) runs on the family VCF instead, as `<familyId>.exomiser.*`: the depth-refined one, or the VEP-annotated one under `--exomiser_start_from_vep`. Exomiser's scores stay in its own reports; they aren't written into the proband VCF.
+
+A family gets one family-mode Exomiser run: a phenopacket names a single proband (`proband` isn't repeated in the Phenopacket schema). Other affected children (affected sibs, twins) are still used, through the phenopacket's pedigree, by Exomiser's segregation filters, and they still get their own proband VCF from `JOIN_PROBAND_CNV`, but no Exomiser report of their own. The `pheno` column is ignored on family rows.
 
 For more details about these reports, refer to the [Exomiser documentation](https://exomiser.readthedocs.io/en/14.0.0/result_interpretation.html).
 

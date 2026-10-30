@@ -95,16 +95,9 @@
                         │   - TABIX_TABIX               │
                         └───────────────┬───────────────┘
                                         ▼
-                        ┌───────────────────────────────┐
-                        │      EXOMISER_WORKFLOW        │
-                        │   (family mode, needs         │
-                        │    familyPheno; skipped if    │
-                        │    not provided)              │
-                        └───────────────┬───────────────┘
-                                        ▼
                              ┌─────────────────────┐
                              │        SLIVAR       │
-                             │                     │
+                             │  (needs familyPed)  │
                              └──────────┬──────────┘
                                         ▼
                         ┌───────────────────────────────┐
@@ -113,6 +106,17 @@
                         │  its own input calls joined   │
                         │  to slivar records via OID;   │
                         │  DRAGEN families only)        │
+                        └───────────────┬───────────────┘
+                                        │ the phenopacket proband's VCF
+                                        ▼
+                        ┌───────────────────────────────┐
+                        │      EXOMISER_WORKFLOW        │
+                        │ (family mode, needs           │
+                        │  familyPheno; skipped if not  │
+                        │  provided). A family with no  │
+                        │  proband VCF (DRAGEN_JOINT,   │
+                        │  no familyPed) runs on the    │
+                        │  family VCF instead           │
                         └───────────────────────────────┘
 
 
