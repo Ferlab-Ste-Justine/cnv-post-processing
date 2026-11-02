@@ -305,6 +305,14 @@ def pedAffectedChildren(ped) {
         .collect { cols -> cols[1] }
 }
 
+// Is this VCF sample a proband of its family: one of pedAffectedChildren(ped)? False without a
+// PED. The workflow asks it of each per-sample row, with the sample's VCF name (the PED names
+// VCF samples, not the samplesheet's sample column): a proband's calls get their own VEP run
+// and become the family's final VCF (JOIN_PROBAND_CNV).
+def isPedProband(ped, sample) {
+    return ped ? sample in pedAffectedChildren(ped) : false
+}
+
 // The proband a family phenopacket (YAML or JSON) is about: its proband.subject.id, or null when
 // it has none. Family-mode Exomiser runs on this child's JOIN_PROBAND_CNV VCF only: another
 // affected child's VCF would be scored against this child's phenotypes.
