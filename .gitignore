@@ -1,9 +1,10 @@
 .nextflow*
 work/
 data/
-# ...but not module/subworkflow test fixtures, which their tests read from tests/data/
+# ...but not module/subworkflow/pipeline test fixtures, which their tests read from tests/data/
 !modules/local/*/tests/data/
 !subworkflows/local/*/tests/data/
+!/tests/data/
 data-test-orig/
 results/
 .DS_Store
