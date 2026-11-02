@@ -22,8 +22,10 @@ process RESTORE_COLLAPSED_FORMAT {
     def prefix = task.ext.prefix ?: "${meta.id}"
     // truvari collapse only copies an absorbed call's FORMAT into the kept record when it reads
     // that call's GT as set, which DRAGEN's `./1` (gain of unknown zygosity) and haploid `1`
-    // aren't. This copies them back from truvari's removed VCF (MatchId -> CollapseId), so no
-    // sample loses its call. Output unsorted, like truvari's: BCFTOOLS_SORT_INDEX follows.
+    // aren't. This copies them back from truvari's removed VCF (MatchId -> CollapseId), and gives
+    // a record of its own to an absorbed call whose sample's column in the kept record holds
+    // another call (by FORMAT/OID), so no sample loses a call. Output unsorted, like truvari's:
+    // BCFTOOLS_SORT_INDEX follows.
 
     """
     #!/bin/bash -eo pipefail

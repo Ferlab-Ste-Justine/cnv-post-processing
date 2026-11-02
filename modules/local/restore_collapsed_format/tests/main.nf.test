@@ -43,6 +43,7 @@ nextflow_process {
             def lines = path(process.out.vcf.get(0)[1]).linesGzip
             assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["NA12878", "NA12891", "NA12892"]
             def records = lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }.collectEntries { [it[1], it] }
+            // no absorbed call gets a record of its own: each one is its sample's call in the kept record
             assert records.size() == 4
             // GT:CN:OID of each sample, and NumConsolidated
             def calls = { pos -> records[pos].drop(9).collect { s -> def f = s.split(":"); [f[0], f[2], f[6]].join(":") } }
@@ -73,6 +74,60 @@ nextflow_process {
             assert consolidated("82726584") == "NumConsolidated=2"
 
             assert path(process.out.versions[0]).text.contains("pysam:")
+        }
+    }
+
+    // Fixtures fam2.*: real truvari 5.4.0 output (TRUVARI_COLLAPSE_COHORT's ext.args) on a toy
+    // trio (DAD, KID, MOM) merged like BCFTOOLS_MERGE does. truvari keeps the leftmost call of a
+    // cluster:
+    // 1. chr1, kept KID's kid_A1 (960,000-1,040,000), which absorbed DAD's dad_F1
+    //    (1,000,000-1,100,000); KID's kid_B1 (1,060,000-1,140,000) doesn't match kid_A1 and is
+    //    left alone.
+    // 2. chr2, kept DAD's dad_K2 (1,000,000-1,100,000) absorbed both KID's kid_A2
+    //    (1,000,000-1,070,000, 70% of it) and kid_B2 (1,070,000-1,140,000, overlapping it by
+    //    30%). The KID column holds kid_A2; kid_B2 is in no record.
+    // 3. chr3, the same with ./1 gains: kept DAD's dad_K3 absorbed KID's kid_A3 and B3, a call
+    //    KID and MOM share. truvari copied MOM's B3 into dad_K3 and left KID empty, restored from
+    //    kid_A3 (higher TruScore); KID's B3 is in no record.
+
+    test("Toy trio: a call folded into a record holding another call of its sample gets a record of its own") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam2" ],
+                    file("\${projectDir}/modules/local/restore_collapsed_format/tests/data/fam2.collapsed.vcf.gz", checkIfExists: true),
+                    file("\${projectDir}/modules/local/restore_collapsed_format/tests/data/fam2.removed.vcf.gz", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf.size() == 1
+                assert file(vcf.get(0)[1]).name == "fam2.restored.vcf.gz"
+            }
+
+            def records = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") as List }
+            // one line per record: ID, INFO, then each sample's GT:CN:OID
+            def lines = records.collect { ([it[2], it[7]] + it.drop(9)).join(" ") }
+
+            assert lines == [
+                "kid_A1 SVTYPE=DEL;END=1040000;SVLEN=-80000;NumCollapsed=1;NumConsolidated=1;CollapseId=1.0 0/1:1:dad_F1 0/1:1:kid_A1 ./.:.:.",
+                "kid_B1 SVTYPE=DEL;END=1140000;SVLEN=-80000 ./.:.:. 0/1:1:kid_B1 ./.:.:.",
+                "dad_K2 SVTYPE=DEL;END=1100000;SVLEN=-100000;NumCollapsed=2;NumConsolidated=1;CollapseId=2.0 0/1:1:dad_K2 0/1:1:kid_A2 ./.:.:.",
+                // as truvari writes kid_B1, the call it left alone
+                "kid_B2 SVTYPE=DEL;END=1140000;SVLEN=-70000 ./.:.:. 0/1:1:kid_B2 ./.:.:.",
+                "dad_K3 SVTYPE=DUP;END=1100000;SVLEN=100000;NumCollapsed=2;NumConsolidated=2;CollapseId=3.0 ./1:3:dad_K3 ./1:3:kid_A3 0/1:3:B3",
+                // MOM's B3 stays in dad_K3 only
+                "B3 SVTYPE=DUP;END=1140000;SVLEN=70000 ./.:.:. ./1:3:B3 ./.:.:.",
+            ]
+            assert records.collect { "${it[0]}:${it[1]}" } == [
+                "chr1:960000", "chr1:1060000", "chr2:1000000", "chr2:1070000", "chr3:1000000", "chr3:1070000"
+            ]
         }
     }
 }

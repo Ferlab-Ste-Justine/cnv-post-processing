@@ -134,7 +134,7 @@ unset, so they were dropped. Example: a real chr10 cluster of the NA12878 trio.
  │    NumConsolidated += number of samples restored (2)     │
  └──────────────────────────┬───────────────────────────────┘
                             ▼
- OUTPUT: <id>.restored.vcf.gz  (same records, same order, unsorted -> BCFTOOLS_SORT_INDEX_COHORT)
+ OUTPUT: <id>.restored.vcf.gz  (same records, same order, + step 3's; unsorted -> BCFTOOLS_SORT_INDEX_COHORT)
  ─────────────────────────────────────────────
  chr10:38954276  NA12891's gain
  INFO  CollapseId=1.0  NumConsolidated=2
@@ -150,3 +150,21 @@ unset, so they were dropped. Example: a real chr10 cluster of the NA12878 trio.
  - TruScore only decides when one sample has several absorbed calls in the cluster.
  - A sample that already has a call (incl. one truvari copied in itself) is never overwritten.
  - ID, POS, END and the rest of INFO stay the kept call's; only NumConsolidated changes.
+
+ 3. Two calls of one sample folded into one record (toy trio, the module test's fam2 fixtures).
+    A record has one column per sample, so it holds one of them; the other is in no record.
+    truvari keeps the leftmost call and compares the others with it, so with --pctsize 0.7 and
+    --pctovl 0.3 this only happens at the edge: A starts at K's start, at exactly 70% of K's
+    length, and B starts where A ends, overlapping K by exactly 30%.
+
+      DAD  |================= K =================|        chr2:1,000,000-1,100,000
+      KID  |============ A ============|============ B ============|   A ends 1,070,000, B to 1,140,000
+
+    kept K:   DAD K   KID A   MOM ./.        (B's MatchId = K's CollapseId, KID's OID is B, not A)
+              │
+              ▼  after K, written as a record of its own, as truvari writes a call it leaves alone:
+    record B: B's site and INFO (no TruScore, MatchId...)   DAD ./.   KID B   MOM ./.
+
+    Any absorbed call of a sample (an ALT allele in its GT) whose OID isn't that sample's in the
+    kept record, once restored, gets one. Another sample's copy of B (identical, one merged
+    record) that truvari copied into K stays only there: ./. in record B.

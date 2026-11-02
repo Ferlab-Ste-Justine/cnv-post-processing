@@ -18,10 +18,12 @@ The rest of the family record's INFO describes the call truvari kept, not the pr
 left out. slivar runs on the output.
 
 A family record is found by (OID, ALT): a split multiallelic site repeats its ID on each allele.
-A proband call with no family record, or in two, is an error: the per-sample segments don't
-overlap, so each call should be in exactly one family record. Family records naming a proband
-call that isn't in the proband VCF only get a warning: VEP drops records on contigs its cache
-doesn't have, and a split multiallelic family site repeats the proband's OID on its other allele.
+A proband call with no family record, or in two, is an error: truvari's cohort collapse keeps
+each call or folds it into another, and RESTORE_COLLAPSED_FORMAT gives it a record of its own
+when the record it's folded into already holds another call of the proband, so each call is in
+exactly one family record. Family records naming a proband call that isn't in the proband VCF
+only get a warning: VEP drops records on contigs its cache doesn't have, and a split
+multiallelic family site repeats the proband's OID on its other allele.
 Records are written in the proband VCF's order.
 """
 import argparse
@@ -162,8 +164,8 @@ def main():
             sys.exit(
                 f"join_proband_cnv.py: {args.proband}'s call {key[0]} ({key[1]}) at {cols[0]}:{cols[1]} is in no record of "
                 f"{args.family_vcf}: no family record has it as {args.proband}'s FORMAT/OID. Either {args.proband_vcf} isn't "
-                f"{args.proband}'s VCF from this run, or a step after the per-sample collapse lost the call (truvari's "
-                "cohort collapse, RESTORE_COLLAPSED_FORMAT)."
+                f"{args.proband}'s VCF from this run, or a step after the per-sample collapse lost the call, which "
+                "RESTORE_COLLAPSED_FORMAT should prevent."
             )
 
         family_info = parse_info(family[7])

@@ -46,7 +46,9 @@ route applicable to it, decided per-row/per-family purely from which optional co
    get a `CSQ` for their own interval
 2. `BCFTOOLS_MERGE` across a family's per-sample VCFs → `TRUVARI_COLLAPSE_COHORT` →
    `RESTORE_COLLAPSED_FORMAT` (`bin/restore_collapsed_format.py`: copies back the FORMAT of
-   absorbed calls truvari reads as unset, DRAGEN's `./1` and haploid `1`, from its removed VCF). Families
+   absorbed calls truvari reads as unset, DRAGEN's `./1` and haploid `1`, from its removed VCF, and
+   gives a record of its own to an absorbed call whose sample's column in the kept record holds
+   another call, by `FORMAT/OID`: a record has one column per sample). Families
    supplied as an already jointly-called `caller=DRAGEN_JOINT` multi-sample VCF skip merge+collapse
    entirely (lightweight prep only: drop non-variant records, split multiallelics) and rejoin at
    step 4
@@ -108,7 +110,7 @@ assets/                                    # samplesheet.csv, schema_input.json,
 bin/add_original_id.awk                    # Copies each call's ID into FORMAT/OID in NORMALIZE_CNV
 bin/svtype_from_alt.awk                    # Sets INFO/SVTYPE from a <DEL>/<DUP> ALT in NORMALIZE_CNV
 bin/join_proband_cnv.py                    # Joins the family VCF's FORMAT onto a proband's own VEP-annotated calls through FORMAT/OID (JOIN_PROBAND_CNV)
-bin/restore_collapsed_format.py            # Restores the FORMAT truvari's cohort collapse drops for ./1 and haploid calls (RESTORE_COLLAPSED_FORMAT)
+bin/restore_collapsed_format.py            # Restores the calls truvari's cohort collapse drops: ./1 and haploid FORMAT, a second call of one sample in a record (RESTORE_COLLAPSED_FORMAT)
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE
 docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram)
 scripts/                                   # run-test-suite.sh, run-smoke-tests.sh (see below)

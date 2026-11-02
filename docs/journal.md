@@ -191,9 +191,21 @@ _Decided 2026-11-02, BIOINFO-214._
 
 **A proband call with no family record stops the run**, as does one in two family records: DRAGEN's per-sample segments don't overlap (0 overlapping pairs in the 3 chr22 test VCFs), and the cohort collapse needs 30% reciprocal overlap with the kept call, so each call should be in exactly one family record. Family records naming a call the proband VCF doesn't have only get a warning: VEP drops records on contigs its cache doesn't have, and a split multiallelic family site repeats the proband's OID on its other allele.
 
-**Caveat, not yet checked on real data:** two disjoint calls of the proband can each match one larger parent call. For example, a parent's 100 kb call and two 80 kb proband calls overlapping 40 kb of it at each end pass both `--pctovl 0.3` and `--pctsize 0.7`. truvari compares each call with the kept one only, so it could fold both into one record, where the proband's column holds only one of them. The other call's OID would then be in no family record, and the run would stop. Not seen on the chr22 trio; the full-genome run (TODO below) should tell whether it happens.
+**One exception, handled since:** truvari can fold two calls of the proband into the same kept record, whose proband column holds only one of them. `RESTORE_COLLAPSED_FORMAT` now gives the other a record of its own (next decision), so it doesn't stop the run.
 
 **Accepted:** the CNVs only the proband's parents carry aren't in the proband VCF: they stay in `depth_refined/`, unannotated. Parents and unaffected sibs aren't VEP-annotated.
+
+### A call folded into a record already holding another call of its sample gets a record of its own
+
+_Decided 2026-11-02, BIOINFO-214._
+
+**What:** `RESTORE_COLLAPSED_FORMAT` also writes as a record of its own each absorbed call of a sample (an ALT allele in its GT) whose `FORMAT/OID` isn't that sample's in the kept record, once restored. The record is the absorbed one as truvari writes a call it collapses with nothing: its own site and INFO, without truvari's match keys (`TruScore`, `MatchId`...), the FORMAT of each sample it was lost for, the other samples missing. It's written after its kept record, and `BCFTOOLS_SORT_INDEX_COHORT` sorts. The script's output counts them ("Gave N absorbed call(s) a record of their own").
+
+**Why:** a record has one column per sample, so when truvari folds two calls of one sample into the same kept record, that column holds one and the other is in no record. The proband route stopped on it ("is in no record"), and the family route lost it silently. truvari keeps the leftmost call of a cluster (`--keep first`: lowest POS, longest on a tie) and compares the others with it only, so both calls start at or after the kept call K. The first must be at least 70% of K's length (`--pctsize 0.7`), and the second, starting after the first ends, must still overlap K by 30% of the longer of the two (`--pctovl 0.3`). That's only possible when the first starts at K's start, is exactly 70% of K's length, and the second starts where the first ends. Checked with truvari 5.4.0 on toy trios (the module test's `fam2` fixtures): a parent's 100 kb call absorbed two such calls of the child, and with the first call starting 1 kb later the second was left alone. Rare, but DRAGEN's breakpoints often coincide between parent and child, so it can happen. The caveat first written on the previous decision had it wrong: with a parent's 100 kb call and two 80 kb calls of the child overlapping 40 kb of it at each end, truvari keeps the child's first call, which absorbs the parent's, and leaves the second alone.
+
+**Rejected:** copying the other samples' columns from the kept record, as truvari would have if it had kept the lost call. slivar could then call the inheritance, but those samples' calls would be in two records, and the join stops on a proband call in two records (an affected sib's, or a parent's who is a proband in a three-generation PED). Stopping truvari from folding two calls of one sample together (`--gt all`): it changes the clusters themselves. A warning in the join instead of the fix: the family route would still lose the call.
+
+**Accepted:** the other samples are missing in the new record, as in any call truvari leaves alone: with CRAMs, depth refinement can resolve them on the call's own interval (5 kb or more), otherwise slivar tags the child `unknown_cn`. The lost call thus looks as it would one base off the edge. A sample sharing the lost call exactly (one merged record) is missing there too: its copy of the call is already in the kept record.
 
 ## Open questions
 
@@ -247,7 +259,7 @@ A family whose `familyPheno` `proband.subject.id` isn't one of its probands (a t
 
 _Noted 2026-11-02, BIOINFO-214._
 
-CI only covers chr22 (22 proband calls). Run the full-genome NA12878 trio: every one of NA12878's calls should be joined, with no "in no record" stop (see the caveat in the decision above), and the slivar tags on its calls should be compared with the family-level route's.
+CI only covers chr22 (22 proband calls). Run the full-genome NA12878 trio: every one of NA12878's calls should be joined, with no "in no record" stop, `RESTORE_COLLAPSED_FORMAT`'s output tells how many calls got a record of their own (see "A call folded into a record already holding another call of its sample gets a record of its own" above), and the slivar tags on its calls should be compared with the family-level route's.
 
 ### Check the PED sex against the data
 
