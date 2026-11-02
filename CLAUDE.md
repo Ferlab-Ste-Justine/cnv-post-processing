@@ -169,10 +169,13 @@ nf-test test modules/local/exomiser
 ```
 
 nf-core upstream module/subworkflow tests are excluded via the `ignore` glob in `nf-test.config`.
-`tests/default.nf.test` runs the test profile twice: the samplesheet as is (`fam1`'s proband route,
-`fam1_joint`, `ind1`), snapshotting the published files and each VCF's variant lines (`nft-vcf`'s
-`variantsMD5`), and the trio with a PED where NA12878 is unaffected (`tests/data/`), for the
-family-level route.
+`tests/default.nf.test` runs the test profile three times: the samplesheet as is (`fam1`'s proband
+route, `fam1_joint`, `ind1`), snapshotting the published files and each VCF's variant lines
+(`nft-vcf`'s `variantsMD5`); the trio with a PED where NA12878 is unaffected (`tests/data/`), for
+the family-level route; and `tests/data/samplesheet_edge_cases.csv`, families built from the same
+chr22 data for the routes the other two don't take (samplesheet names that aren't the VCF's, no
+CRAMs, a proband with no call, a phenopacket about the father, a documented singleton, two
+affected sibs).
 `scripts/run-test-suite.sh` bundles the pre-push gate, harmonized with Post-processing-Pipeline's:
 nf-core CLI version pin check, pre-commit, the slivar rules harness, a `-preview` launch under the
 declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 12 local modules (`modules/local/*`) have their own module

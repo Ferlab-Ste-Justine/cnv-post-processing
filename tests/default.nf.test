@@ -105,6 +105,71 @@ nextflow_pipeline {
         }
     }
 
+    // tests/data/samplesheet_edge_cases.csv: families built from the same chr22 trio, each for a
+    // route the tests above don't take.
+    // - famA: the trio under other samplesheet names (child, father, mother), with CRAMs. Depth
+    //   refinement still finds each sample's depth, by its VCF name.
+    // - famB: the trio without CRAMs, so no refinement. Its proband, NA12878, has no call (a
+    //   header-only VCF), and the phenopacket is about the father, so Exomiser runs on the family
+    //   VCF.
+    // - famD: NA12878 alone with a PED and a family phenopacket, a documented singleton: no merge,
+    //   no proband (a founder), family-level VEP, slivar and Exomiser.
+    // - famF: a quartet without CRAMs whose two daughters are affected (NA12878_sib's VCF is
+    //   NA12878's, renamed): a proband VCF each, Exomiser only on the phenopacket's proband.
+    test("-profile test, edge-case families") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+                input  = "${projectDir}/tests/data/samplesheet_edge_cases.csv"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def stable_path = getAllFilesFromDir("$outputDir", relative: true, includeDir: true, ignore: ['pipeline_info/*.{html,json,txt}'])
+            def vcf_md5 = getAllFilesFromDir("$outputDir", include: ['**/*.vcf.gz']).collect { vcf ->
+                "${file(vcf.toString()).name}:md5,${path(vcf.toString()).vcf.variantsMD5}".toString()
+            }.sort()
+
+            def files = getAllFilesFromDir("$outputDir", relative: true).collect { it.toString() }
+            def task_names = workflow.trace.tasks().collect { it.name }
+            def records = { f -> path("$outputDir/${f}").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") } }
+            def samples = { f -> path("$outputDir/${f}").linesGzip.find { it.startsWith("#CHROM") }.split("\t").drop(9) as List }
+            // Refinement writes a hom-ref GT with the expected CN; no caller or merge step writes one.
+            def refined = { f -> records(f).collect { cols -> cols.drop(9).count { it ==~ /^0(\/0)?:.*/ } }.sum() ?: 0 }
+            def trio = ["NA12878", "NA12891", "NA12892"]
+            def quartet = ["NA12878", "NA12878_sib", "NA12891", "NA12892"]
+
+            assertAll(
+                // famA
+                { assert samples("depth_refined/famA.refined.vcf.gz") == trio },
+                { assert refined("depth_refined/famA.refined.vcf.gz") > 0 },
+                { assert task_names.any { it.contains("MOSDEPTH_RATIO (NA12878)") } },
+                { assert !task_names.any { it.contains("MOSDEPTH_RATIO (child)") } },
+                { assert "slivar/famA.NA12878.cnv.slivar.vcf.gz" in files },
+                // famB
+                { assert !files.any { it.startsWith("depth_refined/famB") } },
+                { assert samples("slivar/famB.NA12878.cnv.slivar.vcf.gz") == trio },
+                { assert records("slivar/famB.NA12878.cnv.slivar.vcf.gz").size() == 0 },
+                { assert "exomiser/famB.exomiser.vcf.gz" in files },
+                { assert !files.any { it.startsWith("exomiser/famB.NA12878") } },
+                // famD
+                { assert !task_names.any { it.contains("BCFTOOLS_MERGE (famD)") || it.contains("JOIN_PROBAND_CNV (famD") } },
+                { assert ["depth_refined/famD.refined.vcf.gz", "ensemblvep/variants.famD.cnv.vep.vcf.gz", "slivar/famD.cnv.slivar.vcf.gz", "exomiser/famD.exomiser.vcf.gz"].every { it in files } },
+                { assert samples("slivar/famD.cnv.slivar.vcf.gz") == ["NA12878"] },
+                // famF
+                { assert ["NA12878", "NA12878_sib"].every { p -> samples("slivar/famF.${p}.cnv.slivar.vcf.gz") == quartet } },
+                { assert ["NA12878", "NA12878_sib"].every { p -> records("slivar/famF.${p}.cnv.slivar.vcf.gz").size() > 0 } },
+                { assert ["NA12878", "NA12878_sib"].every { p -> refined("slivar/famF.${p}.cnv.slivar.vcf.gz") == 0 } },
+                { assert "exomiser/famF.NA12878.exomiser.vcf.gz" in files },
+                { assert !files.any { it.startsWith("exomiser/famF.NA12878_sib") || it.startsWith("depth_refined/famF") } },
+                { assert snapshot(stable_path, vcf_md5).match() }
+            )
+        }
+    }
+
     // assets/cnv-slivar-functions.js models chrX/chrY copy number with hard-coded GRCh38 PAR
     // coordinates, so PIPELINE_INITIALISATION refuses a non-GRCh38 run whenever a family has a
     // familyPed (i.e. slivar would run), before any task starts.

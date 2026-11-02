@@ -1,0 +1,34 @@
+---
+id: family1_father
+proband:
+  subject:
+    id: NA12891
+    sex: MALE
+  phenotypicFeatures:
+    - type:
+        id: HP:0001159
+        label: Syndactyly
+
+pedigree:
+  persons:
+    - individualId: NA12878
+      paternalId: NA12891
+      maternalId: NA12892
+      sex: FEMALE
+      affectedStatus: UNAFFECTED
+    - individualId: NA12891
+      sex: MALE
+      affectedStatus: AFFECTED
+    - individualId: NA12892
+      sex: FEMALE
+      affectedStatus: UNAFFECTED
+
+metaData:
+  resources:
+    - id: hp
+      name: human phenotype ontology
+      url: http://purl.obolibrary.org/obo/hp.owl
+      version: hp/releases/2019-11-08
+      namespacePrefix: HP
+      iriPrefix: 'http://purl.obolibrary.org/obo/HP_'
+  phenopacketSchemaVersion: 2.0
