@@ -1,0 +1,90 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE validateJointCallerExclusivity function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "validateJointCallerExclusivity"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    // input[1] is a family's samplesheet rows, [meta, vcf, cram] each. Only caller is read, so
+    // the paths don't have to exist.
+
+    test("Test Function validateJointCallerExclusivity - one DRAGEN_JOINT row passes") {
+        when {
+            function {
+                """
+                input[0] = "fam1_joint"
+                input[1] = [
+                    [[caller: "DRAGEN_JOINT"], "trio.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success }
+            )
+        }
+    }
+
+    test("Test Function validateJointCallerExclusivity - per-sample DRAGEN rows pass") {
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[caller: "DRAGEN"], "kid.vcf.gz", []],
+                    [[caller: "DRAGEN"], "dad.vcf.gz", []],
+                    [[caller: "DRAGEN"], "mom.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success }
+            )
+        }
+    }
+
+    test("Test Function validateJointCallerExclusivity - a DRAGEN_JOINT row with per-sample rows fails") {
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[caller: "DRAGEN_JOINT"], "trio.vcf.gz", []],
+                    [[caller: "DRAGEN"], "kid.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.failed },
+                { assert function.stdout.any { it.contains("Family fam1 has caller='DRAGEN_JOINT' but 2 rows") } }
+            )
+        }
+    }
+
+    test("Test Function validateJointCallerExclusivity - two DRAGEN_JOINT rows fail") {
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[caller: "DRAGEN_JOINT"], "trio.vcf.gz", []],
+                    [[caller: "DRAGEN_JOINT"], "trio_again.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.failed },
+                { assert function.stdout.any { it.contains("Family fam1 has caller='DRAGEN_JOINT' but 2 rows") } }
+            )
+        }
+    }
+}

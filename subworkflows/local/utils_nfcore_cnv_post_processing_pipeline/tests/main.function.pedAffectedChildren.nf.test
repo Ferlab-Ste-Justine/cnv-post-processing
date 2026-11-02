@@ -41,4 +41,36 @@ nextflow_function {
             )
         }
     }
+
+    test("Test Function pedAffectedChildren - PED formats: header, tabs or spaces, CRLF, blank line, missing phenotype") {
+        // Written here, with Windows line endings, rather than committed (pre-commit would
+        // rewrite them). Only phenotype 2 is affected: 1, 0 and -9 aren't, and a row with fewer
+        // than 6 columns has no phenotype.
+        when {
+            function {
+                """
+                def ped = java.nio.file.Files.createTempFile("ped_formats", ".ped")
+                ped.text = [
+                    "#family\\tid\\tfather\\tmother\\tsex\\tphenotype",
+                    "fam\\tkid_tabs\\tdad\\tmom\\t1\\t2",
+                    "fam   kid_spaces   dad   mom   2   2   ",
+                    "",
+                    "fam\\tkid_unaffected\\tdad\\tmom\\t1\\t1",
+                    "fam\\tkid_unknown\\tdad\\tmom\\t1\\t0",
+                    "fam\\tkid_missing\\tdad\\tmom\\t1\\t-9",
+                    "fam\\tkid_short\\tdad\\tmom\\t1",
+                    "fam\\tdad\\t0\\t0\\t1\\t2",
+                    "fam\\tmom\\t0\\t0\\t2\\t1",
+                ].join("\\r\\n") + "\\r\\n"
+                input[0] = ped
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ["kid_tabs", "kid_spaces"] }
+            )
+        }
+    }
 }
