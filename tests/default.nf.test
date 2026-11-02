@@ -22,16 +22,44 @@ nextflow_pipeline {
             // --no-version across this repo's own bcftools modules regardless, since that's
             // real reproducibility hygiene beyond just this test). VEP's own "##VEP=...
             // time=..." provenance header and Exomiser's generated-timestamp HTML/VCF reports
-            // have no equivalent suppression flag. Matches the sibling SNV pipeline's own
-            // tests/default.nf.test, which hit this identical wall and settled on stable_path +
-            // workflow.success rather than full-content snapshotting.
+            // have no equivalent suppression flag. The sibling SNV pipeline's own
+            // tests/default.nf.test hit this identical wall and settled on stable_path +
+            // workflow.success; this one also snapshots each published VCF's variant lines
+            // (vcf_md5 below), which those headers don't touch.
             assert workflow.success
+
+            // nft-vcf's variantsMD5 hashes a VCF's records only, not its header.
+            def vcf_md5 = getAllFilesFromDir("$outputDir", include: ['**/*.vcf.gz']).collect { vcf ->
+                "${file(vcf.toString()).name}:md5,${path(vcf.toString()).vcf.variantsMD5}".toString()
+            }.sort()
+
+            // fam1's final VCF is built around its proband, NA12878: its own calls, each with the
+            // trio's FORMAT and slivar's tags. (No params.* in this block, see CLAUDE.md.)
+            def proband_lines = path("$outputDir/slivar/fam1.NA12878.cnv.slivar.vcf.gz").linesGzip
+            def proband_records = proband_lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            def input_ids = path("${projectDir}/data-test/vcf/NA12878.chr22.cnv.vcf.gz").linesGzip
+                .findAll { !it.startsWith("#") }.collect { it.split("\t")[2] } as Set
+            def info_keys = { cols -> cols[7].split(";").collect { it.split("=", 2)[0] } as Set }
+            def svtype = { cols -> cols[7].split(";").find { it.startsWith("SVTYPE=") } }
+
+            // Exomiser's output VCF repeats its input's header: the proband slivar VCF's COHORT_ID
+            // and slivar tags show it ran on that. (Under -profile test its reports have no variant
+            // rows, on every route.)
+            def exomiser_header = path("$outputDir/exomiser/fam1.NA12878.exomiser.vcf.gz").linesGzip.findAll { it.startsWith("##") }
+
             assertAll(
+                { assert proband_records.size() > 0 },
+                { assert proband_records.every { it[2] in input_ids } },
+                { assert proband_records.every { svtype(it) in ["SVTYPE=DEL", "SVTYPE=DUP"] } },
+                { assert proband_records.every { info_keys(it).containsAll(["CSQ", "COHORT_ID", "COHORT_POS", "COHORT_END"]) } },
+                { assert proband_lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["NA12878", "NA12891", "NA12892"] },
+                { assert exomiser_header.any { it.startsWith("##INFO=<ID=COHORT_ID,") } },
                 { assert snapshot(
                     // pipeline versions.yml file, from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
                     // All stable path name, with a relative path
-                    stable_path
+                    stable_path,
+                    vcf_md5
                 ).match() }
             )
         }

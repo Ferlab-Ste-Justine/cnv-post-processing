@@ -101,6 +101,53 @@ nextflow_process {
         }
     }
 
+    // Real data: one `-profile test,docker --publish_all` run (2026-11-02) of the NA12878 trio's
+    // chr22 VCFs. NA12878_trio.chr22.refined.vcf.gz is depth_refined/fam1.refined.vcf.gz (35
+    // records), NA12878.chr22.vep.vcf.gz is ensemblvep/variants.fam1.NA12878.cnv.vep.vcf.gz (22
+    // calls).
+    test("NA12878 trio, chr22: every proband call is joined, with its own interval where truvari kept a parent's") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "NA12878" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878_trio.chr22.refined.vcf.gz", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878_trio.chr22.refined.vcf.gz.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878.chr22.vep.vcf.gz", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878.chr22.vep.vcf.gz.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def records = path(process.out.vcf_tbi.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            def proband_ids = path("${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878.chr22.vep.vcf.gz").linesGzip
+                .findAll { !it.startsWith("#") }.collect { it.split("\t")[2] }
+            assert records.collect { it[2] } == proband_ids
+            def info = { cols -> cols[7].split(";").collectEntries { kv -> def p = kv.split("=", 2); [p[0], p.size() > 1 ? p[1] : true] } }
+            records.each { cols ->
+                assert info(cols).SVTYPE in ["DEL", "DUP"]
+                assert info(cols).containsKey("CSQ")
+                assert ["COHORT_ID", "COHORT_POS", "COHORT_END"].every { info(cols).containsKey(it) }
+            }
+
+            // where truvari kept a parent's call, the record keeps NA12878's own interval
+            def kept_other = records.find { it[1] == "17288729" }
+            assert kept_other[2] == "DRAGEN:LOSS:chr22:17288730-17294633"
+            assert info(kept_other).COHORT_ID == "DRAGEN%3ALOSS%3Achr22%3A17287644-17294633"
+            assert info(kept_other).COHORT_POS == "17287643"
+            assert records.count { info(it).COHORT_ID != it[2].replace("%", "%25").replace(":", "%3A") } == 2
+
+            def task_err = path("${file(process.out.vcf_tbi.get(0)[1]).parent}/.command.err").text
+            assert task_err.contains("Joined 22 NA12878 call(s) to the family's FORMAT; 13 family record(s) without a NA12878 call left out.")
+            assert !task_err.contains("WARNING")
+        }
+    }
+
     test("a KID call no family record has stops the task") {
 
         when {
