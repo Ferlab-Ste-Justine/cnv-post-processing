@@ -256,9 +256,11 @@ A few patterns and gotchas worth knowing before editing:
   `familyId`, `sampleSize`, `familyPed`, `familyPheno`, `pheno` from the samplesheet, plus
   `vcfSample` (its VCF sample name) and `proband`. At the family-merge fan-in (stage 2 in the flow
   above), sample-only fields (`sample`, `id`, `caller`, `cram`, `vcfSample`, `proband`) are dropped
-  and `id` resets to the family level, keeping a `samples: [...]` list for fanning back out later
-  (e.g. depth-refinement's per-sample mosdepth runs) and `probands: [...]`, the probands' VCF
-  sample names (`[]` for `DRAGEN_JOINT` families). After `JOIN_PROBAND_CNV`, `meta.proband` names
+  and `id` resets to the family level, keeping `samples: [...]`, the samples' VCF names, for
+  fanning back out later (e.g. depth-refinement's per-sample mosdepth runs: `DEPTH_GENOTYPE_REFINE`
+  matches each `<name>.ratio.bed` to the family VCF's column of that name, and stops on a column
+  with no ratio file), and `probands: [...]`, the probands' VCF sample names (`[]` for
+  `DRAGEN_JOINT` families). After `JOIN_PROBAND_CNV`, `meta.proband` names
   the proband a VCF is built around. The fan-in sorts a
   family's samples by name first: `groupTuple` keeps arrival order, which varies between runs, and
   `bcftools merge` writes its sample columns in input order. Any new fan-in feeding an

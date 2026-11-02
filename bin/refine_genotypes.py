@@ -111,6 +111,14 @@ def main():
     sexes = load_ped_sexes(args.ped) if args.ped else {}
 
     vcf_in = pysam.VariantFile(args.vcf_in)
+    # A sample's ratios are found by its VCF name: a ratio file named otherwise (the samplesheet's
+    # sample column, say) would leave that sample unrefined without a word.
+    no_ratios = [name for name in vcf_in.header.samples if name not in ratios_by_sample]
+    if no_ratios:
+        sys.exit(
+            f"refine_genotypes.py: no <sample>.ratio.bed for VCF sample(s) {', '.join(no_ratios)} of {args.vcf_in} "
+            f"(got: {', '.join(sorted(ratios_by_sample))}). Each ratio file must be named after a VCF sample."
+        )
     vcf_out = pysam.VariantFile(args.vcf_out, "wz", header=vcf_in.header)
     has_cn = "CN" in vcf_in.header.formats
 

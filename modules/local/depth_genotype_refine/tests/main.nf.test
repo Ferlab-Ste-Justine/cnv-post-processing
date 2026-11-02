@@ -191,4 +191,31 @@ nextflow_process {
             assert samplesOf("xy_5_nonpar_y") == ["./.:.", "./.:.", "./.:."]
         }
     }
+
+    // A ratio file is found by its VCF sample's name. One named otherwise (the samplesheet's
+    // sample column, when it isn't the VCF's) used to leave that sample unrefined, silently.
+    test("toy_xy fixture, a VCF sample without a ratio file stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_xy"],
+                    file("${projectDir}/modules/local/depth_genotype_refine/tests/data/toy_xy.vcf.gz"),
+                    file("${projectDir}/modules/local/depth_genotype_refine/tests/data/toy_xy.vcf.gz.tbi"),
+                    [
+                        file("${projectDir}/modules/local/depth_genotype_refine/tests/data/dad.ratio.bed"),
+                        file("${projectDir}/modules/local/depth_genotype_refine/tests/data/mom.ratio.bed")
+                    ],
+                    []
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("no <sample>.ratio.bed for VCF sample(s) nosex of toy_xy.vcf.gz (got: dad, mom)")
+        }
+    }
 }

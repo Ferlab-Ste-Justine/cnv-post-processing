@@ -257,13 +257,14 @@ workflow CNV_POST_PROCESSING {
             def vcfs = by_sample.collect { entry -> entry[1] }
             def tbis = by_sample.collect { entry -> entry[2] }
             // now that samples are grouped together, drop the per-sample-only meta fields and
-            // reset id to the family level. Keep the sample-id list (needed to fan back out to
-            // per-sample steps later, e.g. depth-based genotype refinement), and the probands'
-            // VCF sample names, sorted for the same reason as the samples.
+            // reset id to the family level. Keep the samples' VCF names (needed to fan back out to
+            // per-sample steps later, e.g. depth-based genotype refinement, whose results are
+            // matched to the family VCF's columns by name), and the probands', sorted for the
+            // same reason as the samples.
             def family_meta = metas[0].findAll { entry -> !["sample", "id", "caller", "cram", "vcfSample", "proband"].contains(entry.key) }
             family_meta = family_meta + [
                 id: family_meta.familyId,
-                samples: metas.collect { it.sample },
+                samples: metas.collect { it.vcfSample },
                 probands: metas.findAll { it.proband }.collect { it.vcfSample }.sort()
             ]
             [family_meta, vcfs.flatten(), tbis.flatten()]
@@ -327,7 +328,9 @@ workflow CNV_POST_PROCESSING {
                 def crai = file("${cram}.crai")
                 def bai = file("${cram}.bai")
                 def index = crai.exists() ? crai : (bai.exists() ? bai : [])
-                [[id: meta.sample, family: meta.familyId], file(cram), index]
+                // Named after the VCF sample, like meta.samples: DEPTH_GENOTYPE_REFINE matches
+                // each <name>.ratio.bed to the family VCF's column of that name.
+                [[id: meta.vcfSample, family: meta.familyId], file(cram), index]
             },
         reference_fasta,
         reference_fasta_fai
@@ -344,7 +347,7 @@ workflow CNV_POST_PROCESSING {
             // becomes ambiguous once multiple samples with potentially different callers merge),
             // NORMALIZE_CNV_JOINT reuses NORMALIZE_CNV's own caller guard, so 'caller' must stay.
             def family_meta = meta.findAll { entry -> !["sample", "id", "cram"].contains(entry.key) }
-            family_meta = family_meta + [id: family_meta.familyId, samples: [meta.sample], probands: []]
+            family_meta = family_meta + [id: family_meta.familyId, samples: vcfSampleNames(vcf), probands: []]
             [family_meta, vcf]
         }
 

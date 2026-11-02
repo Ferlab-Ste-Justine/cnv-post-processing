@@ -29,8 +29,8 @@ include { BCFTOOLS_INDEX        } from '../../../modules/local/bcftools_index/ma
 workflow BAM_VCF_DEPTH_GENOTYPE_REFINEMENT {
 
     take:
-    ch_family_vcf  // [meta(id:familyId, samples:[s1,s2,...]), vcf, tbi]
-    ch_sample_cram // [meta(id:sample, family:familyId), cram, crai] -- pre-filtered to samples that have a cram
+    ch_family_vcf  // [meta(id:familyId, samples:[s1,s2,...]), vcf, tbi] -- samples: the VCF's sample names
+    ch_sample_cram // [meta(id:sample, family:familyId), cram, crai] -- id: the VCF sample name (DEPTH_GENOTYPE_REFINE matches <id>.ratio.bed to the VCF column of that name); pre-filtered to samples that have a cram
     ch_fasta       // path: reference genome fasta
     ch_fasta_fai   // path: reference genome fasta index
 
