@@ -218,12 +218,6 @@
                     "description": "When specified, publishes the exomiser output to this folder",
                     "format": "directory-path",
                     "fa_icon": "fas fa-folder-open"
-                },
-                "exomiser_start_from_vep": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "For families that Exomiser runs on the family VCF (no proband VCF), use the VEP-annotated VCF instead of the pre-VEP depth-refined one.",
-                    "fa_icon": "fas fa-dna"
                 }
             }
         },
