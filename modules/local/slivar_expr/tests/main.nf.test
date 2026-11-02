@@ -494,4 +494,30 @@ nextflow_process {
             assert snapshot(summary).match("fam1_joint_sex_chromosome_tags")
         }
     }
+
+    // famA.empty.vcf: famA.vcf's header only, as for a proband with no call left after VEP
+    // (JOIN_PROBAND_CNV then writes a header-only VCF).
+    test("famA, a VCF with no record: slivar writes a header-only VCF") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famA"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.empty.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.empty.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip
+            assert lines.every { it.startsWith("#") }
+            assert lines.find { it.startsWith("#CHROM") } == path("${projectDir}/modules/local/slivar_expr/tests/data/famA.empty.vcf").readLines().find { it.startsWith("#CHROM") }
+        }
+    }
 }

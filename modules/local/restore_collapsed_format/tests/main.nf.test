@@ -130,4 +130,25 @@ nextflow_process {
             ]
         }
     }
+
+    // fam2.no_oid.*: the fam2 fixtures without FORMAT/OID, plain text.
+    test("Toy trio without FORMAT/OID stops the task: it can't tell which call a sample's column holds") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam2" ],
+                    file("\${projectDir}/modules/local/restore_collapsed_format/tests/data/fam2.no_oid.collapsed.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/restore_collapsed_format/tests/data/fam2.no_oid.removed.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("fam2.no_oid.collapsed.vcf has no FORMAT/OID (set by NORMALIZE_CNV's ext.original_id)")
+        }
+    }
 }

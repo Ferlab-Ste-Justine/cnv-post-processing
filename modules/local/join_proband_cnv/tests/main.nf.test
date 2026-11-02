@@ -21,6 +21,8 @@ nextflow_process {
     // - fam1.twice.refined.vcf: KID's call 10501-21900 in a second family record (chr1:30000).
     // - KID.extra.vep.vcf: KID.vep.vcf plus a call no family record has (chr1:30000).
     // - MOM.vep.vcf: MOM's VEP VCF, passed as the proband's.
+    // - KID.empty.vep.vcf: KID.vep.vcf's header only, as when VEP drops every call of a proband.
+    // - fam1.no_oid.refined.vcf: fam1.refined.vcf without FORMAT/OID.
     // The .tbi files are empty placeholders: the script never reads them.
 
     test("toy trio: each KID call keeps its own coordinates, INFO and CSQ, with the family's FORMAT") {
@@ -211,6 +213,85 @@ nextflow_process {
         then {
             assert process.failed
             assert process.errorReport.contains("MOM.vep.vcf should hold KID's calls only, but its samples are MOM")
+        }
+    }
+
+    test("a KID with no calls: a header-only VCF, indexed") {
+        // VEP drops records on contigs its cache doesn't have, so a proband's VEP VCF can be empty
+        // (every call on a contig the test cache lacks, or a proband with no CNV at all).
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.empty.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf_tbi.size() == 1
+                assert file(vcf_tbi.get(0)[1]).name == "fam1.KID.cnv.proband.vcf.gz"
+                assert file(vcf_tbi.get(0)[2]).name == "fam1.KID.cnv.proband.vcf.gz.tbi"
+            }
+
+            def lines = path(process.out.vcf_tbi.get(0)[1]).linesGzip
+            assert lines.every { it.startsWith("#") }
+            assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["DAD", "KID", "MOM"]
+            assert lines.any { it.startsWith("##INFO=<ID=COHORT_ID,") }
+            assert lines.any { it.startsWith("##FORMAT=<ID=OID,") }
+            assert path("${file(process.out.vcf_tbi.get(0)[1]).parent}/.command.err").text.contains("Joined 0 KID call(s) to the family's FORMAT")
+        }
+    }
+
+    test("a family VCF without FORMAT/OID stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.no_oid.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("fam1.no_oid.refined.vcf has no FORMAT/OID (set by NORMALIZE_CNV's ext.original_id)")
+        }
+    }
+
+    test("a proband who isn't a sample of the family VCF stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "SIB" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("proband 'SIB' isn't a sample of fam1.refined.vcf (DAD, KID, MOM)")
         }
     }
 }
