@@ -9,25 +9,31 @@ nextflow_process {
     tag "join_proband_cnv"
 
     // Toy fixtures in ./data/, plain-text VCFs (bin/join_proband_cnv.py reads plain or bgzipped):
-    // - fam1.slivar.vcf: a trio (DAD, KID, MOM) after slivar, with FORMAT/OID.
-    //   1. chr1:10000, kept call MOM's (10001-20000); KID's own call is 10501-21900.
-    //   2. chr1:50000, no KID call (OID "."): left out.
-    //   3. chr1:80000, KID's own call, with an ID holding "%" and ":" (OID toy%25call%3A80001).
-    // - KID.cnv.vcf: KID's caller VCF, with a ref block (ALT "."), a FILTER and INFO keys
-    //   (cnvBinSupportRatio, REFLEN, GCP) the slivar VCF doesn't define.
-    // - MOM.cnv.vcf: KID.cnv.vcf without the 10501-21900 call, as the wrong sample's VCF.
-    // fam1.slivar.vcf.tbi is an empty placeholder: the script never reads it.
+    // - fam1.refined.vcf: a trio (DAD, KID, MOM) after the cohort collapse, with FORMAT/OID.
+    //   1. chr1:10000, MOM's call kept (10001-20000); KID's own call is 10501-21900.
+    //   2. chr1:50000, DAD only (KID OID "."): left out.
+    //   3. chr1:70000, DAD only, KID's FORMAT column short ("./."): left out.
+    //   4. chr1:80000, KID's own call, with an ID holding "%" and ":" (OID toy%25call%3A80001).
+    //   5-6. chr1:90000, a split multiallelic site: KID's OID multi%3A90001 on <DEL> and <DUP>.
+    //   7. chr2:1000, a KID call that isn't in KID.vep.vcf (as when VEP drops a contig): a warning.
+    // - KID.vep.vcf: KID's VEP-annotated per-sample VCF: SVTYPE DEL/DUP, CSQ, its own
+    //   NumCollapsed, a FILTER and INFO keys the family VCF doesn't have; the two alleles at 90000.
+    // - fam1.twice.refined.vcf: KID's call 10501-21900 in a second family record (chr1:30000).
+    // - KID.extra.vep.vcf: KID.vep.vcf plus a call no family record has (chr1:30000).
+    // - MOM.vep.vcf: MOM's VEP VCF, passed as the proband's.
+    // The .tbi files are empty placeholders: the script never reads them.
 
-    test("toy trio: each KID call takes its own coordinates and INFO, plus slivar's tags and FORMAT") {
+    test("toy trio: each KID call keeps its own coordinates, INFO and CSQ, with the family's FORMAT") {
 
         when {
             process {
                 """
                 input[0] = [
                     [ id: "fam1", familyId: "fam1", proband: "KID" ],
-                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf", checkIfExists: true),
-                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf.tbi", checkIfExists: true),
-                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.cnv.vcf", checkIfExists: true)
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
                 ]
                 """
             }
@@ -44,50 +50,68 @@ nextflow_process {
 
             def lines = path(process.out.vcf_tbi.get(0)[1]).linesGzip
             def header = lines.findAll { it.startsWith("##") }
+            // KID's header, with the family's FORMAT lines instead of its own
+            assert header.any { it.startsWith("##INFO=<ID=CSQ,") }
             assert header.any { it.startsWith("##FILTER=<ID=cnvBinSupportRatio,") }
-            assert header.any { it.startsWith("##INFO=<ID=GCP,") }
-            ["COHORT_ID", "COHORT_POS", "COHORT_END"].each { key ->
+            assert header.findAll { it.startsWith("##FORMAT=") }.collect { (it =~ /ID=([^,]+)/)[0][1] } == ["GT", "CN", "OID"]
+            ["COHORT_ID", "COHORT_POS", "COHORT_END", "COHORT_NumCollapsed", "COHORT_NumConsolidated"].each { key ->
                 assert header.any { it.startsWith("##INFO=<ID=${key},") }
             }
             assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["DAD", "KID", "MOM"]
 
             def records = lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }
-            assert records.size() == 2
+            assert records.collect { "${it[0]}:${it[1]}:${it[4]}".toString() } == ["chr1:10500:<DUP>", "chr1:80000:<DEL>", "chr1:90000:<DEL>", "chr1:90000:<DUP>"]
             def info = { cols -> cols[7].split(";").collectEntries { kv -> def p = kv.split("=", 2); [p[0], p.size() > 1 ? p[1] : true] } }
 
-            // 1. KID's own call, not MOM's kept one; the family's tags and FORMAT from slivar
+            // 1. KID's own call, not MOM's kept one; the family record's FORMAT and COHORT_*
             def first = records[0]
             assert first[0..6] == ["chr1", "10500", "DRAGEN:GAIN:chr1:10501-21900", "N", "<DUP>", "77", "cnvBinSupportRatio"]
             def first_info = info(first)
+            assert first_info.SVTYPE == "DUP"
             assert first_info.END == "21900"
-            assert first_info.SVLEN == "11400"
             assert first_info.GCP == "0.41"
-            assert first_info.NumCollapsed == "2"
-            assert first_info.inherited_maternal == "KID"
+            assert first_info.CSQ == "duplication|transcript_amplification|HIGH|GENE1"
+            assert first_info.NumCollapsed == "0"            // KID's own, from the per-sample collapse
+            assert first_info.COHORT_NumCollapsed == "1"     // the family record's
+            assert first_info.COHORT_NumConsolidated == "2"
             assert first_info.COHORT_ID == "DRAGEN%3AGAIN%3Achr1%3A10001-20000"
             assert first_info.COHORT_POS == "10000"
             assert first_info.COHORT_END == "20000"
+            assert first_info.SVLEN == "11400"               // KID's, not the family record's 10000
             assert first.drop(8) == ["GT:CN:OID", "0/0:2:.", "0/1:3:DRAGEN%3AGAIN%3Achr1%3A10501-21900", "0/1:3:DRAGEN%3AGAIN%3Achr1%3A10001-20000"]
 
-            // 3. OID decoded in one pass: toy%25call%3A80001 -> toy%call:80001
+            // 4. OID decoded in one pass: toy%25call%3A80001 -> toy%call:80001
             def second = records[1]
             assert second[0..6] == ["chr1", "80000", "toy%call:80001", "N", "<DEL>", "12", "PASS"]
             assert info(second).COHORT_ID == "toy%25call%3A80001"
+
+            // 5-6. each allele of the split site matched to its own family record (MOM carries the deletion only)
+            assert records[2][2] == "multi:90001" && records[3][2] == "multi:90001"
+            assert records[2][11] == "0/1:1:DRAGEN%3ALOSS%3Achr1%3A90001-95000"
+            assert records[3][11] == "0/0:2:."
+            assert info(records[2]).CSQ.startsWith("deletion|")
+            assert info(records[3]).CSQ.startsWith("duplication|")
+            assert !info(records[2]).containsKey("COHORT_NumCollapsed")  // the family record has none
+
+            // 7. a warning, not an error, in the task's stderr (process.stderr is Nextflow's own)
+            def task_err = path("${file(process.out.vcf_tbi.get(0)[1]).parent}/.command.err").text
+            assert task_err.contains("WARNING: 1 family record(s) name a KID call")
 
             assert path(process.out.versions[0]).text.contains("pysam:")
         }
     }
 
-    test("wrong proband VCF: an OID that isn't in it stops the task") {
+    test("a KID call no family record has stops the task") {
 
         when {
             process {
                 """
                 input[0] = [
                     [ id: "fam1", familyId: "fam1", proband: "KID" ],
-                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf", checkIfExists: true),
-                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.slivar.vcf.tbi", checkIfExists: true),
-                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/MOM.cnv.vcf", checkIfExists: true)
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.extra.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
                 ]
                 """
             }
@@ -95,7 +119,51 @@ nextflow_process {
 
         then {
             assert process.failed
-            assert process.stdout.any { it.contains("isn't in MOM.cnv.vcf") } || process.errorReport.contains("isn't in MOM.cnv.vcf")
+            assert process.errorReport.contains("KID's call DRAGEN:LOSS:chr1:30001-31000 (<DEL>) at chr1:30000 is in no record of fam1.refined.vcf")
+        }
+    }
+
+    test("a KID call in two family records stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.twice.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("KID's call DRAGEN:GAIN:chr1:10501-21900 (<DUP>) is in two records of fam1.twice.refined.vcf, at chr1:10000 and chr1:30000")
+        }
+    }
+
+    test("another sample's VEP VCF as the proband's stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/MOM.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("MOM.vep.vcf should hold KID's calls only, but its samples are MOM")
         }
     }
 }

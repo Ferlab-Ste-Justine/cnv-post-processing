@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""Join a proband's own CNV calls to the family's slivar VCF, through FORMAT/OID. See
+"""Join the family's FORMAT onto a proband's own CNV calls, through FORMAT/OID. See
 modules/local/join_proband_cnv/main.nf for the CLI contract.
 
-truvari's cohort collapse keeps one call per cluster, often a parent's, so a slivar record's ID,
-POS, END, QUAL, FILTER and caller INFO describe that call, not the proband's. Each sample's
-FORMAT/OID still names its own call (bin/add_original_id.awk), so for every slivar record where
-the proband has a call, this writes one record built from:
+The proband VCF holds the proband's own calls: normalized (SVTYPE DEL/DUP), collapsed per sample
+and annotated by VEP, so its CSQ describes each call's own interval. The family VCF (merged,
+collapsed across the family, depth-refined) has one record per cluster of calls: truvari keeps
+one call per cluster, often a parent's, but each sample's FORMAT/OID still names its own call
+(bin/add_original_id.awk). For every proband call, this writes one record built from:
 
-- the proband's own call, from its caller VCF: CHROM, POS, ID, REF, ALT, QUAL, FILTER and INFO;
-- the slivar record: the INFO keys the proband's call doesn't have (slivar's tags, VEP's CSQ,
-  truvari's NumCollapsed...), and FORMAT with every family sample;
-- INFO/COHORT_ID, COHORT_POS and COHORT_END: the slivar record it comes from (COHORT_ID
-  percent-encoded like OID, since ":" isn't allowed in an INFO value either).
+- the proband's call: CHROM, POS, ID, REF, ALT, QUAL, FILTER and INFO (with CSQ);
+- the family record whose proband OID names that call: FORMAT and every sample's column;
+- INFO/COHORT_ID, COHORT_POS and COHORT_END: that family record (COHORT_ID percent-encoded like
+  OID, since ":" isn't allowed in an INFO value either), and COHORT_NumCollapsed /
+  COHORT_NumConsolidated when it has them (the per-sample collapse writes keys of the same name).
 
-Records where the proband has no call (OID ".") are left out.
+The rest of the family record's INFO describes the call truvari kept, not the proband's, and is
+left out. slivar runs on the output.
+
+A family record is found by (OID, ALT): a split multiallelic site repeats its ID on each allele.
+A proband call with no family record, or in two, is an error: the per-sample segments don't
+overlap, so each call should be in exactly one family record. Family records naming a proband
+call that isn't in the proband VCF only get a warning: VEP drops records on contigs its cache
+doesn't have, and a split multiallelic family site repeats the proband's OID on its other allele.
+Records are written in the proband VCF's order.
 """
 import argparse
 import re
@@ -22,16 +31,16 @@ import sys
 import pysam
 
 COHORT_INFO_HEADERS = [
-    '##INFO=<ID=COHORT_ID,Number=1,Type=String,Description="ID of the family slivar record this proband call was joined from (\':\' percent-encoded as %3A)">',
-    '##INFO=<ID=COHORT_POS,Number=1,Type=Integer,Description="POS of the family slivar record this proband call was joined from">',
-    '##INFO=<ID=COHORT_END,Number=1,Type=Integer,Description="END of the family slivar record this proband call was joined from">',
+    '##INFO=<ID=COHORT_ID,Number=1,Type=String,Description="ID of the family record this proband call was joined to (\':\' percent-encoded as %3A)">',
+    '##INFO=<ID=COHORT_POS,Number=1,Type=Integer,Description="POS of the family record this proband call was joined to">',
+    '##INFO=<ID=COHORT_END,Number=1,Type=Integer,Description="END of the family record this proband call was joined to">',
 ]
 
-# Header lines taken from the proband's caller VCF when the slivar VCF doesn't define them: its
-# INFO, FILTER and ALT values are written as is. FORMAT comes from slivar, so its lines aren't.
-MERGED_HEADER_TYPES = ("INFO", "FILTER", "ALT", "contig")
-
-HEADER_ID = re.compile(r"^##(\w+)=<ID=([^,>]+)")
+# Family INFO keys copied as COHORT_<key>, with their header line, when the family VCF has them.
+COHORT_INFO_COPIED = {
+    "NumCollapsed": '##INFO=<ID=COHORT_NumCollapsed,Number=1,Type=Integer,Description="Number of calls truvari collapsed into the family record this proband call was joined to">',
+    "NumConsolidated": '##INFO=<ID=COHORT_NumConsolidated,Number=1,Type=Integer,Description="Number of samples truvari consolidated into the family record this proband call was joined to">',
+}
 
 
 def decode_oid(oid):
@@ -88,10 +97,21 @@ def record_end(cols, info):
     return str(int(cols[1]) + len(cols[3]) - 1)
 
 
+def sample_oid(cols, col):
+    """The sample's FORMAT/OID in this record, "." when unset. A sample's trailing FORMAT values
+    can be left out, so a short column means "." too."""
+    keys = cols[8].split(":")
+    if "OID" not in keys or col >= len(cols):
+        return "."
+    values = cols[col].split(":")
+    index = keys.index("OID")
+    return values[index] if index < len(values) else "."
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--slivar-vcf", required=True, help="The family's slivar VCF")
-    parser.add_argument("--proband-vcf", required=True, help="The proband's own caller VCF (the samplesheet's vcf)")
+    parser.add_argument("--family-vcf", required=True, help="The family VCF, with FORMAT/OID (depth-refined)")
+    parser.add_argument("--proband-vcf", required=True, help="The proband's own VEP-annotated per-sample VCF")
     parser.add_argument("--proband", required=True, help="The proband's sample name in both VCFs")
     parser.add_argument("--vcf-out", required=True, help="Output path, ending in .vcf.gz (a .tbi is written next to it)")
     args = parser.parse_args()
@@ -99,82 +119,91 @@ def main():
     if not args.vcf_out.endswith(".vcf.gz"):
         sys.exit("join_proband_cnv.py: --vcf-out must end in .vcf.gz")
 
-    slivar_meta, slivar_chrom_line, slivar_records = read_vcf(args.slivar_vcf)
-    proband_meta, _, proband_records = read_vcf(args.proband_vcf)
+    family_meta, family_chrom_line, family_records = read_vcf(args.family_vcf)
+    proband_meta, proband_chrom_line, proband_records = read_vcf(args.proband_vcf)
 
-    samples = slivar_chrom_line.split("\t")[9:]
+    samples = family_chrom_line.split("\t")[9:]
     if args.proband not in samples:
-        sys.exit(f"join_proband_cnv.py: proband '{args.proband}' isn't a sample of {args.slivar_vcf} ({', '.join(samples)})")
+        sys.exit(f"join_proband_cnv.py: proband '{args.proband}' isn't a sample of {args.family_vcf} ({', '.join(samples)})")
     proband_col = 9 + samples.index(args.proband)
-    if not any(line.startswith("##FORMAT=<ID=OID,") for line in slivar_meta):
-        sys.exit(f"join_proband_cnv.py: {args.slivar_vcf} has no FORMAT/OID (set by NORMALIZE_CNV's ext.original_id)")
+    if not any(line.startswith("##FORMAT=<ID=OID,") for line in family_meta):
+        sys.exit(f"join_proband_cnv.py: {args.family_vcf} has no FORMAT/OID (set by NORMALIZE_CNV's ext.original_id)")
+    proband_samples = proband_chrom_line.split("\t")[9:]
+    if proband_samples != [args.proband]:
+        sys.exit(
+            f"join_proband_cnv.py: {args.proband_vcf} should hold {args.proband}'s calls only, but its samples are "
+            f"{', '.join(proband_samples) or 'none'}. Is it that sample's own VCF?"
+        )
 
-    # The proband's calls by ID. ALT="." records are the caller's ref blocks, which NORMALIZE_CNV
-    # drops, so no OID can point to them.
-    calls = {}
-    for cols in proband_records:
-        if cols[4] == ".":
-            continue
-        if cols[2] in calls:
-            sys.exit(f"join_proband_cnv.py: ID '{cols[2]}' is on more than one record of {args.proband_vcf}")
-        calls[cols[2]] = cols
-
-    defined = {m.groups() for m in map(HEADER_ID.match, slivar_meta) if m}
-    extra_meta = []
-    for line in proband_meta:
-        m = HEADER_ID.match(line)
-        if m and m.group(1) in MERGED_HEADER_TYPES and m.groups() not in defined:
-            extra_meta.append(line)
-            defined.add(m.groups())
-    out_meta = slivar_meta + extra_meta + COHORT_INFO_HEADERS
-    contig_order = {m.group(2): i for i, m in enumerate(filter(None, map(HEADER_ID.match, out_meta))) if m.group(1) == "contig"}
-
-    joined, no_call = [], 0
-    for cols in slivar_records:
-        keys = cols[8].split(":")
-        values = cols[proband_col].split(":")
-        oid_index = keys.index("OID") if "OID" in keys else None
-        # A sample's trailing FORMAT values can be left out, so a short column means OID ".".
-        oid = values[oid_index] if oid_index is not None and oid_index < len(values) else "."
+    # The family records by the proband call their OID names, with its ALT.
+    family_by_call, no_call = {}, 0
+    for cols in family_records:
+        oid = sample_oid(cols, proband_col)
         if oid == ".":
             no_call += 1
             continue
-        original_id = decode_oid(oid)
-        call = calls.get(original_id)
-        if call is None:
+        key = (decode_oid(oid), cols[4])
+        if key in family_by_call:
+            first = family_by_call[key]
             sys.exit(
-                f"join_proband_cnv.py: {args.proband}'s OID '{original_id}' at {cols[0]}:{cols[1]} isn't in {args.proband_vcf}. "
-                "Is it that sample's own caller VCF?"
+                f"join_proband_cnv.py: {args.proband}'s call {key[0]} ({key[1]}) is in two records of {args.family_vcf}, "
+                f"at {first[0]}:{first[1]} and {cols[0]}:{cols[1]}. truvari's cohort collapse should keep each call in one record."
+            )
+        family_by_call[key] = cols
+
+    joined, seen = [], set()
+    for cols in proband_records:
+        key = (cols[2], cols[4])
+        if key in seen:
+            sys.exit(f"join_proband_cnv.py: call {key[0]} ({key[1]}) is on more than one record of {args.proband_vcf}")
+        seen.add(key)
+        family = family_by_call.get(key)
+        if family is None:
+            sys.exit(
+                f"join_proband_cnv.py: {args.proband}'s call {key[0]} ({key[1]}) at {cols[0]}:{cols[1]} is in no record of "
+                f"{args.family_vcf}: no family record has it as {args.proband}'s FORMAT/OID. Either {args.proband_vcf} isn't "
+                f"{args.proband}'s VCF from this run, or a step after the per-sample collapse lost the call (truvari's "
+                "cohort collapse, RESTORE_COLLAPSED_FORMAT)."
             )
 
-        slivar_info = parse_info(cols[7])
-        info = parse_info(call[7])
-        for key, value in slivar_info.items():
-            info.setdefault(key, value)
-        info["COHORT_ID"] = encode_id(cols[2])
-        info["COHORT_POS"] = cols[1]
-        info["COHORT_END"] = record_end(cols, slivar_info)
+        family_info = parse_info(family[7])
+        info = parse_info(cols[7])
+        info["COHORT_ID"] = encode_id(family[2])
+        info["COHORT_POS"] = family[1]
+        info["COHORT_END"] = record_end(family, family_info)
+        for name in COHORT_INFO_COPIED:
+            if name in family_info:
+                info[f"COHORT_{name}"] = family_info[name]
+        joined.append(cols[:7] + [format_info(info)] + family[8:])
 
-        # The call's own ALT, except on a multiallelic call that NORMALIZE_CNV split: there the
-        # slivar record holds the one allele it's about.
-        alt = cols[4] if "," in call[4] else call[4]
-        joined.append(call[:4] + [alt, call[5], call[6], format_info(info)] + cols[8:])
-
-    # The call's own POS can come before an earlier slivar record's.
-    joined.sort(key=lambda c: (contig_order.get(c[0], len(contig_order)), c[0], int(c[1])))
+    family_info_ids = {m.group(1) for m in (re.match(r"^##INFO=<ID=([^,>]+)", line) for line in family_meta) if m}
+    out_meta = (
+        [line for line in proband_meta if not line.startswith("##FORMAT=")]
+        + [line for line in family_meta if line.startswith("##FORMAT=")]
+        + COHORT_INFO_HEADERS
+        + [header for name, header in COHORT_INFO_COPIED.items() if name in family_info_ids]
+    )
 
     plain_out = args.vcf_out[: -len(".gz")]
     with open(plain_out, "w") as out:
-        out.write("\n".join(out_meta + [slivar_chrom_line]) + "\n")
+        out.write("\n".join(out_meta + [family_chrom_line]) + "\n")
         for cols in joined:
             out.write("\t".join(cols) + "\n")
     pysam.tabix_index(plain_out, preset="vcf", force=True)
 
+    unmatched = len(family_by_call) - len(joined)
     print(
-        f"Joined {len(joined)} slivar record(s) to {args.proband}'s own calls; "
-        f"{no_call} record(s) without a {args.proband} call left out.",
+        f"Joined {len(joined)} {args.proband} call(s) to the family's FORMAT; "
+        f"{no_call} family record(s) without a {args.proband} call left out.",
         file=sys.stderr,
     )
+    if unmatched:
+        print(
+            f"WARNING: {unmatched} family record(s) name a {args.proband} call (FORMAT/OID and ALT) that isn't in "
+            f"{args.proband_vcf}, and are left out. VEP drops records on contigs its cache doesn't have, and a split "
+            f"multiallelic family site repeats {args.proband}'s OID on its other allele.",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
