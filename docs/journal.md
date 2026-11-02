@@ -96,7 +96,7 @@ _Decided 2026-10-28, BIOINFO-214, after a colleague's suggestion._
 
 ### Each proband gets its own calls back, joined to the slivar VCF through OID
 
-_Decided 2026-10-28, BIOINFO-214._
+_Decided 2026-10-28, BIOINFO-214. Replaced on 2026-11-02: see "Each proband's final VCF is built from its own VEP-annotated calls" below._
 
 **What:** `JOIN_PROBAND_CNV` (`bin/join_proband_cnv.py`) runs after slivar, once per affected child in the PED (`pedAffectedChildren`). For each slivar record where the proband's `OID` isn't `.`, it writes the proband's own call from its input VCF (ID, coordinates, QUAL, FILTER, INFO), plus the INFO keys only the slivar record has and the family's FORMAT. `COHORT_ID`/`COHORT_POS`/`COHORT_END` point back to the slivar record. Published as `slivar/<familyId>.<proband>.cnv.proband.vcf.gz`.
 
@@ -145,7 +145,7 @@ _Decided 2026-10-29, BIOINFO-214, from the first full-genome NA12878 trio run._
 
 ### Family-mode Exomiser runs on the proband VCF
 
-_Decided 2026-10-30, BIOINFO-214._
+_Decided 2026-10-30, BIOINFO-214. Replaced on 2026-11-02: see "Each proband's final VCF is built from its own VEP-annotated calls" below._
 
 **What:** `EXOMISER_WORKFLOW` now runs after `JOIN_PROBAND_CNV`, on the proband VCF of the child the `familyPheno` phenopacket is about (`proband.subject.id`, read by `phenopacketProbandId()`). Its reports are `<familyId>.<proband>.exomiser.*`. A family with no such VCF (`DRAGEN_JOINT`, no `familyPed`, or a phenopacket proband who isn't a sequenced affected PED child) runs on the family VCF as before, `<familyId>.exomiser.*`, and `--exomiser_start_from_vep` only applies to those families.
 
@@ -179,7 +179,21 @@ _Decided 2026-10-30, BIOINFO-214._
 
 **Rejected:** putting `CNV` back after the collapse, for VEP and Exomiser: they gave the same output on the trio's joint VCF with `DEL` / `DUP` (same VEP consequences, Exomiser read every record), and `DEL` / `DUP` is the usual SVTYPE for CNVs.
 
-**Accepted:** a sample whose call of the other type now has its own record is `./.` on the first one, and depth refinement doesn't fill it in (a gain's ratio is outside the hom-ref band). At chr14:73530575 NA12878 goes from `inherited_maternal` to `possible_inherited_maternal`; it's the only tag change on the trio. The proband VCF keeps the proband's own INFO from its input VCF, so its `SVTYPE` is still `CNV`.
+**Accepted:** a sample whose call of the other type now has its own record is `./.` on the first one, and depth refinement doesn't fill it in (a gain's ratio is outside the hom-ref band). At chr14:73530575 NA12878 goes from `inherited_maternal` to `possible_inherited_maternal`; it's the only tag change on the trio. The proband VCF keeps the proband's own INFO from its input VCF, so its `SVTYPE` is still `CNV` (fixed on 2026-11-02: see "Each proband's final VCF is built from its own VEP-annotated calls" below).
+
+### Each proband's final VCF is built from its own VEP-annotated calls
+
+_Decided 2026-11-02, BIOINFO-214._
+
+**What:** probands are decided from the samplesheet (`isPedProband()`: a per-sample row whose VCF sample is one of its PED's affected children). A proband's per-sample VCF (normalized, collapsed per sample) is VEP-annotated on its own (`VCF_ANNOTATE_ENSEMBLVEP_PROBAND`). `JOIN_PROBAND_CNV` then loops over those calls and gives each one the `FORMAT` of the family record whose proband `FORMAT/OID` names it, keyed with the ALT since a split multiallelic site repeats its ID, plus `COHORT_ID`/`COHORT_POS`/`COHORT_END` and `COHORT_NumCollapsed`/`COHORT_NumConsolidated` for that record. slivar runs on the result (`slivar/<familyId>.<proband>.cnv.slivar.vcf.gz`), and family-mode Exomiser on the slivar VCF of the phenopacket's proband. Families without a proband, and `DRAGEN_JOINT` ones, keep the family-level VEP and slivar VCFs, and any family whose phenopacket isn't about one of its probands runs Exomiser on its family VCF. `--exomiser_start_from_vep` is removed.
+
+**Why:** Radiant wants the final VCF built around the proband, and the join after slivar had two problems. Its INFO came from the raw DRAGEN VCF, so `SVTYPE` was `CNV` again in the file Exomiser reads (undoing the previous decision). And VEP had run on the cohort record's interval, so `CSQ` described a different interval than the record's `POS`/`END`. Both now describe the proband's own call. On the chr22 trio, all 22 of NA12878's calls are joined; for the 2 where truvari kept a parent's call, the record keeps NA12878's own interval and `CSQ`.
+
+**A proband call with no family record stops the run**, as does one in two family records: DRAGEN's per-sample segments don't overlap (0 overlapping pairs in the 3 chr22 test VCFs), and the cohort collapse needs 30% reciprocal overlap with the kept call, so each call should be in exactly one family record. Family records naming a call the proband VCF doesn't have only get a warning: VEP drops records on contigs its cache doesn't have, and a split multiallelic family site repeats the proband's OID on its other allele.
+
+**Caveat, not yet checked on real data:** two disjoint calls of the proband can each match one larger parent call. For example, a parent's 100 kb call and two 80 kb proband calls overlapping 40 kb of it at each end pass both `--pctovl 0.3` and `--pctsize 0.7`. truvari compares each call with the kept one only, so it could fold both into one record, where the proband's column holds only one of them. The other call's OID would then be in no family record, and the run would stop. Not seen on the chr22 trio; the full-genome run (TODO below) should tell whether it happens.
+
+**Accepted:** the CNVs only the proband's parents carry aren't in the proband VCF: they stay in `depth_refined/`, unannotated. Parents and unaffected sibs aren't VEP-annotated.
 
 ## Open questions
 
@@ -213,7 +227,27 @@ The 383 are mostly a parent's CNV the child didn't inherit. `unknown_cn` is true
 
 Leaning towards 2, pending that discussion.
 
+### Several affected children: a sib's MoI tag on the proband's record
+
+_Noted 2026-11-02, BIOINFO-214._
+
+**Context:** each MoI tag is a `--family-expr`, true when any affected child of the family gets that call (`has_moi_call()`). So in a family with two affected children, the proband VCF of child A carries a tag on a record when child B gets that call there, even if A's own call is different; only the per-sample `po_*` tags say which child is which. Our inputs rarely have several affected children.
+
+**Options:** keep it, as in the SNV pipeline; or, on a proband VCF, value the MoI tags with the proband only (e.g. a `--sample-expr` limited to `meta.proband`).
+
 ## TODO
+
+### Warn when the phenopacket's proband isn't one of the family's probands
+
+_Noted 2026-11-02, BIOINFO-214._
+
+A family whose `familyPheno` `proband.subject.id` isn't one of its probands (a typo, an unsequenced child, a child unaffected in the PED) silently runs Exomiser on its family VCF instead of a proband's slivar VCF. A warning naming the phenopacket's proband and the family's probands would make that visible.
+
+### Run the proband route on the full-genome trio
+
+_Noted 2026-11-02, BIOINFO-214._
+
+CI only covers chr22 (22 proband calls). Run the full-genome NA12878 trio: every one of NA12878's calls should be joined, with no "in no record" stop (see the caveat in the decision above), and the slivar tags on its calls should be compared with the family-level route's.
 
 ### Check the PED sex against the data
 

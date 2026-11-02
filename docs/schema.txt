@@ -1,125 +1,92 @@
-                              samplesheet (--input)
-                                       │
-                    ┌──────────────────┴──────────────────┐
-                    │                                     │
-          caller = DRAGEN                         caller = DRAGEN_JOINT
-      (one row per SAMPLE)                        (one row per FAMILY —
-                    │                            vcf = joint, multi-sample VCF)
-                    │                                      │
-                    ▼                                      ▼
-         ┌─────────────────────┐              ┌─────────────────────────┐
-         │   NORMALIZE_CNV     │              │   NORMALIZE_CNV_JOINT   │
-         │   (per sample)      │              │   (per family)          │
-         │ - drop ALT="."      │              │ - drop ALT="."          │
-         │   (REF blocks)      │              │   (REF blocks)          │
-         │ - sort              │              │ - sort                  │
-         │ - split multiallelic│              │ - split multiallelic    │
-         │ - SVTYPE from ALT   │              │ - SVTYPE from ALT       │
-         │   (DEL / DUP)       │              │   (DEL / DUP)           │
-         └──────────┬──────────┘              │ - strip INFO/SVLEN      │
-                    │                         │   (DRAGEN joint-only    │
-                    ▼                         │   Number=. bug, breaks  │
-         ┌─────────────────────┐              │   Exomiser otherwise)   │
-         │TRUVARI_COLLAPSE_    │              └────────────┬────────────┘
-         │   PERSAMPLE         │                           │
-         │ (dedup within one   │                           ▼
-         │  sample's own calls)│              ┌─────────────────────────┐
-         └──────────┬──────────┘              │ BCFTOOLS_SORT_INDEX_    │
-                    │                         │      JOINT              │
-                    ▼                         └───────────────┬─────────┘
-         ┌─────────────────────┐    ┌─────────────────────┐   │
-         │BCFTOOLS_SORT_INDEX_ │    │        VEP          │   │
-         │   PERSAMPLE         │───►│                     │   │
-         └──────────┬──────────┘    └─────────┬───────────┘   │
-                    │                         ▼               │
-        [ group all of a family's   ┌─────────────────────┐   │
-          samples together ]        │EXOMISER_SINGLE      │   │
-                    │               │(single sample mode) │   │
-                    ▼               └─────────────────────┘   │
-         ┌──────────────────────┐                             │
-         │   BCFTOOLS_MERGE     │                             │
-         │ (family-level union  │                             │
-         │  of per-sample calls)│                             │
-         └──────────┬───────────┘                             │
-                    │                                         │
-                    ▼                                         │
-         ┌─────────────────────┐                              │
-         │TRUVARI_COLLAPSE_    │                              │
-         │    COHORT           │                              │
-         │ (merge near-dupes   │                              │
-         │  across samples)    │                              │
-         └──────────┬──────────┘                              │
-                    │ kept + removed VCFs                     │
-                    ▼                                         │
-         ┌─────────────────────┐                              │
-         │RESTORE_COLLAPSED_   │                              │
-         │    FORMAT           │                              │
-         │ (gives back absorbed│                              │
-         │  ./1 & haploid calls│                              │
-         │  truvari drops; see │                              │
-         │  detail at the end) │                              │
-         └──────────┬──────────┘                              │
-                    │                                         │
-                    ▼                                         │
-         ┌─────────────────────┐                              │
-         │BCFTOOLS_SORT_INDEX_ │                              │
-         │    COHORT           │                              │
-         └──────────┬──────────┘                              │
-                    │                                         │
-                    ▼                                         │
-    ┌─────────────────────────────────────┐                   │
-    │ BAM_VCF_DEPTH_GENOTYPE_REFINEMENT   │                   │
-    │  (mosdepth, per family, needs cram) │                   │
-    │  - VCF_TO_BED                       │                   │
-    │  - MOSDEPTH_RATIO (per sample)      │                   │
-    │  - DEPTH_GENOTYPE_REFINE            │                   │
-    │  - BCFTOOLS_INDEX                   │                   │
-    │  resolves ./. → 0/0 + expected CN   │                   │
-    │  (sex-aware on X/Y, from PED) where │                   │
-    │  depth supports it (fixes the       │                   │
-    │  missing-genotype cost of post-hoc  │                   │
-    │  merging; slivar reads CN, not GT)  │                   │
-    │  only records >= 5 kb (smaller:     │                   │
-    │  depth can't tell normal from a     │                   │
-    │  missed loss)                       │                   │
-    └───────────────┬─────────────────────┘                   │
-                    │                                         │
-                    └───────────────────┬─────────────────────┘
-                                        │
-                         family-level VCF, ready for VEP
-                       (both input shapes converge HERE —
-                        downstream is 100% identical either way)
-                                        │
-                                        ▼
-                        ┌───────────────────────────────┐
-                        │   VCF_ANNOTATE_ENSEMBLVEP     │
-                        │   - ENSEMBLVEP_VEP            │
-                        │   - TABIX_TABIX               │
-                        └───────────────┬───────────────┘
-                                        ▼
-                             ┌─────────────────────┐
-                             │        SLIVAR       │
-                             │  (needs familyPed)  │
-                             └──────────┬──────────┘
-                                        ▼
-                        ┌───────────────────────────────┐
-                        │      JOIN_PROBAND_CNV         │
-                        │ (per affected child in PED:   │
-                        │  its own input calls joined   │
-                        │  to slivar records via OID;   │
-                        │  DRAGEN families only)        │
-                        └───────────────┬───────────────┘
-                                        │ the phenopacket proband's VCF
-                                        ▼
-                        ┌───────────────────────────────┐
-                        │      EXOMISER_WORKFLOW        │
-                        │ (family mode, needs           │
-                        │  familyPheno; skipped if not  │
-                        │  provided). A family with no  │
-                        │  proband VCF (DRAGEN_JOINT,   │
-                        │  no familyPed) runs on the    │
-                        │  family VCF instead           │
-                        └───────────────────────────────┘
+                                   +-----------------------+
+                                   | samplesheet (--input) |
+                                   +-----------+-----------+
+                                               |
+                +------------------------------+------------------------------+
+                v                                                             v
+  +----------------------------+                                +----------------------------+
+  | caller = DRAGEN            |                                | caller = DRAGEN_JOINT      |
+  | (one row per SAMPLE)       |                                | (one row per FAMILY)       |
+  +-------------+--------------+                                +-------------+--------------+
+                v                                                             v
+  +----------------------------+                                +----------------------------+
+  | NORMALIZE_CNV (per sample) |                                | NORMALIZE_CNV_JOINT        |
+  | drop ALT="." (REF blocks)  |                                | (per family, joint VCF)    |
+  | sort, split multiallelic   |                                | same steps as on the left, |
+  | SVTYPE=CNV -> DUP/DEL      |                                | + strip INFO/SVLEN (DRAGEN |
+  +-------------+--------------+                                |  joint Number=. bug)       |
+                v                                               | -> BCFTOOLS_SORT_INDEX_    |
+  +----------------------------+                                |    JOINT                   |
+  | TRUVARI_COLLAPSE_PERSAMPLE |                                +------+--------------+------+
+  | (dedup within one sample)  |                                       |              |
+  | -> BCFTOOLS_SORT_INDEX_    |                                       v              v
+  |    PERSAMPLE               |                          +------------------+  +-----------------+
+  +--+----------+-----------+--+                          | VCF_ANNOTATE_    |  | EXOMISER        |
+     |          |           |                             | ENSEMBLVEP       |  | (family mode,   |
+     |          |           v                             | VEP -> TABIX     |  |  needs          |
+     |          |   +--------------------------------+    +--------+---------+  |  familyPheno)   |
+     |          |   | VCF_ANNOTATE_ENSEMBLVEP_       |             v            +-----------------+
+     |          |   | PERSAMPLE   VEP -> TABIX       |    +------------------+
+     |          |   +---------------+----------------+    | SLIVAR           |
+     |          |                   v                     +------------------+
+     |          |   +--------------------------------+
+     |          |   | EXOMISER_SINGLE                |
+     |          |   | (single-sample mode: gene /    |
+     |          |   |  phenotype match)              |
+     |          |   +--------------------------------+
+     |          |
+     |          |  [ group all of a family's samples together ]
+     |          v
+     |   +--------------------------------------------+
+     |   | BCFTOOLS_MERGE                             |
+     |   | (family-level union of per-sample calls)   |
+     |   +---------------------+----------------------+
+     |                         v
+     |   +--------------------------------------------+
+     |   | TRUVARI_COLLAPSE_COHORT                    |
+     |   | (merge near-dupes across samples)          |
+     |   | -> RESTORE_COLLAPSED_FORMAT (see below)    |
+     |   | -> BCFTOOLS_SORT_INDEX_COHORT              |
+     |   +---------------------+----------------------+
+     |                         v
+     |   +--------------------------------------------+
+     |   | BAM_VCF_DEPTH_GENOTYPE_REFINEMENT          |
+     |   | (mosdepth, per family, needs CRAM)         |
+     |   | VCF_TO_BED -> MOSDEPTH_RATIO (per sample)  |
+     |   |  -> DEPTH_GENOTYPE_REFINE -> BCFTOOLS_INDEX|
+     |   | resolves ./. -> 0/0 where depth supports it|
+     |   +--------------------+-------------------+---+
+     |                        | (proband)         | (no proband)
+     v                        |                   |
+ +-----------------------+    |     . . . . . . . v . . . . . . . . . . . . . . . . . . . .
+ | VCF_ANNOTATE_         |    |     .  Run if no proband                                  .
+ | ENSEMBLVEP_PROBAND    |    |     .  +----------------------+   +----------------------+ .
+ | VEP -> TABIX          |    |     .  | VCF_ANNOTATE_        |   | EXOMISER             | .
+ +-----------+-----------+    |     .  | ENSEMBLVEP           |   | (family mode, needs  | .
+             |                |     .  | VEP -> TABIX         |   |  familyPheno)        | .
+             v                |     .  +----------+-----------+   +----------------------+ .
+ +-----------------------+    |     .             v                                       .
+ | JOIN_PROBAND_CNV      <----+     .  +----------------------+                           .
+ | force each CNV ID to  |          .  | SLIVAR               |                           .
+ | come from the proband |          .  +----------------------+                           .
+ | (for Radiant)         |          . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ +-----------+-----------+
+             v
+ +-----------------------+
+ | SLIVAR                |
+ +-----------+-----------+
+             v
+ +-----------------------+
+ | EXOMISER (family mode,|
+ | needs familyPheno)    |
+ +-----------------------+
+
+ EXOMISER (family mode) is skipped when familyPheno is not provided, SLIVAR when familyPed is not.
+ A proband is a PED affected child (affected, with a parent in the PED) that has its own
+ per-sample row, decided from the samplesheet (isPedProband). A family with a proband gets no
+ family-level VEP or SLIVAR: its CNVs that only the parents carry stay in depth_refined/.
+ Family-mode EXOMISER runs on a proband's SLIVAR VCF when the familyPheno phenopacket is about
+ that proband (proband.subject.id), and on the family (or joint) VCF otherwise.
 
 
 RESTORE_COLLAPSED_FORMAT in detail (bin/restore_collapsed_format.py)

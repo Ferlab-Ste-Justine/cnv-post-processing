@@ -38,7 +38,12 @@ route applicable to it, decided per-row/per-family purely from which optional co
 1. `NORMALIZE_CNV` (bcftools norm/view; sets `INFO/SVTYPE` from the ALT, `DEL`/`DUP` instead of
    DRAGEN's `CNV`, via `bin/svtype_from_alt.awk`, so truvari doesn't collapse a loss with a gain;
    also copies each call's ID into `FORMAT/OID` via `bin/add_original_id.awk`) →
-   `TRUVARI_COLLAPSE_PERSAMPLE`, per sample
+   `TRUVARI_COLLAPSE_PERSAMPLE`, per sample. Probands are decided here, from the samplesheet: a
+   per-sample row is a proband when its VCF sample (`vcfSampleNames()`: the PED names VCF samples,
+   not the samplesheet's `sample` column) is one of its PED's affected children (`isPedProband()`,
+   on `pedAffectedChildren()`: affected, with a parent in the PED). A proband's per-sample VCF also
+   goes through `VCF_ANNOTATE_ENSEMBLVEP_PROBAND`, so its calls keep their `DEL`/`DUP` SVTYPE and
+   get a `CSQ` for their own interval
 2. `BCFTOOLS_MERGE` across a family's per-sample VCFs → `TRUVARI_COLLAPSE_COHORT` →
    `RESTORE_COLLAPSED_FORMAT` (`bin/restore_collapsed_format.py`: copies back the FORMAT of
    absorbed calls truvari reads as unset, DRAGEN's `./1` and haploid `1`, from its removed VCF). Families
@@ -52,25 +57,28 @@ route applicable to it, decided per-row/per-family purely from which optional co
    coordinates in `bin/refine_genotypes.py` in sync with them). Records under 5 kb
    (`ext.min_size`) are never refined: depth there can't tell normal from a missed loss, which
    made false `denovo` calls
-4. `VCF_ANNOTATE_ENSEMBLVEP`, family-level
-5. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed`. Its
-   output is the family's final VCF, so it gets an explicit indexing step of its own
+4. A family with a proband (`meta.probands`) skips the family-level VEP: `JOIN_PROBAND_CNV`
+   (`bin/join_proband_cnv.py`) builds one VCF per proband from its own VEP-annotated calls, each
+   with the FORMAT (every sample's column) of the family record whose decoded `FORMAT/OID` names
+   it, plus `COHORT_ID`/`COHORT_POS`/`COHORT_END` (and `COHORT_NumCollapsed`/`NumConsolidated`)
+   for that record. A proband call with no family record, or in two, stops the run. Families
+   without a proband, and `DRAGEN_JOINT` ones, get `VCF_ANNOTATE_ENSEMBLVEP` on the family VCF
+   instead. CNVs only a proband's parents carry stay in `depth_refined/`, unannotated
+5. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed` — on
+   each proband VCF (`<familyId>.<proband>.cnv.slivar.vcf.gz`) or on the VEP-annotated family VCF
+   (`<familyId>.cnv.slivar.vcf.gz`). Its output is the family's final VCF, so it gets an explicit
+   indexing step of its own
    (`BCFTOOLS_INDEX_SLIVAR`) rather than relying on a downstream stage to need/produce one.
    Before it, in the workflow's slivar-input `.map` (not in a subworkflow, so tests can still feed
    slivar inconsistent PEDs), the run stops if the family VCF declares no `FORMAT/CN`
    (`vcfFormatIds()`), and `validatePedAgainstVcf` checks the PED against the family VCF's
    `#CHROM` names and stops the run on a mismatch, or only warns under `--skip_ped_validation`.
-6. `JOIN_PROBAND_CNV` (`bin/join_proband_cnv.py`) — one VCF per proband (`pedAffectedChildren`:
-   the PED's affected children), joining the proband's own input-VCF calls to the slivar records
-   they're in through the decoded `FORMAT/OID`. Per-sample families only: `DRAGEN_JOINT` ones have
-   no per-sample VCF or `OID`. The PED names VCF samples, so the proband's input VCF is found by
-   `vcfSampleNames()`, not the samplesheet's `sample` column.
-7. `EXOMISER_WORKFLOW` — only for families with `familyPheno`. Runs on the `JOIN_PROBAND_CNV` VCF
-   of the phenopacket's proband (`phenopacketProbandId()`: `proband.subject.id`), output
-   `<familyId>.<proband>.exomiser.*`; a family with no such VCF (`DRAGEN_JOINT`, no `familyPed`,
-   proband not a sequenced affected PED child) falls back to the family VCF (pre-VEP, or VEP's
-   under `--exomiser_start_from_vep`) through a `join(..., remainder: true)`. Unlike the SNV
-   pipeline, which always runs Exomiser on the family VCF, in parallel with slivar.
+6. `EXOMISER_WORKFLOW` — only for families with `familyPheno`. Runs on the slivar VCF of the
+   phenopacket's proband (`phenopacketProbandId()`: `proband.subject.id`) when that's one of the
+   family's probands, output `<familyId>.<proband>.exomiser.*`; any other family (no proband,
+   `DRAGEN_JOINT`, no `familyPed`, a phenopacket about another sample) runs on its family VCF,
+   the depth-refined or joint one, pre-VEP. Unlike the SNV pipeline, which always runs Exomiser on
+   the family VCF, in parallel with slivar.
 
 **Solo route** (true singletons: `sampleSize==1`, no `familyPed`, no `familyPheno` — the family
 route would add nothing over this for them, so they're dropped from `ch_grouped_by_family`
@@ -99,7 +107,7 @@ conf/                                      # base.config, modules.config, test.c
 assets/                                    # samplesheet.csv, schema_input.json, exomiser/ (default analysis YAMLs), cnv-slivar-functions.js (slivar rules) + cnv-slivar-moi-harness.js (its test bench; golden file moi_scenarios.expected.tsv)
 bin/add_original_id.awk                    # Copies each call's ID into FORMAT/OID in NORMALIZE_CNV
 bin/svtype_from_alt.awk                    # Sets INFO/SVTYPE from a <DEL>/<DUP> ALT in NORMALIZE_CNV
-bin/join_proband_cnv.py                    # Joins a proband's own calls to the slivar VCF through FORMAT/OID (JOIN_PROBAND_CNV)
+bin/join_proband_cnv.py                    # Joins the family VCF's FORMAT onto a proband's own VEP-annotated calls through FORMAT/OID (JOIN_PROBAND_CNV)
 bin/restore_collapsed_format.py            # Restores the FORMAT truvari's cohort collapse drops for ./1 and haploid calls (RESTORE_COLLAPSED_FORMAT)
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE
 docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram)
@@ -159,6 +167,10 @@ nf-test test modules/local/exomiser
 ```
 
 nf-core upstream module/subworkflow tests are excluded via the `ignore` glob in `nf-test.config`.
+`tests/default.nf.test` runs the test profile twice: the samplesheet as is (`fam1`'s proband route,
+`fam1_joint`, `ind1`), snapshotting the published files and each VCF's variant lines (`nft-vcf`'s
+`variantsMD5`), and the trio with a PED where NA12878 is unaffected (`tests/data/`), for the
+family-level route.
 `scripts/run-test-suite.sh` bundles the pre-push gate, harmonized with Post-processing-Pipeline's:
 nf-core CLI version pin check, pre-commit, the slivar rules harness, a `-preview` launch under the
 declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 12 local modules (`modules/local/*`) have their own module
@@ -239,10 +251,13 @@ A few patterns and gotchas worth knowing before editing:
 - **Channel shape convention.** Most VCF channels carry `[meta, vcf, tbi]`. After a `BCFTOOLS_*`
   call, the index is emitted separately and joined back: `out.vcf.join(out.tbi)`.
 - **`meta` grows and shrinks across stages.** Per-sample meta (`id: "familyId.sample"`) carries
-  `familyId`, `sampleSize`, `familyPed`, `familyPheno`, `pheno` from the samplesheet. At the
-  family-merge fan-in (stage 2 in the flow above), sample-only fields (`sample`, `id`, `caller`,
-  `cram`) are dropped and `id` resets to the family level, keeping a `samples: [...]` list for
-  fanning back out later (e.g. depth-refinement's per-sample mosdepth runs). The fan-in sorts a
+  `familyId`, `sampleSize`, `familyPed`, `familyPheno`, `pheno` from the samplesheet, plus
+  `vcfSample` (its VCF sample name) and `proband`. At the family-merge fan-in (stage 2 in the flow
+  above), sample-only fields (`sample`, `id`, `caller`, `cram`, `vcfSample`, `proband`) are dropped
+  and `id` resets to the family level, keeping a `samples: [...]` list for fanning back out later
+  (e.g. depth-refinement's per-sample mosdepth runs) and `probands: [...]`, the probands' VCF
+  sample names (`[]` for `DRAGEN_JOINT` families). After `JOIN_PROBAND_CNV`, `meta.proband` names
+  the proband a VCF is built around. The fan-in sorts a
   family's samples by name first: `groupTuple` keeps arrival order, which varies between runs, and
   `bcftools merge` writes its sample columns in input order. Any new fan-in feeding an
   order-sensitive tool, or putting a per-sample list in `meta`, needs the same sort. (A `path`

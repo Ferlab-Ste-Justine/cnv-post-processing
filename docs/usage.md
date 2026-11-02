@@ -74,6 +74,8 @@ Notes about the phenopacket file (`pheno`/`familyPheno` columns):
 
 A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must be the VCFs' sample names (their `#CHROM` header line), not the samplesheet's `sample` column: for `DRAGEN` rows, the name in each per-sample VCF; for a `DRAGEN_JOINT` row, the names in the joint VCF. Its sex column must be correct: on non-PAR chrX and chrY, a normal male carries one copy, so slivar uses each sample's sex to decide what copy number is normal. A wrong sex misclassifies every call there, and a sex of `0` (unknown) makes slivar skip non-PAR chrX/chrY records for that family. Check sex against the data (e.g. chrX heterozygosity, or the CNV caller's own sex estimate) before running the pipeline.
 
+The PED also decides the family's probands: its affected children (phenotype `2`, with a father or mother named) that have their own `DRAGEN` row. A family with a proband gets its final VCF built around that proband's own calls (`slivar/<familyId>.<proband>.cnv.slivar.vcf.gz`, see [output.md](output.md#slivar)) instead of a family-level one.
+
 Before running slivar, the pipeline checks each family's PED against the sample names in the family VCF, and stops with an error naming the problem and its fix if:
 
 - a sample in the VCF has no row in the PED. slivar would leave that sample out of the family, and a PED matching none of the VCF's names would give no tags at all;
