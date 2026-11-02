@@ -185,20 +185,21 @@ def validateInputSamplesheet(input) {
 }
 
 // All rows of the same family must reference the same familyPed value (or all omit it).
-// familyPed is optional overall (families without one skip the mendelian2/slivar steps),
-// but it must not be ambiguous within a family.
+// familyPed is optional overall (families without one skip slivar), but it must not be ambiguous
+// within a family: the family-level steps take it from one row (the first by sample name), while
+// each row's own familyPed decides whether it's a proband. An empty value counts as a value.
 def validatePedFiles(family_id, items) {
-    def ped_files = items.collect { entry -> entry[0].familyPed }.findAll { ped -> ped }.unique(false)
+    def ped_files = items.collect { entry -> entry[0].familyPed ?: '' }.unique(false)
     if (ped_files.size() > 1) {
-        error("Samples in the same family must reference the same familyPed value in the input samplesheet. Found ${ped_files} in family ${family_id}.")
+        error("Samples in the same family must reference the same familyPed value in the input samplesheet, or all leave it empty. Found ${ped_files.collect { ped -> ped ?: '(empty)' }} in family ${family_id}.")
     }
 }
 
 // Same rule as validatePedFiles, for familyPheno (required for exomiser family mode).
 def validatePhenopacketFiles(family_id, items) {
-    def pheno_files = items.collect { entry -> entry[0].familyPheno }.findAll { pheno -> pheno }.unique(false)
+    def pheno_files = items.collect { entry -> entry[0].familyPheno ?: '' }.unique(false)
     if (pheno_files.size() > 1) {
-        error("Samples in the same family must reference the same familyPheno value in the input samplesheet. Found ${pheno_files} in family ${family_id}.")
+        error("Samples in the same family must reference the same familyPheno value in the input samplesheet, or all leave it empty. Found ${pheno_files.collect { pheno -> pheno ?: '(empty)' }} in family ${family_id}.")
     }
 }
 

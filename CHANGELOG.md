@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A family's merged VCF now always lists its samples in name order. Before, `BCFTOOLS_MERGE` got the per-sample VCFs in whatever order their tasks finished, so the sample columns of the family VCF, and of every file built from it, could change from one run to the next, and `-resume` could re-run the merge and every family-level step after it
 - `conf/modules.config`'s VEP `ext.args` no longer fails to parse under Nextflow's strict config syntax (the default from 26.04, "Variable declarations cannot be mixed with config statements"); its local variables now live inside an `ext.args` closure. Resolved args are unchanged for all three cache flavors
 - Depth refinement no longer skips a sample whose samplesheet `sample` isn't its VCF sample name. Each sample's depth ratios were named after the `sample` column and looked up by the VCF's column name, so such a sample was left unrefined without a warning. They're now named after the VCF sample, and `DEPTH_GENOTYPE_REFINE` stops when a VCF sample has no ratio file
+- A family where only some rows have a `familyPed` (or `familyPheno`) now fails the samplesheet check, as the rule (the same value on every row, or none) says. It used to pass: the family-level steps then took the value of the first row by sample name, so a family could get no slivar run and no Exomiser run depending on its sample names
 
 ### `Dependencies`
 

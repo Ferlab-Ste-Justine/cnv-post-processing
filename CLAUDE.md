@@ -240,8 +240,8 @@ Authoritative schema: `assets/schema_input.json`. Required: `familyId`, `sample`
 `sequencingType` (`WES`/`WGS`), `caller` (`DRAGEN`/`DRAGEN_JOINT`/`GATK` — only `DRAGEN` and
 `DRAGEN_JOINT` are currently supported by normalization), `vcf`. Optional: `cram` (enables
 depth-based genotype refinement), `pheno` (per-sample phenopacket, enables single-sample
-Exomiser), `familyPheno` (family-level phenopacket, identical across a family's rows, enables
-family-mode Exomiser), `familyPed` (identical across a family's rows, enables slivar; its IDs
+Exomiser), `familyPheno` (family-level phenopacket, identical across a family's rows, all or
+none, enables family-mode Exomiser), `familyPed` (the same, enables slivar; its IDs
 are the VCFs' `#CHROM` sample names, not the samplesheet's `sample` column, e.g. `fam1_joint`).
 `caller=DRAGEN_JOINT` families must have exactly one row and no per-sample rows (enforced by
 `validateJointCallerExclusivity` in `PIPELINE_INITIALISATION`).
