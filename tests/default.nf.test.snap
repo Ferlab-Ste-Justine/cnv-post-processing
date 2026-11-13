@@ -2,7 +2,7 @@
     "-profile test": {
         "content": [
             {
-                "BCFTOOLS_INDEX": {
+                "BCFTOOLS_INDEX_CN_FILLED": {
                     "bcftools": "1.23.1"
                 },
                 "BCFTOOLS_INDEX_SLIVAR": {
@@ -20,9 +20,6 @@
                 "BCFTOOLS_SORT_INDEX_PERSAMPLE": {
                     "bcftools": "1.23.1"
                 },
-                "DEPTH_GENOTYPE_REFINE": {
-                    "pysam": "0.24.0"
-                },
                 "ENSEMBLVEP_VEP": {
                     "ensemblvep": 114.2
                 },
@@ -32,11 +29,20 @@
                 "EXOMISER_SINGLE": {
                     "exomiser": "14.0.0"
                 },
-                "JOIN_PROBAND_CNV": {
+                "FILL_CN_FROM_SEGMENTS": {
                     "pysam": "0.24.0"
                 },
-                "MOSDEPTH_RATIO": {
-                    "mosdepth": "0.3.11"
+                "FILTER_CNV_CARRIERS_FAMILY": {
+                    "pysam": "0.24.0"
+                },
+                "FILTER_CNV_CARRIERS_PROBAND": {
+                    "pysam": "0.24.0"
+                },
+                "FILTER_CNV_CARRIERS_SOLO": {
+                    "pysam": "0.24.0"
+                },
+                "JOIN_PROBAND_CNV": {
+                    "pysam": "0.24.0"
                 },
                 "NORMALIZE_CNV": {
                     "bcftools": "1.23.1"
@@ -59,17 +65,14 @@
                 "TRUVARI_COLLAPSE_PERSAMPLE": {
                     "truvari": "5.4.0"
                 },
-                "VCF_TO_BED": {
-                    "bcftools": "1.23.1"
-                },
                 "Workflow": {
                     "Ferlab-Ste-Justine/cnv-post-processing": "v2.0.0"
                 }
             },
             [
-                "depth_refined",
-                "depth_refined/fam1.refined.vcf.gz",
-                "depth_refined/fam1.refined.vcf.gz.tbi",
+                "cn_filled",
+                "cn_filled/fam1.cn_filled.vcf.gz",
+                "cn_filled/fam1.cn_filled.vcf.gz.tbi",
                 "ensemblvep",
                 "ensemblvep/variants.fam1.NA12878.cnv.vep.vcf.gz",
                 "ensemblvep/variants.fam1.NA12878.cnv.vep.vcf.gz.tbi",
@@ -118,21 +121,21 @@
                 "truvari/fam1.sorted.vcf.gz.tbi"
             ],
             [
-                "fam1.NA12878.cnv.slivar.vcf.gz:md5,ddc643c3d6edf3ba8cf55637e0009c53",
+                "fam1.NA12878.cnv.slivar.vcf.gz:md5,15fa30fd02838211b97b84829adfb7b3",
                 "fam1.NA12878.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "fam1.merged.vcf.gz:md5,7637a8df7e6d7b6ca693fe9aaf1225c",
-                "fam1.refined.vcf.gz:md5,ad5d19a7d7104fd13b8ab2c312787ef",
-                "fam1.sorted.vcf.gz:md5,60bf5a4289866a00fbc8d5d01a965350",
-                "fam1_joint.cnv.slivar.vcf.gz:md5,97da94591e0c0f27a8834e01b9301e85",
+                "fam1.cn_filled.vcf.gz:md5,7b12a6caa21a7786a8524bcb41d27099",
+                "fam1.merged.vcf.gz:md5,59658f01b829e3de29069e35705d05d1",
+                "fam1.sorted.vcf.gz:md5,53bc87b6d3972fdd22b1d8dfad0eeba1",
+                "fam1_joint.cnv.slivar.vcf.gz:md5,344a0f265c86588d18156ddcbe4aca5c",
                 "fam1_joint.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "fam1_joint.sorted.vcf.gz:md5,44066ca7c5332a2cc84e9b42b405849c",
                 "ind1.NA12878_ind.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "variants.fam1.NA12878.cnv.vep.vcf.gz:md5,d136135cc55cdb0661d53d9e7c6a095c",
-                "variants.fam1_joint.cnv.vep.vcf.gz:md5,a8cc0b415a43622e23e2deadf475aee",
-                "variants.ind1.NA12878_ind.cnv.vep.vcf.gz:md5,d136135cc55cdb0661d53d9e7c6a095c"
+                "variants.fam1.NA12878.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b",
+                "variants.fam1_joint.cnv.vep.vcf.gz:md5,b587cb84d1fe909bf6a9624625e52bff",
+                "variants.ind1.NA12878_ind.cnv.vep.vcf.gz:md5,f9fc527083d7037b9b7ec2ea9de22b20"
             ]
         ],
-        "timestamp": "2026-11-02T16:22:38.635959593",
+        "timestamp": "2026-11-12T02:46:09.739969887",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"
@@ -141,11 +144,15 @@
     "-profile test, edge-case families": {
         "content": [
             [
-                "depth_refined",
-                "depth_refined/famA.refined.vcf.gz",
-                "depth_refined/famA.refined.vcf.gz.tbi",
-                "depth_refined/famD.refined.vcf.gz",
-                "depth_refined/famD.refined.vcf.gz.tbi",
+                "cn_filled",
+                "cn_filled/famA.cn_filled.vcf.gz",
+                "cn_filled/famA.cn_filled.vcf.gz.tbi",
+                "cn_filled/famB.cn_filled.vcf.gz",
+                "cn_filled/famB.cn_filled.vcf.gz.tbi",
+                "cn_filled/famD.cn_filled.vcf.gz",
+                "cn_filled/famD.cn_filled.vcf.gz.tbi",
+                "cn_filled/famF.cn_filled.vcf.gz",
+                "cn_filled/famF.cn_filled.vcf.gz.tbi",
                 "ensemblvep",
                 "ensemblvep/variants.famA.child.cnv.vep.vcf.gz",
                 "ensemblvep/variants.famA.child.cnv.vep.vcf.gz.tbi",
@@ -216,32 +223,34 @@
                 "truvari/famF.sorted.vcf.gz.tbi"
             ],
             [
-                "famA.NA12878.cnv.slivar.vcf.gz:md5,ddc643c3d6edf3ba8cf55637e0009c53",
+                "famA.NA12878.cnv.slivar.vcf.gz:md5,15fa30fd02838211b97b84829adfb7b3",
                 "famA.NA12878.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "famA.merged.vcf.gz:md5,7637a8df7e6d7b6ca693fe9aaf1225c",
-                "famA.refined.vcf.gz:md5,ad5d19a7d7104fd13b8ab2c312787ef",
-                "famA.sorted.vcf.gz:md5,60bf5a4289866a00fbc8d5d01a965350",
+                "famA.cn_filled.vcf.gz:md5,7b12a6caa21a7786a8524bcb41d27099",
+                "famA.merged.vcf.gz:md5,59658f01b829e3de29069e35705d05d1",
+                "famA.sorted.vcf.gz:md5,53bc87b6d3972fdd22b1d8dfad0eeba1",
                 "famB.NA12878.cnv.slivar.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "famB.cn_filled.vcf.gz:md5,234fb87692bc901704481c316286fab6",
                 "famB.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "famB.merged.vcf.gz:md5,4ba5267239e41464b9ed4bded786fd2e",
-                "famB.sorted.vcf.gz:md5,daab354deec9b390e8d0f91649936242",
-                "famD.cnv.slivar.vcf.gz:md5,184d922c45f676e056838841a7fb7a60",
+                "famB.merged.vcf.gz:md5,e878fb4dac5c3fcd7647b942e97f3409",
+                "famB.sorted.vcf.gz:md5,b2e6252a78e6003a0a5a2cb0b108b23e",
+                "famD.cn_filled.vcf.gz:md5,31d1ace80b5f5c7abce8ab0c49036fbb",
+                "famD.cnv.slivar.vcf.gz:md5,9c135ed15df092388b1abc66eec1a01f",
                 "famD.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "famD.refined.vcf.gz:md5,663d376aa0957c0aafe14ed074bf0650",
-                "famD.sorted.vcf.gz:md5,663d376aa0957c0aafe14ed074bf0650",
-                "famF.NA12878.cnv.slivar.vcf.gz:md5,d0bb5c13bc31b6ac4c72bb26ee5c58b7",
+                "famD.sorted.vcf.gz:md5,31d1ace80b5f5c7abce8ab0c49036fbb",
+                "famF.NA12878.cnv.slivar.vcf.gz:md5,bb7fa0e77f8a7e6d464c4a13747e86a",
                 "famF.NA12878.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "famF.NA12878_sib.cnv.slivar.vcf.gz:md5,d0bb5c13bc31b6ac4c72bb26ee5c58b7",
-                "famF.merged.vcf.gz:md5,cb9b6e3ff1f59cf71ce285c91618e98b",
-                "famF.sorted.vcf.gz:md5,ebae4de3c77b2677e4629e4cf82766ab",
-                "variants.famA.child.cnv.vep.vcf.gz:md5,d136135cc55cdb0661d53d9e7c6a095c",
+                "famF.NA12878_sib.cnv.slivar.vcf.gz:md5,bb7fa0e77f8a7e6d464c4a13747e86a",
+                "famF.cn_filled.vcf.gz:md5,ab99d229722d0d4bd168899487a26988",
+                "famF.merged.vcf.gz:md5,daeb82bf5b14104c2172bbf43f86ef01",
+                "famF.sorted.vcf.gz:md5,afdb0af7b0a18ca799d579c59c32ba9f",
+                "variants.famA.child.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b",
                 "variants.famB.NA12878.cnv.vep.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
-                "variants.famD.cnv.vep.vcf.gz:md5,d136135cc55cdb0661d53d9e7c6a095c",
-                "variants.famF.NA12878.cnv.vep.vcf.gz:md5,d136135cc55cdb0661d53d9e7c6a095c",
-                "variants.famF.NA12878_sib.cnv.vep.vcf.gz:md5,d136135cc55cdb0661d53d9e7c6a095c"
+                "variants.famD.cnv.vep.vcf.gz:md5,f9fc527083d7037b9b7ec2ea9de22b20",
+                "variants.famF.NA12878.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b",
+                "variants.famF.NA12878_sib.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b"
             ]
         ],
-        "timestamp": "2026-11-02T19:11:13.954566341",
+        "timestamp": "2026-11-12T02:48:42.047498045",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "24.10.5"

@@ -43,7 +43,7 @@
                 "format": "file-path",
                 "exists": true,
                 "pattern": "^\\S+\\.(cram|bam)$",
-                "errorMessage": "Alignment file, if provided, must have a '.cram' or '.bam' extension. Required for the depth-based genotype-refinement step; samples without it skip that step. Not used for caller='DRAGEN_JOINT' rows -- joint calling doesn't have the post-hoc-merge missing-genotype problem that step exists to work around, so it's always skipped for those families."
+                "errorMessage": "Alignment file, if provided, must have a '.cram' or '.bam' extension. Only used with --get_cn_by_computing_ratio, to fill a family's missing genotypes from depth; a family without one for every sample isn't filled that way. Not used for caller='DRAGEN_JOINT' rows -- joint calling doesn't have the post-hoc-merge missing-genotype problem that step exists to work around."
             },
             "pheno": {
                 "type": "string",

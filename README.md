@@ -8,7 +8,7 @@
 
 1. Per-sample CNV normalization ([bcftools](https://samtools.github.io/bcftools/bcftools.html)) and redundant-call collapsing ([truvari](https://github.com/ACEnglish/truvari))
 2. Family-level merge of per-sample VCFs and cohort-level collapsing -- families provided as an already jointly-called, multi-sample VCF (e.g. DRAGEN joint calling) skip merging/collapsing entirely
-3. Depth-based genotype refinement ([mosdepth](https://github.com/brentp/mosdepth)) to resolve missing genotypes at cohort-collapsed sites, for families where every sample has an alignment file (CRAM/BAM)
+3. Fill the missing genotypes the family merge leaves with each sample's own copy number, from its original DRAGEN VCF's REF blocks and calls (or, with `--get_cn_by_computing_ratio`, from alignment depth with [mosdepth](https://github.com/brentp/mosdepth), for families where every sample has a CRAM/BAM)
 4. Variant annotation with [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html): of each proband's own calls (a PED affected child with its own VCF), which then get the family's genotypes joined on, so a family's final VCF is built around its proband; at the family level for families without a proband; and separately for standalone samples
 5. Mode-of-inheritance classification with [slivar](https://github.com/brentp/slivar), for families with a pedigree (PED) file
 6. Variant prioritization with [Exomiser](https://exomiser.readthedocs.io/en/14.0.0/running.html) from a phenopacket: on the proband's VCF when the family phenopacket is about a proband, on the family VCF otherwise, and at the standalone-sample level
@@ -38,6 +38,7 @@ nextflow -c application.config run Ferlab-Ste-Justine/cnv-post-processing \
 For more details, see:
 
 - [docs/usage.md](docs/usage.md) for instructions on how to run the pipeline, including input requirements and examples
+- [docs/routes.md](docs/routes.md) for what each step does to the VCFs, on the per-sample, joint and standalone routes
 - [docs/reference_data.md](docs/reference_data.md) for information about the reference data required by the pipeline
 
 ## Credits

@@ -339,6 +339,30 @@
                     "fa_icon": "fas fa-filter"
                 }
             }
+        },
+        "genotype_fill_options": {
+            "title": "Genotype fill options",
+            "type": "object",
+            "fa_icon": "fas fa-fill-drip",
+            "description": "How a family's missing genotypes are filled after the per-sample VCFs are merged.",
+            "properties": {
+                "get_cn_by_computing_ratio": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Fill the family VCF's missing genotypes from read depth (mosdepth, needs every sample's cram) instead of from each sample's own DRAGEN copy-number segments.",
+                    "help_text": "When a family's per-sample VCFs are merged, a sample with no call in a record gets an empty genotype (`./.`, no FORMAT/CN), which slivar reads as unknown. By default, each sample's original per-sample DRAGEN VCF fills it: its REF blocks and its own calls give the CN that covers at least half of the record, and GT becomes hom-ref when that CN is the expected one. Set this to fill from depth instead: mosdepth's depth ratio over the record, which needs a `cram` for every sample of the family (a family without them is left unfilled). Either way, records under 5 kb are left missing, and `DRAGEN_JOINT` families need no fill.",
+                    "fa_icon": "fas fa-chart-bar"
+                },
+                "cn_from_segment_overlap": {
+                    "type": "number",
+                    "default": 0.5,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of a record one copy number must cover in the sample's own DRAGEN segments for the default fill to write it.",
+                    "help_text": "For each missing genotype on a record of 5 kb or more, the default fill (`FILL_CN_FROM_SEGMENTS`) counts the bases of the record each CN covers in the sample's original per-sample VCF (REF blocks and own calls) and writes the CN covering at least this share of it; below it, or on a tie, the genotype stays missing. `0.5` is the rule measured against the DRAGEN joint caller on 7 trios (see `docs/journal.md`). Higher values fill fewer genotypes, only where the sample's segments agree over most of the record; `0` writes the CN covering the most bases, however little. Not used with `--get_cn_by_computing_ratio`.",
+                    "fa_icon": "fas fa-percent"
+                }
+            }
         }
     },
     "allOf": [
@@ -365,6 +389,9 @@
         },
         {
             "$ref": "#/$defs/filtering_options"
+        },
+        {
+            "$ref": "#/$defs/genotype_fill_options"
         }
     ]
 }

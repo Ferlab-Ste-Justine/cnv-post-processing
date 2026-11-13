@@ -1,0 +1,169 @@
+nextflow_process {
+
+    name "Test Process FILL_CN_FROM_SEGMENTS"
+    script "../main.nf"
+    process "FILL_CN_FROM_SEGMENTS"
+
+    tag "modules"
+    tag "modules_"
+    tag "fill_cn_from_segments"
+
+    // Fixtures in ./data/, written by a script (not hand-edited) and checked by running
+    // bin/fill_cn_from_segments.py on them directly before this test was written.
+    //
+    // toy.vcf.gz, a family VCF (dad kid mom, chr1), one record per rule. The family's per-sample
+    // VCFs are DRAGEN-style: REF blocks (ALT ".", CN 2) between the sample's calls, all three
+    // named sample.cnv.vcf.gz in their own folder, so the process has to stage them apart.
+    //   t1 [100000,110000]  dad: REF CN 2 covers it                      -> 0/0:2
+    //                       mom: her own CN 1 call (cnvLength, in no record here) covers 60% -> ./.:1
+    //   t2 [300000,310000]  dad: CN 1 40%, CN 3 40%, CN 2 20%: no CN covers half -> ./.:.
+    //   t3 [600000,609999]  mom: REF CN 2 and her CN 1 call, 5000 bases each: a tie -> ./.:.
+    //   t4 [800000,803000]  3 kb, under the 5 kb floor (ext.min_size)    -> ./.:. for everyone
+    //   t5 [900000,910000]  every genotype set (mom's ./1 too)           -> unchanged
+    //   t6 [2000000,...]    no segment of any sample reaches it          -> ./.:.
+    test("toy fixture: fills a hole from the sample's own segments, hom-ref only at the expected CN") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy"],
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy.vcf.gz"),
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy.vcf.gz.tbi"),
+                    [
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/dad/sample.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/kid/sample.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/mom/sample.cnv.vcf.gz")
+                    ],
+                    []
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            with(process.out) {
+                assert vcf.size() == 1
+                assert vcf.get(0)[0] == [id: "toy"]
+                assert file(vcf.get(0)[1]).name == "toy.cn_filled.vcf.gz"
+                assert snapshot(versions).match()
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 6
+            def samplesOf = { String id -> lines.find { it.split("\t")[2] == id }.split("\t").drop(9) }
+
+            //                                       dad      kid      mom
+            assert samplesOf("t1_own_call_elsewhere") == ["0/0:2", "0/1:1", "./.:1"]
+            assert samplesOf("t2_no_majority_cn")     == ["./.:.", "0/0:2", "0/0:2"]
+            assert samplesOf("t3_tie")                == ["0/0:2", "0/0:2", "./.:."]
+            assert samplesOf("t4_under_5kb")          == ["./.:.", "./.:.", "./.:."]
+            assert samplesOf("t5_existing_calls")     == ["0/0:2", "0/1:1", "./1:3"]
+            assert samplesOf("t6_no_segment")         == ["./.:.", "./.:.", "./.:."]
+        }
+    }
+
+    // toy_xy.vcf.gz and toy_xy.ped are depth_genotype_refine's (dad PED sex 1, mom 2, nosex 0).
+    // Segments: everyone CN 2 on chrM; dad CN 2 on PAR1, CN 1 on the rest of chrX and on non-PAR
+    // chrY, with a CN 2 gain over xy_2; mom and nosex CN 2 along chrX and nothing on chrY.
+    //   xy_6 chrM: not modelled, CN written, GT left missing
+    //   xy_3 PAR1: CN 2 is everyone's expected CN, sex not needed
+    //   xy_4 straddles the PAR1 boundary: no single expected CN, CN only (dad's CN 1 covers 59%)
+    //   xy_1 non-PAR X: dad 0:1 (haploid), mom 0/0:2, nosex CN only (sex unknown)
+    //   xy_2 non-PAR X: dad's own gain (CN 2, a male's expected is 1) -> CN only
+    //   xy_5 non-PAR Y: dad 0:1; mom and nosex have no chrY segments -> missing
+    test("toy_xy fixture with PED: GT hom-ref, haploid on a male's non-PAR chrX/chrY, only at the sex's expected CN") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_xy"],
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.vcf.gz"),
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.vcf.gz.tbi"),
+                    [
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/dad.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/mom.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/nosex.cnv.vcf.gz")
+                    ],
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.ped")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def samplesOf = { String id -> lines.find { it.split("\t")[2] == id }.split("\t").drop(9) }
+
+            //                                      dad      mom      nosex
+            assert samplesOf("xy_6_chrm")            == ["./.:2", "./.:2", "./.:2"]
+            assert samplesOf("xy_3_par_x")           == ["0/0:2", "0/0:2", "0/0:2"]
+            assert samplesOf("xy_4_straddles_par")   == ["./.:1", "./.:2", "./.:2"]
+            assert samplesOf("xy_1_nonpar_x_normal") == ["0:1", "0/0:2", "./.:2"]
+            assert samplesOf("xy_2_nonpar_x_off")    == ["./.:2", "0/0:2", "./.:2"]
+            assert samplesOf("xy_5_nonpar_y")        == ["0:1", "./.:.", "./.:."]
+        }
+    }
+
+    test("toy_xy fixture without PED: non-PAR chrX/chrY get their CN, GT left missing") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_xy"],
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.vcf.gz"),
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.vcf.gz.tbi"),
+                    [
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/dad.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/mom.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/nosex.cnv.vcf.gz")
+                    ],
+                    []
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def samplesOf = { String id -> lines.find { it.split("\t")[2] == id }.split("\t").drop(9) }
+
+            assert samplesOf("xy_1_nonpar_x_normal") == ["./.:1", "./.:2", "./.:2"]
+            assert samplesOf("xy_3_par_x")           == ["0/0:2", "0/0:2", "0/0:2"]
+            assert samplesOf("xy_5_nonpar_y")        == ["./.:1", "./.:.", "./.:."]
+        }
+    }
+
+    // Segments are found by the sample name in each per-sample VCF's own header: a family column
+    // with none stops the task, rather than staying unfilled without a word.
+    test("toy_xy fixture, a family sample without a per-sample VCF stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy_xy"],
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.vcf.gz"),
+                    file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/toy_xy.vcf.gz.tbi"),
+                    [
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/dad.cnv.vcf.gz"),
+                        file("${projectDir}/modules/local/fill_cn_from_segments/tests/data/mom.cnv.vcf.gz")
+                    ],
+                    []
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("no per-sample VCF for sample(s) nosex of toy_xy.vcf.gz (got: dad, mom)")
+        }
+    }
+}

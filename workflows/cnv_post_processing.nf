@@ -22,6 +22,8 @@ include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_COHORT    } from '../module
 include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_JOINT     } from '../modules/local/bcftools_sort_index/main.nf'
 include { BCFTOOLS_MERGE } from '../modules/local/bcftools_merge/main.nf'
 include { BCFTOOLS_INDEX as BCFTOOLS_INDEX_SLIVAR } from '../modules/local/bcftools_index/main.nf'
+include { BCFTOOLS_INDEX as BCFTOOLS_INDEX_CN_FILLED } from '../modules/local/bcftools_index/main.nf'
+include { FILL_CN_FROM_SEGMENTS } from '../modules/local/fill_cn_from_segments/main.nf'
 include { BAM_VCF_DEPTH_GENOTYPE_REFINEMENT } from '../subworkflows/local/bam_vcf_depth_genotype_refinement/main.nf'
 include { VCF_ANNOTATE_ENSEMBLVEP } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
 include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
@@ -128,7 +130,7 @@ workflow CNV_POST_PROCESSING {
     //
     // caller='DRAGEN_JOINT' rows are already a family-level, jointly-called, multi-sample VCF --
     // there's no per-sample VCF to normalize/collapse/merge, and joint calling doesn't have the
-    // post-hoc-merge missing-genotype problem depth-based refinement exists to work around. Those
+    // post-hoc-merge missing-genotype problem the genotype fill (STAGE 3) exists to work around. Those
     // families skip stages 1-3 entirely (validated to be exactly one row per family in
     // PIPELINE_INITIALISATION's validateJointCallerExclusivity) and only get the same lightweight
     // prep (drop non-variant records, split multiallelic sites -- DRAGEN's own joint VCFs do carry
@@ -268,7 +270,7 @@ workflow CNV_POST_PROCESSING {
             def tbis = by_sample.collect { entry -> entry[2] }
             // now that samples are grouped together, drop the per-sample-only meta fields and
             // reset id to the family level. Keep the samples' VCF names (needed to fan back out to
-            // per-sample steps later, e.g. depth-based genotype refinement, whose results are
+            // per-sample steps later, e.g. the genotype fill (STAGE 3), whose inputs are
             // matched to the family VCF's columns by name), and the probands', sorted for the
             // same reason as the samples.
             def family_meta = metas[0].findAll { entry -> !["sample", "id", "caller", "cram", "vcfSample", "proband"].contains(entry.key) }
@@ -312,39 +314,79 @@ workflow CNV_POST_PROCESSING {
     BCFTOOLS_SORT_INDEX_COHORT(RESTORE_COLLAPSED_FORMAT.out.vcf)
 
     //
-    // STAGE 3 -- Depth-based genotype refinement (mosdepth), family-level. Joint families never
-    // appear in BCFTOOLS_SORT_INDEX_COHORT.out (they skipped stages 1-2 above), so this subworkflow
-    // never attempts refinement for them regardless of what's in the cram-channel -- but the
-    // cram-channel itself is still built from the persample branch only, for clarity.
+    // STAGE 3 -- Fill the family VCF's missing genotypes (./., no CN: a sample with no call in a
+    // record), family-level. Joint families never appear in BCFTOOLS_SORT_INDEX_COHORT.out (they
+    // skipped stages 1-2 above, and joint calling gives every sample a CN), so neither fill runs
+    // for them.
     //
-    // True solos (sampleSize==1, no familyPed/familyPheno) are excluded here too, same predicate
-    // as the ch_grouped_by_family filter above: they never reach BCFTOOLS_SORT_INDEX_COHORT.out
-    // (their family route was dropped entirely), so leaving their cram in this channel would hand
-    // BAM_VCF_DEPTH_GENOTYPE_REFINEMENT a family id with a cram-count but no matching family VCF --
-    // an orphan its internal `join(..., remainder: true)` doesn't shape-pad correctly, which
-    // crashes downstream with a MissingMethodException instead of a clean skip.
+    // True solos (sampleSize==1, no familyPed/familyPheno) are excluded from the per-sample
+    // channels here, same predicate as the ch_grouped_by_family filter above: they never reach
+    // BCFTOOLS_SORT_INDEX_COHORT.out (their family route was dropped entirely). Left in, they'd
+    // hand BAM_VCF_DEPTH_GENOTYPE_REFINEMENT a family id with a cram-count but no matching family
+    // VCF -- an orphan its internal `join(..., remainder: true)` doesn't shape-pad correctly, which
+    // crashes downstream with a MissingMethodException instead of a clean skip -- and fail the
+    // segment join below.
     //
-    BAM_VCF_DEPTH_GENOTYPE_REFINEMENT(
-        BCFTOOLS_SORT_INDEX_COHORT.out.vcf.join(BCFTOOLS_SORT_INDEX_COHORT.out.tbi),
-        ch_persample
-            .filter { meta, _vcf, _cram -> !(meta.sampleSize == 1 && !meta.familyPed && !meta.familyPheno) }
-            .filter { meta, _vcf, cram ->
-                if (!cram) {
-                    log.warn("Skipping depth-based genotype refinement for sample '${meta.id}': no cram (alignment file) provided in the samplesheet.")
+    def ch_cohort_vcf = BCFTOOLS_SORT_INDEX_COHORT.out.vcf.join(BCFTOOLS_SORT_INDEX_COHORT.out.tbi)
+    def ch_family_samples = ch_persample
+        .filter { meta, _vcf, _cram -> !(meta.sampleSize == 1 && !meta.familyPed && !meta.familyPheno) }
+    def ch_cn_filled
+
+    if (params.get_cn_by_computing_ratio) {
+        //
+        // Depth-based (mosdepth): a hole whose depth ratio reads normal gets GT hom-ref and the
+        // expected CN. Needs every sample's cram; a family without them is left as it is.
+        //
+        BAM_VCF_DEPTH_GENOTYPE_REFINEMENT(
+            ch_cohort_vcf,
+            ch_family_samples
+                .filter { meta, _vcf, cram ->
+                    if (!cram) {
+                        log.warn("Skipping depth-based genotype refinement for sample '${meta.id}': no cram (alignment file) provided in the samplesheet.")
+                    }
+                    cram
                 }
-                cram
+                .map { meta, _vcf, cram ->
+                    def crai = file("${cram}.crai")
+                    def bai = file("${cram}.bai")
+                    def index = crai.exists() ? crai : (bai.exists() ? bai : [])
+                    // Named after the VCF sample, like meta.samples: DEPTH_GENOTYPE_REFINE matches
+                    // each <name>.ratio.bed to the family VCF's column of that name.
+                    [[id: meta.vcfSample, family: meta.familyId], file(cram), index]
+                },
+            reference_fasta,
+            reference_fasta_fai
+        )
+        ch_cn_filled = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
+    } else {
+        //
+        // From each sample's own DRAGEN segments (default): its original per-sample VCF, read
+        // before NORMALIZE_CNV drops the REF blocks, gives the CN covering at least half of the
+        // record. GT becomes hom-ref when that CN is the expected one; any other CN (usually the
+        // sample's own call, which the collapse left in another record) is written as CN only.
+        // No cram needed. A family's per-sample VCFs are put in sample-name order: their order is
+        // part of the task's command line, so -resume would otherwise re-run it.
+        //
+        def ch_segment_vcfs = ch_family_samples
+            .map { meta, vcf, _cram -> [meta.familyId, meta.vcfSample, vcf] }
+            .groupTuple()
+            .map { family_id, names, vcfs ->
+                [family_id, [names as List, vcfs as List].transpose().sort { entry -> entry[0] }.collect { entry -> entry[1] }]
             }
-            .map { meta, _vcf, cram ->
-                def crai = file("${cram}.crai")
-                def bai = file("${cram}.bai")
-                def index = crai.exists() ? crai : (bai.exists() ? bai : [])
-                // Named after the VCF sample, like meta.samples: DEPTH_GENOTYPE_REFINE matches
-                // each <name>.ratio.bed to the family VCF's column of that name.
-                [[id: meta.vcfSample, family: meta.familyId], file(cram), index]
-            },
-        reference_fasta,
-        reference_fasta_fai
-    )
+
+        FILL_CN_FROM_SEGMENTS(
+            ch_cohort_vcf
+                .map { meta, vcf, tbi -> [meta.id, meta, vcf, tbi] }
+                .join(ch_segment_vcfs, failOnMismatch: true, failOnDuplicate: true)
+                .map { _family_id, meta, vcf, tbi, segment_vcfs ->
+                    [meta, vcf, tbi, segment_vcfs, meta.familyPed ? file(meta.familyPed) : []]
+                }
+        )
+
+        // Filling genotypes doesn't reorder records, so this is a plain re-index, not a re-sort.
+        BCFTOOLS_INDEX_CN_FILLED(FILL_CN_FROM_SEGMENTS.out.vcf)
+        ch_cn_filled = BCFTOOLS_INDEX_CN_FILLED.out.vcf_tbi
+    }
 
     //
     // STAGE 3b -- Joint-called families: lightweight prep only (drop non-variant records, split
@@ -372,12 +414,12 @@ workflow CNV_POST_PROCESSING {
     // least one carrier's FT is PASS, the filters they name otherwise; --cnv_pass_only drops the
     // records that don't pass. In a joint VCF, FT is DRAGEN's, per sample; on the per-sample
     // route, each call's FILTER, copied by NORMALIZE_CNV. Run on every family VCF, the
-    // depth-refined and the joint ones: VEP (STAGE 4) and Exomiser on a family VCF (STAGE 7) read
+    // genotype-filled and the joint ones: VEP (STAGE 4) and Exomiser on a family VCF (STAGE 7) read
     // the result. JOIN_PROBAND_CNV (STAGE 5) reads the unfiltered family VCF, since it stops on a
     // proband call with no family record; a proband's VCF goes through the same step after it.
     //
     FILTER_CNV_CARRIERS_FAMILY(
-        BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
+        ch_cn_filled
             .mix(ch_joint_vcf)
             .map { meta, vcf, _tbi -> [meta, vcf] }
     )
@@ -386,9 +428,9 @@ workflow CNV_POST_PROCESSING {
     // The family VCFs split here: a family with a proband (meta.probands) goes on to
     // JOIN_PROBAND_CNV with its probands' VEP VCFs (STAGE 5); the others, with the joint-called
     // ones, are VEP-annotated as a whole (STAGE 4). A family with a proband gets no family-level
-    // VEP or slivar VCF: CNVs only its parents carry stay in depth_refined/, unannotated.
+    // VEP or slivar VCF: CNVs only its parents carry stay in cn_filled/, unannotated.
     //
-    def ch_family_vcf_with_proband = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
+    def ch_family_vcf_with_proband = ch_cn_filled
         .filter { meta, _vcf, _tbi -> meta.probands }
 
     def ch_family_vcf_for_vep = FILTER_CNV_CARRIERS_FAMILY.out.vcf_tbi
@@ -483,7 +525,7 @@ workflow CNV_POST_PROCESSING {
     // probands (proband.subject.id) runs on that proband's slivar VCF (STAGE 6): the proband's own
     // calls and intervals, with the family's FORMAT for its pedigree analysis. Any other family
     // (no proband, DRAGEN_JOINT, no familyPed, a phenopacket about another sample) runs on its
-    // family VCF, the depth-refined or the joint one, through FILTER_CNV_CARRIERS (STAGE 3c).
+    // family VCF, the genotype-filled or the joint one, through FILTER_CNV_CARRIERS (STAGE 3c).
     // Families without familyPheno stay in the family channel, so EXOMISER_WORKFLOW drops them
     // with its warning.
     //

@@ -75,15 +75,18 @@ nextflow_pipeline {
 
     // The same trio with a PED where NA12878 is unaffected (tests/data/): no affected child, so no
     // proband. The family keeps the family-level route: VEP and slivar on the family VCF, and
-    // family-mode Exomiser on the depth-refined family VCF, under <familyId> names. With
-    // --cnv_pass_only false, the CNVs no carrier passes reach slivar too, flagged in FILTER.
-    test("-profile test, a family without a proband") {
+    // family-mode Exomiser on the genotype-filled family VCF, under <familyId> names. With
+    // --cnv_pass_only false, the CNVs no carrier passes reach slivar too, flagged in FILTER. Run
+    // with --get_cn_by_computing_ratio, the depth fill (mosdepth, from the trio's CRAMs) instead
+    // of the samples' own segments.
+    test("-profile test, a family without a proband, genotypes filled from depth") {
 
         when {
             params {
-                outdir        = "$outputDir"
-                input         = "${projectDir}/tests/data/samplesheet_no_proband.csv"
-                cnv_pass_only = false
+                outdir                    = "$outputDir"
+                input                     = "${projectDir}/tests/data/samplesheet_no_proband.csv"
+                cnv_pass_only             = false
+                get_cn_by_computing_ratio = true
             }
         }
 
@@ -102,16 +105,24 @@ nextflow_pipeline {
             def slivar_header = path("$outputDir/slivar/fam1.cnv.slivar.vcf.gz").linesGzip.findAll { it.startsWith("#") }
             def slivar_filters = path("$outputDir/slivar/fam1.cnv.slivar.vcf.gz").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[6] }
             def exomiser_header = path("$outputDir/exomiser/fam1.exomiser.vcf.gz").linesGzip.findAll { it.startsWith("##") }
+            // The depth fill writes a hom-ref GT with the expected CN; no caller or merge step writes one.
+            def refined = path("$outputDir/cn_filled/fam1.refined.vcf.gz").linesGzip.findAll { !it.startsWith("#") }
+                .collect { it.split("\t").drop(9).count { s -> s ==~ /^0(\/0)?:.*/ } }.sum() ?: 0
 
             assertAll(
                 { assert family_files.every { it in files } },
+                // the depth fill, not the segment one
+                { assert ["MOSDEPTH_RATIO (NA12878)", "MOSDEPTH_RATIO (NA12891)", "MOSDEPTH_RATIO (NA12892)"].every { t -> task_names.any { it.contains(t) } } },
+                { assert !task_names.any { it.contains("FILL_CN_FROM_SEGMENTS") } },
+                { assert !files.any { it.startsWith("cn_filled/fam1.cn_filled") } },
+                { assert refined > 0 },
                 { assert !files.any { it.contains("fam1.NA12878") } },
                 { assert !task_names.any { it.contains("JOIN_PROBAND_CNV") || it.contains("VCF_ANNOTATE_ENSEMBLVEP_PROBAND") } },
                 // the family VCF's own records, not a proband's join
                 { assert slivar_header.find { it.startsWith("#CHROM") }.split("\\t").drop(9) == ["NA12878", "NA12891", "NA12892"] },
                 { assert !slivar_header.any { it.startsWith("##INFO=<ID=COHORT_ID,") } },
                 { assert "PASS" in slivar_filters && slivar_filters.any { it != "PASS" } },
-                // Exomiser repeats its input's header: the depth-refined family VCF, without VEP's CSQ
+                // Exomiser repeats its input's header: the genotype-filled family VCF, without VEP's CSQ
                 { assert !exomiser_header.any { it.startsWith("##INFO=<ID=CSQ,") || it.startsWith("##INFO=<ID=COHORT_ID,") } }
             )
         }
@@ -119,15 +130,16 @@ nextflow_pipeline {
 
     // tests/data/samplesheet_edge_cases.csv: families built from the same chr22 trio, each for a
     // route the tests above don't take.
-    // - famA: the trio under other samplesheet names (child, father, mother), with CRAMs. Depth
-    //   refinement still finds each sample's depth, by its VCF name.
-    // - famB: the trio without CRAMs, so no refinement. Its proband, NA12878, has no call (a
-    //   header-only VCF), and the phenopacket is about the father, so Exomiser runs on the family
-    //   VCF.
+    // - famA: the trio under other samplesheet names (child, father, mother). The genotype fill
+    //   still finds each sample's per-sample VCF, by its VCF name.
+    // - famB: the trio without CRAMs, which the segment fill doesn't need. Its proband, NA12878,
+    //   has no call (a header-only VCF: no segments either), and the phenopacket is about the
+    //   father, so Exomiser runs on the family VCF.
     // - famD: NA12878 alone with a PED and a family phenopacket, a documented singleton: no merge,
     //   no proband (a founder), family-level VEP, slivar and Exomiser.
     // - famF: a quartet without CRAMs whose two daughters are affected (NA12878_sib's VCF is
-    //   NA12878's, renamed): a proband VCF each, Exomiser only on the phenopacket's proband.
+    //   NA12878's, renamed): a proband VCF each, Exomiser only on the phenopacket's proband. Its
+    //   genotypes are filled from the samples' own segments all the same.
     test("-profile test, edge-case families") {
 
         when {
@@ -149,34 +161,33 @@ nextflow_pipeline {
             def task_names = workflow.trace.tasks().collect { it.name }
             def records = { f -> path("$outputDir/${f}").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") } }
             def samples = { f -> path("$outputDir/${f}").linesGzip.find { it.startsWith("#CHROM") }.split("\t").drop(9) as List }
-            // Refinement writes a hom-ref GT with the expected CN; no caller or merge step writes one.
-            def refined = { f -> records(f).collect { cols -> cols.drop(9).count { it ==~ /^0(\/0)?:.*/ } }.sum() ?: 0 }
+            // The genotype fill writes a hom-ref GT with the expected CN; no caller or merge step writes one.
+            def filled = { f -> records(f).collect { cols -> cols.drop(9).count { it ==~ /^0(\/0)?:.*/ } }.sum() ?: 0 }
             def trio = ["NA12878", "NA12891", "NA12892"]
             def quartet = ["NA12878", "NA12878_sib", "NA12891", "NA12892"]
 
             assertAll(
                 // famA
-                { assert samples("depth_refined/famA.refined.vcf.gz") == trio },
-                { assert refined("depth_refined/famA.refined.vcf.gz") > 0 },
-                { assert task_names.any { it.contains("MOSDEPTH_RATIO (NA12878)") } },
-                { assert !task_names.any { it.contains("MOSDEPTH_RATIO (child)") } },
+                { assert samples("cn_filled/famA.cn_filled.vcf.gz") == trio },
+                { assert filled("cn_filled/famA.cn_filled.vcf.gz") > 0 },
+                { assert !task_names.any { it.contains("MOSDEPTH_RATIO") } },
                 { assert "slivar/famA.NA12878.cnv.slivar.vcf.gz" in files },
                 // famB
-                { assert !files.any { it.startsWith("depth_refined/famB") } },
+                { assert filled("cn_filled/famB.cn_filled.vcf.gz") > 0 },
                 { assert samples("slivar/famB.NA12878.cnv.slivar.vcf.gz") == trio },
                 { assert records("slivar/famB.NA12878.cnv.slivar.vcf.gz").size() == 0 },
                 { assert "exomiser/famB.exomiser.vcf.gz" in files },
                 { assert !files.any { it.startsWith("exomiser/famB.NA12878") } },
                 // famD
                 { assert !task_names.any { it.contains("BCFTOOLS_MERGE (famD)") || it.contains("JOIN_PROBAND_CNV (famD") } },
-                { assert ["depth_refined/famD.refined.vcf.gz", "ensemblvep/variants.famD.cnv.vep.vcf.gz", "slivar/famD.cnv.slivar.vcf.gz", "exomiser/famD.exomiser.vcf.gz"].every { it in files } },
+                { assert ["cn_filled/famD.cn_filled.vcf.gz", "ensemblvep/variants.famD.cnv.vep.vcf.gz", "slivar/famD.cnv.slivar.vcf.gz", "exomiser/famD.exomiser.vcf.gz"].every { it in files } },
                 { assert samples("slivar/famD.cnv.slivar.vcf.gz") == ["NA12878"] },
                 // famF
                 { assert ["NA12878", "NA12878_sib"].every { p -> samples("slivar/famF.${p}.cnv.slivar.vcf.gz") == quartet } },
                 { assert ["NA12878", "NA12878_sib"].every { p -> records("slivar/famF.${p}.cnv.slivar.vcf.gz").size() > 0 } },
-                { assert ["NA12878", "NA12878_sib"].every { p -> refined("slivar/famF.${p}.cnv.slivar.vcf.gz") == 0 } },
+                { assert ["NA12878", "NA12878_sib"].every { p -> filled("slivar/famF.${p}.cnv.slivar.vcf.gz") > 0 } },
                 { assert "exomiser/famF.NA12878.exomiser.vcf.gz" in files },
-                { assert !files.any { it.startsWith("exomiser/famF.NA12878_sib") || it.startsWith("depth_refined/famF") } },
+                { assert !files.any { it.startsWith("exomiser/famF.NA12878_sib") } },
                 { assert snapshot(stable_path, vcf_md5).match() }
             )
         }
