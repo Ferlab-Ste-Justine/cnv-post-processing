@@ -207,6 +207,20 @@ _Decided 2026-11-02, BIOINFO-214._
 
 **Accepted:** the other samples are missing in the new record, as in any call truvari leaves alone: with CRAMs, depth refinement can resolve them on the call's own interval (5 kb or more), otherwise slivar tags the child `unknown_cn`. The lost call thus looks as it would one base off the edge. A sample sharing the lost call exactly (one merged record) is missing there too: its copy of the call is already in the kept record.
 
+### Only the CNVs a carrier passes go on to VEP, slivar and Exomiser
+
+_Decided 2026-11-03, BIOINFO-214._
+
+**What:** `NORMALIZE_CNV` copies each per-sample call's `FILTER` into `FORMAT/FT` (`bin/add_sample_filter.awk`, `ext.sample_filter`), the field a DRAGEN joint VCF already gives each sample. The merge, the collapses (as for `OID`), `RESTORE_COLLAPSED_FORMAT` and `JOIN_PROBAND_CNV` carry it. `FILTER_CNV_CARRIERS` (`bin/filter_cnv_carriers.py`) then sets each record's `FILTER` from its carriers' `FT`: `PASS` when at least one carrier's is `PASS`, the filters they name otherwise, `CarrierFT` when they name none. `--cnv_pass_only` (default `true`) drops the records that don't pass. It runs on every family VCF, depth-refined or joint, before family-level VEP and family-mode Exomiser; on each proband VCF after the join, before slivar; and on each standalone sample's VCF before VEP. `depth_refined/` and the files before it keep every call.
+
+**Why:** slivar tagged every call, `PASS` or not, and Exomiser (`analysisMode: PASS_ONLY`) read a `FILTER` that meant something different on each route. In a DRAGEN joint VCF, the real filters are per sample, in `FORMAT/FT`, and they describe the sample's segment, which can span several records: `FILTER` is `PASS` as soon as one sample passes, even one without the CNV, whose `FT` is then its normal segment's. For example, chr1:15,825,729 in the NA12878 trio is a 2,750 bp loss in NA12878 and NA12891, both `cnvLength`, and `PASS` from NA12892's 3.25 Mb normal segment. In the 7 full-genome trios of the 2026-11-03 run, 2,689 of the 4,296 `PASS` records with a CNV had no passing carrier. One of them, a 1,066 bp chrX loss in NA12864 (`cnvLength`), was ranked by Exomiser on the joint route and dropped on the per-sample one. On the proband route, `FILTER` was the proband's own call's. One field and one rule on both routes make `FILTER` say whether a carrier's call passed the caller's filters.
+
+**The cost:** DRAGEN sets `cnvLength` on every call under 10 kb (`--cnv-filter-length`, default 10000, not changed in our runs), so the default drops nearly all of them, about 4 records in 5 on either route: 1,607 of the 8,569 joint records with a CNV in the 7 trios pass, and 151 of NA12878's 726 calls on the per-sample route. Those small calls are mostly real. In the same trios, a CNV under 5 kb that only one parent carries is in the child's joint calls 52.7% of the time (about 50% expected), and 88% of the joint calls under 5 kb that the per-sample route lacks are backed by a parent's own per-sample call (0.9% by chance). `--cnv_pass_only false` keeps them, flagged in `FILTER`.
+
+**Details:** a carrier is a sample with an ALT allele in its GT (`0/1`, `1/1`, `./1`, haploid `1`). A child's failing call is kept when a parent's matching call passes: the same row on the joint route, the same truvari cluster on the per-sample route. `JOIN_PROBAND_CNV` reads the unfiltered family VCF, since it stops on a proband call with no family record.
+
+**Rejected:** dropping the joint VCF's `SampleFT` records only: it keeps the records that are `PASS` only through a sample without the CNV. Filtering the joint route only: the two routes would tag different calls for the same family. The proband's own `FT` instead of any carrier's: a parent's passing matching call supports the child's.
+
 ## Open questions
 
 ### A child with no call of its own: `unknown_cn`, or no MoI tag?

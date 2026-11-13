@@ -14,9 +14,11 @@
   | drop ALT="." (REF blocks)  |                                | (per family, joint VCF)    |
   | sort, split multiallelic   |                                | same steps as on the left, |
   | SVTYPE=CNV -> DUP/DEL      |                                | + strip INFO/SVLEN (DRAGEN |
-  +-------------+--------------+                                |  joint Number=. bug)       |
-                v                                               | -> BCFTOOLS_SORT_INDEX_    |
-  +----------------------------+                                |    JOINT                   |
+  | ID -> FORMAT/OID           |                                |  joint Number=. bug); no   |
+  | FILTER -> FORMAT/FT        |                                |  OID, FT is DRAGEN's own   |
+  +-------------+--------------+                                | -> BCFTOOLS_SORT_INDEX_    |
+                v                                               |    JOINT                   |
+  +----------------------------+                                | -> FILTER_CNV_CARRIERS     |
   | TRUVARI_COLLAPSE_PERSAMPLE |                                +------+--------------+------+
   | (dedup within one sample)  |                                       |              |
   | -> BCFTOOLS_SORT_INDEX_    |                                       v              v
@@ -25,10 +27,11 @@
      |          |           |                             | ENSEMBLVEP       |  | (family mode,   |
      |          |           v                             | VEP -> TABIX     |  |  needs          |
      |          |   +--------------------------------+    +--------+---------+  |  familyPheno)   |
-     |          |   | VCF_ANNOTATE_ENSEMBLVEP_       |             v            +-----------------+
-     |          |   | PERSAMPLE   VEP -> TABIX       |    +------------------+
-     |          |   +---------------+----------------+    | SLIVAR           |
-     |          |                   v                     +------------------+
+     |          |   | FILTER_CNV_CARRIERS (solo)     |             v            +-----------------+
+     |          |   | -> VCF_ANNOTATE_ENSEMBLVEP_    |    +------------------+
+     |          |   |    PERSAMPLE   VEP -> TABIX    |    | SLIVAR           |
+     |          |   +---------------+----------------+    +------------------+
+     |          |                   v
      |          |   +--------------------------------+
      |          |   | EXOMISER_SINGLE                |
      |          |   | (single-sample mode: gene /    |
@@ -59,7 +62,7 @@
      |                        | (proband)         | (no proband)
      v                        |                   |
  +-----------------------+    |     . . . . . . . v . . . . . . . . . . . . . . . . . . . .
- | VCF_ANNOTATE_         |    |     .  Run if no proband                                  .
+ | VCF_ANNOTATE_         |    |     .  Run if no proband, after FILTER_CNV_CARRIERS      .
  | ENSEMBLVEP_PROBAND    |    |     .  +----------------------+   +----------------------+ .
  | VEP -> TABIX          |    |     .  | VCF_ANNOTATE_        |   | EXOMISER             | .
  +-----------+-----------+    |     .  | ENSEMBLVEP           |   | (family mode, needs  | .
@@ -70,6 +73,10 @@
  | force each CNV ID to  |          .  | SLIVAR               |                           .
  | come from the proband |          .  +----------------------+                           .
  | (for Radiant)         |          . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ +-----------+-----------+
+             v
+ +-----------------------+
+ | FILTER_CNV_CARRIERS   |
  +-----------+-----------+
              v
  +-----------------------+
@@ -87,6 +94,10 @@
  family-level VEP or SLIVAR: its CNVs that only the parents carry stay in depth_refined/.
  Family-mode EXOMISER runs on a proband's SLIVAR VCF when the familyPheno phenopacket is about
  that proband (proband.subject.id), and on the family (or joint) VCF otherwise.
+ FILTER_CNV_CARRIERS sets each record's FILTER from its carriers' FORMAT/FT (PASS when one
+ passes) and, under --cnv_pass_only (the default), drops the records no carrier passes. On the
+ left, FT is each call's FILTER, copied by NORMALIZE_CNV; in a joint VCF, DRAGEN's own.
+ JOIN_PROBAND_CNV reads the unfiltered family VCF; depth_refined/ keeps every CNV.
 
 
 RESTORE_COLLAPSED_FORMAT in detail (bin/restore_collapsed_format.py)

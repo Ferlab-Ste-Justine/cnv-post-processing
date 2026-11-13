@@ -37,7 +37,8 @@ route applicable to it, decided per-row/per-family purely from which optional co
 
 1. `NORMALIZE_CNV` (bcftools norm/view; sets `INFO/SVTYPE` from the ALT, `DEL`/`DUP` instead of
    DRAGEN's `CNV`, via `bin/svtype_from_alt.awk`, so truvari doesn't collapse a loss with a gain;
-   also copies each call's ID into `FORMAT/OID` via `bin/add_original_id.awk`) →
+   also copies each call's ID into `FORMAT/OID` via `bin/add_original_id.awk`, and its FILTER
+   into `FORMAT/FT` via `bin/add_sample_filter.awk`, the field a DRAGEN joint VCF already has) →
    `TRUVARI_COLLAPSE_PERSAMPLE`, per sample. Probands are decided here, from the samplesheet: a
    per-sample row is a proband when its VCF sample (`vcfSampleNames()`: the PED names VCF samples,
    not the samplesheet's `sample` column) is one of its PED's affected children (`isPedProband()`,
@@ -50,8 +51,8 @@ route applicable to it, decided per-row/per-family purely from which optional co
    gives a record of its own to an absorbed call whose sample's column in the kept record holds
    another call, by `FORMAT/OID`: a record has one column per sample). Families
    supplied as an already jointly-called `caller=DRAGEN_JOINT` multi-sample VCF skip merge+collapse
-   entirely (lightweight prep only: drop non-variant records, split multiallelics) and rejoin at
-   step 4
+   entirely (lightweight prep only: drop non-variant records, split multiallelics; DRAGEN's own
+   `FORMAT/FT` kept, `ext.sample_filter` off) and rejoin at step 4
 3. `BAM_VCF_DEPTH_GENOTYPE_REFINEMENT` (mosdepth-based) — only if _every_ sample in the family has
    a `cram`; partial coverage skips refinement for the whole family with a warning. A resolved
    `./.` gets GT hom-ref _and_ `FORMAT/CN` = the expected CN (slivar reads CN, not GT), sex-aware
@@ -59,14 +60,22 @@ route applicable to it, decided per-row/per-family purely from which optional co
    coordinates in `bin/refine_genotypes.py` in sync with them). Records under 5 kb
    (`ext.min_size`) are never refined: depth there can't tell normal from a missed loss, which
    made false `denovo` calls
-4. A family with a proband (`meta.probands`) skips the family-level VEP: `JOIN_PROBAND_CNV`
+4. `FILTER_CNV_CARRIERS` (`bin/filter_cnv_carriers.py`) on every family VCF, depth-refined or
+   joint: each record's FILTER becomes `PASS` when at least one carrier's (ALT allele in GT)
+   `FORMAT/FT` is `PASS`, the filters they name otherwise, `CarrierFT` when none.
+   `--cnv_pass_only` (default `true`) drops the records that don't pass, nearly every call under
+   10 kb (DRAGEN's `cnvLength`). The joint VCF's own FILTER is `PASS` whenever any sample passes,
+   even one without the CNV, so it can't be used as is. Its output feeds family-level VEP and
+   family-mode Exomiser; `JOIN_PROBAND_CNV` reads the unfiltered VCF, and each proband VCF goes
+   through the same step after it (`FILTER_CNV_CARRIERS_PROBAND`)
+5. A family with a proband (`meta.probands`) skips the family-level VEP: `JOIN_PROBAND_CNV`
    (`bin/join_proband_cnv.py`) builds one VCF per proband from its own VEP-annotated calls, each
    with the FORMAT (every sample's column) of the family record whose decoded `FORMAT/OID` names
    it, plus `COHORT_ID`/`COHORT_POS`/`COHORT_END` (and `COHORT_NumCollapsed`/`NumConsolidated`)
    for that record. A proband call with no family record, or in two, stops the run. Families
    without a proband, and `DRAGEN_JOINT` ones, get `VCF_ANNOTATE_ENSEMBLVEP` on the family VCF
    instead. CNVs only a proband's parents carry stay in `depth_refined/`, unannotated
-5. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed` — on
+6. `SLIVAR_EXPR` mode-of-inheritance classification — only for families with `familyPed` — on
    each proband VCF (`<familyId>.<proband>.cnv.slivar.vcf.gz`) or on the VEP-annotated family VCF
    (`<familyId>.cnv.slivar.vcf.gz`). Its output is the family's final VCF, so it gets an explicit
    indexing step of its own
@@ -75,11 +84,11 @@ route applicable to it, decided per-row/per-family purely from which optional co
    slivar inconsistent PEDs), the run stops if the family VCF declares no `FORMAT/CN`
    (`vcfFormatIds()`), and `validatePedAgainstVcf` checks the PED against the family VCF's
    `#CHROM` names and stops the run on a mismatch, or only warns under `--skip_ped_validation`.
-6. `EXOMISER_WORKFLOW` — only for families with `familyPheno`. Runs on the slivar VCF of the
+7. `EXOMISER_WORKFLOW` — only for families with `familyPheno`. Runs on the slivar VCF of the
    phenopacket's proband (`phenopacketProbandId()`: `proband.subject.id`) when that's one of the
    family's probands, output `<familyId>.<proband>.exomiser.*`; any other family (no proband,
    `DRAGEN_JOINT`, no `familyPed`, a phenopacket about another sample) runs on its family VCF,
-   the depth-refined or joint one, pre-VEP. Unlike the SNV pipeline, which always runs Exomiser on
+   the depth-refined or joint one, after `FILTER_CNV_CARRIERS`, pre-VEP. Unlike the SNV pipeline, which always runs Exomiser on
    the family VCF, in parallel with slivar.
 
 **Solo route** (true singletons: `sampleSize==1`, no `familyPed`, no `familyPheno` — the family
@@ -87,7 +96,8 @@ route would add nothing over this for them, so they're dropped from `ch_grouped_
 entirely rather than paying for a second VEP run):
 
 1. `NORMALIZE_CNV` + `TRUVARI_COLLAPSE_PERSAMPLE` (same processes as the family route, shared)
-2. `VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE`
+2. `FILTER_CNV_CARRIERS_SOLO` (the sample is its calls' only carrier: FILTER stays its own) →
+   `VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE`
 3. `EXOMISER_SINGLE` — only if the sample row has a `pheno`
 
 See `docs/schema.txt` for a visual ASCII diagram of this flow and `docs/images/cnv_post_processing_workflow.png`
@@ -103,16 +113,18 @@ nf-test.config                             # nf-test runner config (default prof
 workflows/cnv_post_processing.nf           # Main CNV_POST_PROCESSING workflow (both routes above) + EXOMISER_WORKFLOW
 subworkflows/local/                        # bam_vcf_depth_genotype_refinement, utils_nfcore_cnv_post_processing_pipeline
 subworkflows/nf-core/                      # utils_nextflow_pipeline, utils_nfcore_pipeline, utils_nfschema_plugin, vcf_annotate_ensemblvep
-modules/local/                             # normalize_cnv, truvari_collapse, bcftools_{merge,sort_index,index}, vcf_to_bed, mosdepth_ratio, depth_genotype_refine, slivar_expr, join_proband_cnv, restore_collapsed_format, exomiser
+modules/local/                             # normalize_cnv, truvari_collapse, bcftools_{merge,sort_index,index}, vcf_to_bed, mosdepth_ratio, depth_genotype_refine, slivar_expr, join_proband_cnv, restore_collapsed_format, filter_cnv_carriers, exomiser
 modules/nf-core/                           # ensemblvep/{vep,download}, tabix/tabix
 conf/                                      # base.config, modules.config, test.config, test_full.config
 assets/                                    # samplesheet.csv, schema_input.json, exomiser/ (default analysis YAMLs), cnv-slivar-functions.js (slivar rules) + cnv-slivar-moi-harness.js (its test bench; golden file moi_scenarios.expected.tsv)
 bin/add_original_id.awk                    # Copies each call's ID into FORMAT/OID in NORMALIZE_CNV
+bin/add_sample_filter.awk                  # Copies each call's FILTER into FORMAT/FT in NORMALIZE_CNV
+bin/filter_cnv_carriers.py                 # Sets FILTER from the carriers' FORMAT/FT; --pass-only drops non-PASS (FILTER_CNV_CARRIERS)
 bin/svtype_from_alt.awk                    # Sets INFO/SVTYPE from a <DEL>/<DUP> ALT in NORMALIZE_CNV
 bin/join_proband_cnv.py                    # Joins the family VCF's FORMAT onto a proband's own VEP-annotated calls through FORMAT/OID (JOIN_PROBAND_CNV)
 bin/restore_collapsed_format.py            # Restores the calls truvari's cohort collapse drops: ./1 and haploid FORMAT, a second call of one sample in a record (RESTORE_COLLAPSED_FORMAT)
 bin/refine_genotypes.py                    # Depth-ratio-based genotype rewrite logic used by DEPTH_GENOTYPE_REFINE
-docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram)
+docs/                                      # usage.md, output.md, reference_data.md, schema.txt (ASCII flow diagram), journal.md
 scripts/                                   # run-test-suite.sh, run-smoke-tests.sh (see below)
 ```
 
@@ -172,13 +184,13 @@ nf-core upstream module/subworkflow tests are excluded via the `ignore` glob in 
 `tests/default.nf.test` runs the test profile three times: the samplesheet as is (`fam1`'s proband
 route, `fam1_joint`, `ind1`), snapshotting the published files and each VCF's variant lines
 (`nft-vcf`'s `variantsMD5`); the trio with a PED where NA12878 is unaffected (`tests/data/`), for
-the family-level route; and `tests/data/samplesheet_edge_cases.csv`, families built from the same
+the family-level route, with `--cnv_pass_only false`; and `tests/data/samplesheet_edge_cases.csv`, families built from the same
 chr22 data for the routes the other two don't take (samplesheet names that aren't the VCF's, no
 CRAMs, a proband with no call, a phenopacket about the father, a documented singleton, two
 affected sibs).
 `scripts/run-test-suite.sh` bundles the pre-push gate, harmonized with Post-processing-Pipeline's:
 nf-core CLI version pin check, pre-commit, the slivar rules harness, a `-preview` launch under the
-declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 12 local modules (`modules/local/*`) have their own module
+declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 13 local modules (`modules/local/*`) have their own module
 test under `modules/local/<name>/tests/`.
 
 **nf-test gotchas** (both hit, and fixed, while writing `modules/local/truvari_collapse/tests/`;

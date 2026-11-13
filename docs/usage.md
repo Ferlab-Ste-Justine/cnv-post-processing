@@ -4,7 +4,7 @@
 
 ## Introduction
 
-The Ferlab-Ste-Justine/cnv-post-processing pipeline post-processes Copy Number Variant (CNV) calls, from per-sample VCFs to family-level, annotated and prioritized results: normalization and redundant-call collapsing ([truvari](https://github.com/ACEnglish/truvari)), family-level merging, depth-based genotype refinement ([mosdepth](https://github.com/brentp/mosdepth)), annotation with [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html), prioritization with [Exomiser](https://exomiser.readthedocs.io/en/14.0.0/running.html), and mode-of-inheritance classification with [slivar](https://github.com/brentp/slivar). Standalone samples with no family or pedigree information get their own lightweight VEP + Exomiser route. We might support additional tools and steps in the future.
+The Ferlab-Ste-Justine/cnv-post-processing pipeline post-processes Copy Number Variant (CNV) calls, from per-sample VCFs to family-level, annotated and prioritized results: normalization and redundant-call collapsing ([truvari](https://github.com/ACEnglish/truvari)), family-level merging (or a family VCF already jointly called by DRAGEN), depth-based genotype refinement ([mosdepth](https://github.com/brentp/mosdepth)), a filter on the caller's own per-sample filters, annotation with [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html), prioritization with [Exomiser](https://exomiser.readthedocs.io/en/14.0.0/running.html), and mode-of-inheritance classification with [slivar](https://github.com/brentp/slivar). A family with an affected child gets its final VCF built around that child's own calls. Standalone samples with no family or pedigree information get their own lightweight VEP + Exomiser route. The flow is drawn in [schema.txt](schema.txt), and the outputs in [output.md](output.md).
 
 Exomiser requires clinical information for each sample or family, including details such as clinical signs, affected status, and gender. This information is provided in a separate file using the Phenopacket format. slivar's mode-of-inheritance classification requires a pedigree (PED) file. More details can be found in the samplesheet section.
 
@@ -29,50 +29,79 @@ fam1_joint,NA12878_91_92,WGS,DRAGEN_JOINT,data-test/vcf/1463_NA12878_NA12891_NA1
 ind1,NA12878_ind,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,data-test/pheno/NA12878.yaml,,
 ```
 
-| Column           | Required? | Description                                                                                                                                                                                                                                                                                                                                        |
-| ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `familyId`       | Required  | Identifier grouping the samples that make up a family. A standalone sample with no relatives still needs a `familyId` (its own, used by no other row).                                                                                                                                                                                             |
-| `sample`         | Required  | Unique identifier for the sample being analyzed.                                                                                                                                                                                                                                                                                                   |
-| `sequencingType` | Required  | Use `WES` for whole exome sequencing and `WGS` for whole genome sequencing.                                                                                                                                                                                                                                                                        |
-| `caller`         | Required  | Identifies the tool that produced the CNV VCF. Only `DRAGEN` and `DRAGEN_JOINT` are currently supported by the normalization step. `DRAGEN_JOINT` means `vcf` is a DRAGEN jointly-called, multi-sample VCF for the whole family rather than a per-sample one -- a family using it must have exactly one row, and cannot also have per-sample rows. |
-| `vcf`            | Required  | Path to the vcf file containing the CNV data. The file must have a `.vcf` or `.vcf.gz` extension.                                                                                                                                                                                                                                                  |
-| `cram`           | Optional  | Path to the sample's alignment file (`.cram` or `.bam`). Enables the depth-based genotype-refinement step for that sample; a family is only refined if every one of its samples has a cram. Not used for `DRAGEN_JOINT` rows.                                                                                                                      |
-| `pheno`          | Optional  | Path to a per-sample phenotype file in Phenopacket format (`.yaml`/`.yml`/`.json`). Enables Exomiser in single-sample mode for that sample.                                                                                                                                                                                                        |
-| `familyPheno`    | Optional  | Path to a phenopacket file, identical across every row of the same family (all rows or none). Enables Exomiser in family mode.                                                                                                                                                                                                                     |
-| `familyPed`      | Optional  | Path to a PED file (`.ped`), identical across every row of the same family (all rows or none). Enables slivar mode-of-inheritance classification (GRCh38 only).                                                                                                                                                                                    |
+| Column           | Required? | Description                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `familyId`       | Required  | Identifier grouping the samples that make up a family. A standalone sample with no relatives still needs a `familyId` (its own, used by no other row).                                                                                                                                                                                  |
+| `sample`         | Required  | Identifier for the sample, unique within its family. It names the sample's own output files (`<familyId>.<sample>`), and can differ from the sample name in the VCF; the PED, the phenopackets and a proband's output files use the VCF's name.                                                                                         |
+| `sequencingType` | Required  | `WES` (whole exome) or `WGS` (whole genome). Selects Exomiser's analysis file (`--exomiser_analysis_wes` or `--exomiser_analysis_wgs`).                                                                                                                                                                                                 |
+| `caller`         | Required  | The tool that produced the CNV VCF: `DRAGEN` for a sample's own DRAGEN CNV VCF, `DRAGEN_JOINT` for a DRAGEN jointly-called, multi-sample CNV VCF of the whole family. A `DRAGEN_JOINT` family has exactly one row, and no per-sample rows. `GATK` is accepted by the samplesheet but not supported yet: the run stops at normalization. |
+| `vcf`            | Required  | Path to the CNV VCF (`.vcf` or `.vcf.gz`). slivar reads copy number from its `FORMAT/CN`.                                                                                                                                                                                                                                               |
+| `cram`           | Optional  | Path to the sample's alignment file (`.cram` or `.bam`), with its index next to it (`<file>.crai` or `<file>.bai`). Enables the depth-based genotype-refinement step; a family is only refined when every one of its samples has one. Not used for `DRAGEN_JOINT` rows or standalone samples.                                           |
+| `pheno`          | Optional  | Path to a per-sample phenopacket (`.yaml`/`.yml`/`.json`). Enables Exomiser in single-sample mode, for a standalone sample only: it's ignored on the rows of a family, and not allowed on a `DRAGEN_JOINT` row.                                                                                                                         |
+| `familyPheno`    | Optional  | Path to a family phenopacket, identical on every row of the family (all rows or none). Enables Exomiser in family mode, see [Phenopacket files](#phenopacket-files-pheno-familypheno).                                                                                                                                                  |
+| `familyPed`      | Optional  | Path to a PED file (`.ped`), identical on every row of the family (all rows or none). Enables slivar's mode-of-inheritance classification (GRCh38 only) and decides the family's probands, see [PED file](#ped-file-familyped).                                                                                                         |
 
 An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
-The identifier provided in the `sample` column in the samplesheet can differ from the sample identifier in the input vcf file.
-However, it must be unique to the sample, as it determines the output file names.
+A sample with neither `familyPed` nor `familyPheno` and no other family members (`familyId` used by no other row) is treated as a true standalone sample: it's routed through its own per-sample VEP + Exomiser (single-sample mode) steps instead of the family-level route, since the family-level route (merge, cohort collapse, depth refinement, family-level VEP/Exomiser, slivar) would have nothing to add for it. A single sample with a `familyPed` or a `familyPheno` takes the family route instead, without the merge.
 
-A sample with neither `familyPed` nor `familyPheno` and no other family members (`familyId` used by no other row) is treated as a true standalone sample: it's routed through its own per-sample VEP + Exomiser (single-sample mode) steps instead of the family-level route, since the family-level route (merge, cohort collapse, depth refinement, family-level VEP/Exomiser, slivar) would have nothing to add for it.
+The pipeline checks the samplesheet before any task runs, and stops if:
 
-### Phenopacket file example
+- the rows of a family don't all have the same `familyPed`, or the same `familyPheno` (an empty value counts as a value);
+- a `DRAGEN_JOINT` family has more than one row, or a `DRAGEN_JOINT` row has a `pheno`;
+- a family has a `familyPed` and `--vep_genome` isn't `GRCh38`: slivar's chrX/chrY model uses the GRCh38 pseudoautosomal regions.
 
-Here is an example phenopacket file, in yaml format:
+The caller's filters decide which CNVs go on to VEP, slivar and Exomiser: by default (`--cnv_pass_only`), only the CNVs at least one carrier passes. DRAGEN flags every call under 10 kb `cnvLength`, so nearly all of them are left out. Set `--cnv_pass_only false` to keep them, flagged in `FILTER` (see [output.md](output.md#carrier-filter)).
 
-```yaml title="NA07019_pheno.yml"
+### Phenopacket files (`pheno`, `familyPheno`)
+
+Exomiser reads the patient's phenotypes (HPO terms) from a [Phenopacket](https://phenopacket-schema.readthedocs.io/) file, in YAML or JSON. Its sample identifiers must be the VCFs' sample names, not the samplesheet's `sample` column.
+
+- `familyPheno`: a family phenopacket, with the proband's phenotypes (`proband`) and a `pedigree` listing the family members in the VCF. Its `proband.subject.id` decides which VCF Exomiser runs on: that proband's slivar VCF when it's one of the family's probands (see [PED file](#ped-file-familyped)), the family VCF otherwise. A family gets one Exomiser run, about that proband: other affected children only count through the pedigree. Exomiser reads this pedigree and slivar the PED, so keep their sexes and affected statuses consistent.
+- `pheno`: a standalone sample's phenopacket, with no pedigree, or one listing only that sample.
+
+Here is the test data's family phenopacket (`data-test/pheno/trio_NA12878_91_92.yaml`):
+
+```yaml title="trio_NA12878_91_92.yaml"
 ---
-id: NA07019_FAMILY
+id: family1
 proband:
   subject:
-    id: NA07019
+    id: NA12878
     sex: FEMALE
   phenotypicFeatures:
     - type:
         id: HP:0001159
         label: Syndactyly
+
+pedigree:
+  persons:
+    - individualId: NA12878
+      paternalId: NA12891
+      maternalId: NA12892
+      sex: FEMALE
+      affectedStatus: AFFECTED
+    - individualId: NA12891
+      sex: MALE
+      affectedStatus: UNAFFECTED
+    - individualId: NA12892
+      sex: FEMALE
+      affectedStatus: UNAFFECTED
+
+metaData:
+  resources:
+    - id: hp
+      name: human phenotype ontology
+      url: http://purl.obolibrary.org/obo/hp.owl
+      version: hp/releases/2019-11-08
+      namespacePrefix: HP
+      iriPrefix: "http://purl.obolibrary.org/obo/HP_"
+  phenopacketSchemaVersion: 2.0
 ```
-
-Notes about the phenopacket file (`pheno`/`familyPheno` columns):
-
-- It should include only sample-specific (`pheno`) or family-specific (`familyPheno`) information. The pedigree section must either contain only the sample(s) it covers or be omitted entirely.
-- The sample identifier(s) in the phenopacket file must match the sample identifier(s) in the corresponding VCF file.
 
 ### PED file (`familyPed`)
 
-A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family, used by the slivar mode-of-inheritance classification step. It must be identical across every row of the same family, and its sample identifiers must be the VCFs' sample names (their `#CHROM` header line), not the samplesheet's `sample` column: for `DRAGEN` rows, the name in each per-sample VCF; for a `DRAGEN_JOINT` row, the names in the joint VCF. Its sex column must be correct: on non-PAR chrX and chrY, a normal male carries one copy, so slivar uses each sample's sex to decide what copy number is normal. A wrong sex misclassifies every call there, and a sex of `0` (unknown) makes slivar skip non-PAR chrX/chrY records for that family. Check sex against the data (e.g. chrX heterozygosity, or the CNV caller's own sex estimate) before running the pipeline.
+A standard [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format) file describing the family: whitespace-separated columns (family, sample, father, mother, sex `1`/`2`/`0`, phenotype `2` for affected), lines starting with `#` ignored. It's used by the slivar mode-of-inheritance classification step, and by depth refinement for each sample's sex. It must be identical across every row of the same family, and its sample identifiers must be the VCFs' sample names (their `#CHROM` header line), not the samplesheet's `sample` column: for `DRAGEN` rows, the name in each per-sample VCF; for a `DRAGEN_JOINT` row, the names in the joint VCF. Its sex column must be correct: on non-PAR chrX and chrY, a normal male carries one copy, so slivar and depth refinement use each sample's sex to decide what copy number is normal. A wrong sex misclassifies every call there, and a sex of `0` (unknown) makes slivar skip non-PAR chrX/chrY records for that family. Check sex against the data (e.g. chrX heterozygosity, or the CNV caller's own sex estimate) before running the pipeline.
 
 The PED also decides the family's probands: its affected children (phenotype `2`, with a father or mother named) that have their own `DRAGEN` row. A family with a proband gets its final VCF built around that proband's own calls (`slivar/<familyId>.<proband>.cnv.slivar.vcf.gz`, see [output.md](output.md#slivar)) instead of a family-level one.
 
@@ -96,13 +125,14 @@ You can find more details about parameter files in the [nextflow documentation](
 ### Reference data
 
 The pipeline requires specific reference data to function correctly.
-Detailed instructions on the reference data, its structure, and how to configure the associated parameters can be found in the [reference_data.md](docs/reference_data.md) documentation.
+Detailed instructions on the reference data, its structure, and how to configure the associated parameters can be found in the [reference_data.md](reference_data.md) documentation.
 
 ## Running the pipeline
 
-Here is an example command to run the pipeline locally using the test profile with Docker:
+The pipeline needs Nextflow 24.10.5 or later, before 26.0.0 (`manifest.nextflowVersion`). Here is an example command to run the pipeline locally using the test profile with Docker, from a clone of the repository. The test data isn't in the repository: sync it to `data-test/` first.
 
 ```bash
+aws s3 cp s3://ferlab-public-dataset/nextflow/cnv-post-processing/V2/data-test data-test --recursive
 nextflow run . -profile test,docker --outdir results
 ```
 
@@ -111,11 +141,11 @@ Note that the pipeline will create the following files in your working directory
 ```bash
 work                # Directory containing the nextflow working files
 <OUTDIR>            # Finished results in specified location (defined with --outdir)
-.nextflow_log       # Log file from Nextflow
+.nextflow.log       # Log file from Nextflow
 # Other nextflow hidden files, eg. history of pipeline runs and old logs.
 ```
 
-Instead using profiles, you can also pass pipeline settings via `.config` files and parameter files.
+Instead of using profiles, you can also pass pipeline settings via `.config` files and parameter files.
 Here is an example command to run the pipeline in a production environment with a specific configuration and parameters:
 
 ```bash
@@ -130,7 +160,7 @@ Refer to the [nextflow documentation](https://www.nextflow.io/docs/latest/config
 
 For the [-params-file](https://www.nextflow.io/docs/latest/cli.html#pipeline-parameters) option, both `json` and `yaml` are supported. You can also generate such `YAML`/`JSON` files via [nf-core/launch](https://nf-co.re/launch).
 
-By default, all pipeline outputs are saved in the directory specified by the `--outdir` parameter. However, you can customize the output locations for specific steps using other parameters. For more details on that, see [output.md](output.md).
+By default, all pipeline outputs are saved in the directory specified by the `--outdir` parameter. However, you can customize the output locations for specific steps using other parameters (`--vep_outdir`, `--exomiser_outdir`), and `--publish_all` also publishes the intermediate files. For more details on that, see [output.md](output.md).
 
 ### Updating the pipeline
 
@@ -144,7 +174,7 @@ nextflow pull Ferlab-Ste-Justine/cnv-post-processing
 
 It is a good idea to specify the pipeline version when running the pipeline on your data. This ensures that a specific version of the pipeline code and software are used when you run your pipeline. If you keep using the same tag, you'll be running the same version of the pipeline, even if there have been changes to the code since.
 
-First, go to the [Ferlab-Ste-Justine/cnv-post-processing releases page](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/releases) and find the latest pipeline version - numeric only (eg. `1.3.1`). Then specify this when running the pipeline with `-r` (one hyphen) - eg. `-r 1.3.1`. Of course, you can switch to another version by changing the number after the `-r` flag.
+First, go to the [Ferlab-Ste-Justine/cnv-post-processing releases page](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/releases) and find the latest pipeline version (e.g. `v2.0.0`). Then specify this when running the pipeline with `-r` (one hyphen) - e.g. `-r v2.0.0`. Of course, you can switch to another version by changing the number after the `-r` flag.
 
 This version number will be logged in reports when you run the pipeline, so that you'll know what you used when you look back in the future.
 
@@ -167,9 +197,9 @@ Use this parameter to choose a configuration profile. Profiles can give configur
 Several generic profiles are bundled with the pipeline which instruct the pipeline to use software packaged using different methods (Docker, Singularity, Podman, Shifter, Charliecloud, Apptainer, Conda) - see below.
 
 > [!IMPORTANT]
-> We highly recommend the use of Docker or Singularity containers for full pipeline reproducibility, however when this is not possible, Conda is also supported.
+> Use Docker or Singularity containers. Conda isn't supported: the pipeline's own modules have no Conda environment.
 
-The pipeline also dynamically loads configurations from [https://github.com/nf-core/configs](https://github.com/nf-core/configs) when it runs, making multiple config profiles for various institutional clusters available at run time. For more information and to check if your system is supported, please see the [nf-core/configs documentation](https://github.com/nf-core/configs#documentation).
+Unlike nf-core pipelines, this one doesn't load institutional profiles from [nf-core/configs](https://github.com/nf-core/configs) when it runs, so that no configuration is ever fetched from a remote source. Pass your institution's settings with `-c` instead.
 
 Note that multiple profiles can be loaded, for example: `-profile test,docker` - the order of arguments is important!
 They are loaded in sequence, so later profiles can overwrite earlier profiles.
@@ -178,7 +208,9 @@ If `-profile` is not specified, the pipeline will run locally and expect all sof
 
 - `test`
   - A profile with a complete configuration for automated testing
-  - Includes links to test data so needs no other parameters
+  - Uses the test data in `data-test/` (see [Running the pipeline](#running-the-pipeline)), so needs no other parameters but `--outdir`
+- `debug`
+  - For troubleshooting: prints each task's host and dumps task hashes (to see why `-resume` re-runs a task)
 - `docker`
   - A generic configuration profile to be used with [Docker](https://docker.com/)
 - `singularity`
@@ -192,9 +224,7 @@ If `-profile` is not specified, the pipeline will run locally and expect all sof
 - `apptainer`
   - A generic configuration profile to be used with [Apptainer](https://apptainer.org/)
 - `wave`
-  - A generic configuration profile to enable [Wave](https://seqera.io/wave/) containers. Use together with one of the above (requires Nextflow ` 24.03.0-edge` or later).
-- `conda`
-  - A generic configuration profile to be used with [Conda](https://conda.io/docs/). Please only use Conda as a last resort i.e. when it's not possible to run the pipeline with Docker, Singularity, Podman, Shifter, Charliecloud, or Apptainer.
+  - A generic configuration profile to enable [Wave](https://seqera.io/wave/) containers. Use together with one of the above.
 
 ### `-resume`
 
@@ -210,7 +240,7 @@ Specify the path to a specific config file (this is a core Nextflow command). Se
 
 ### Resource requests
 
-Whilst the default requirements set within the pipeline will hopefully work for most people and with most input data, you may find that you want to customise the compute resources that the pipeline requests. Each step in the pipeline has a default set of requirements for number of CPUs, memory and time. For most of the pipeline steps, if the job exits with any of the error codes specified [here](https://github.com/nf-core/rnaseq/blob/4c27ef5610c87db00c3c5a3eed10b1d161abf575/conf/base.config#L18) it will automatically be resubmitted with higher resources request (2 x original, then 3 x original). If it still fails after the third attempt then the pipeline execution is stopped.
+Whilst the default requirements set within the pipeline will hopefully work for most people and with most input data, you may find that you want to customise the compute resources that the pipeline requests. Each step in the pipeline has a default set of requirements for number of CPUs, memory and time. If a task exits with a code that usually means it ran out of memory or time (130 to 145, or 104), it's resubmitted once with twice the resources; if it fails again, the pipeline stops (`conf/base.config`).
 
 To change the resource requests, please see the [max resources](https://nf-co.re/docs/usage/configuration#max-resources) and [tuning workflow resources](https://nf-co.re/docs/usage/configuration#tuning-workflow-resources) section of the nf-core website.
 
@@ -218,13 +248,23 @@ To change the resource requests, please see the [max resources](https://nf-co.re
 
 In some cases, you may wish to change the container or conda environment used by a pipeline steps for a particular tool. By default, nf-core pipelines use containers and software from the [biocontainers](https://biocontainers.pro/) or [bioconda](https://bioconda.github.io/) projects. However, in some cases the pipeline specified version maybe out of date.
 
-To use a different container from the default container or conda environment specified in a pipeline, please see the [updating tool versions](https://nf-co.re/docs/usage/configuration#updating-tool-versions) section of the nf-core website.
+To use a different container from the default container or conda environment specified in a pipeline, please see the [updating tool versions](https://nf-co.re/docs/usage/configuration#updating-tool-versions) section of the nf-core website. The pipeline sets `docker.registry` (and Singularity's, Podman's...) to `quay.io`, so give a container's full address, e.g. `docker.io/ensemblorg/ensembl-vep:release_114.2`: a name without a registry is looked up on quay.io.
 
 ### Custom Tool Arguments
 
 A pipeline might not always support every possible argument or option of a particular tool used in pipeline. Fortunately, nf-core pipelines provide some freedom to users to insert additional parameters that the pipeline does not include by default.
 
-To learn how to provide additional arguments to a particular tool of the pipeline, please see the [customising tool arguments](https://nf-co.re/docs/usage/configuration#customising-tool-arguments) section of the nf-core website.
+To learn how to provide additional arguments to a particular tool of the pipeline, please see the [customising tool arguments](https://nf-co.re/docs/usage/configuration#customising-tool-arguments) section of the nf-core website. The defaults are in `conf/modules.config`. For example, depth refinement's hom-ref depth-ratio band (0.8 to 1.2) and the shortest record it refines (5 kb) can be changed in a config file passed with `-c`:
+
+```groovy
+process {
+    withName: DEPTH_GENOTYPE_REFINE {
+        ext.low      = 0.85
+        ext.high     = 1.15
+        ext.min_size = 10000
+    }
+}
+```
 
 ## Running in the background
 
@@ -238,7 +278,7 @@ Some HPC setups also allow you to run nextflow within a cluster job submitted yo
 ## Nextflow memory requirements
 
 In some cases, the Nextflow Java virtual machines can start to request a large amount of memory.
-We recommend adding the following line to your environment to limit this (typically in `~/.bashrc` or `~./bash_profile`):
+We recommend adding the following line to your environment to limit this (typically in `~/.bashrc` or `~/.bash_profile`):
 
 ```bash
 NXF_OPTS='-Xms1g -Xmx4g'

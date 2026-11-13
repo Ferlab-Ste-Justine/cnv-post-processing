@@ -47,8 +47,16 @@ nextflow_pipeline {
             // rows, on every route.)
             def exomiser_header = path("$outputDir/exomiser/fam1.NA12878.exomiser.vcf.gz").linesGzip.findAll { it.startsWith("##") }
 
+            // --cnv_pass_only (the default): only the CNVs a carrier passes reach slivar, on the
+            // per-sample route (FORMAT/FT copied from each call's FILTER) and the joint one
+            def slivar_filters = ["fam1.NA12878", "fam1_joint"].collectMany { f ->
+                path("$outputDir/slivar/${f}.cnv.slivar.vcf.gz").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[6] }
+            }
+
             assertAll(
                 { assert proband_records.size() > 0 },
+                { assert proband_records.every { it[8].split(":").contains("FT") } },
+                { assert slivar_filters.size() > 0 && slivar_filters.every { it == "PASS" } },
                 { assert proband_records.every { it[2] in input_ids } },
                 { assert proband_records.every { svtype(it) in ["SVTYPE=DEL", "SVTYPE=DUP"] } },
                 { assert proband_records.every { info_keys(it).containsAll(["CSQ", "COHORT_ID", "COHORT_POS", "COHORT_END"]) } },
@@ -67,13 +75,15 @@ nextflow_pipeline {
 
     // The same trio with a PED where NA12878 is unaffected (tests/data/): no affected child, so no
     // proband. The family keeps the family-level route: VEP and slivar on the family VCF, and
-    // family-mode Exomiser on the depth-refined family VCF, under <familyId> names.
+    // family-mode Exomiser on the depth-refined family VCF, under <familyId> names. With
+    // --cnv_pass_only false, the CNVs no carrier passes reach slivar too, flagged in FILTER.
     test("-profile test, a family without a proband") {
 
         when {
             params {
-                outdir = "$outputDir"
-                input  = "${projectDir}/tests/data/samplesheet_no_proband.csv"
+                outdir        = "$outputDir"
+                input         = "${projectDir}/tests/data/samplesheet_no_proband.csv"
+                cnv_pass_only = false
             }
         }
 
@@ -90,6 +100,7 @@ nextflow_pipeline {
             ]
             def task_names = workflow.trace.tasks().collect { it.name }
             def slivar_header = path("$outputDir/slivar/fam1.cnv.slivar.vcf.gz").linesGzip.findAll { it.startsWith("#") }
+            def slivar_filters = path("$outputDir/slivar/fam1.cnv.slivar.vcf.gz").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[6] }
             def exomiser_header = path("$outputDir/exomiser/fam1.exomiser.vcf.gz").linesGzip.findAll { it.startsWith("##") }
 
             assertAll(
@@ -99,6 +110,7 @@ nextflow_pipeline {
                 // the family VCF's own records, not a proband's join
                 { assert slivar_header.find { it.startsWith("#CHROM") }.split("\\t").drop(9) == ["NA12878", "NA12891", "NA12892"] },
                 { assert !slivar_header.any { it.startsWith("##INFO=<ID=COHORT_ID,") } },
+                { assert "PASS" in slivar_filters && slivar_filters.any { it != "PASS" } },
                 // Exomiser repeats its input's header: the depth-refined family VCF, without VEP's CSQ
                 { assert !exomiser_header.any { it.startsWith("##INFO=<ID=CSQ,") || it.startsWith("##INFO=<ID=COHORT_ID,") } }
             )

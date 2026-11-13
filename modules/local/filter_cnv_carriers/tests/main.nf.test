@@ -1,0 +1,168 @@
+nextflow_process {
+
+    name "Test Process FILTER_CNV_CARRIERS"
+    script "../main.nf"
+    process "FILTER_CNV_CARRIERS"
+
+    tag "modules"
+    tag "modules_"
+    tag "filter_cnv_carriers"
+
+    // Fixtures in ./data/:
+    // - fam1_joint.vcf: 5 chr1 records of the NA12878 trio's DRAGEN joint VCF (data-test/), as
+    //   DRAGEN wrote them. Samples NA12878, NA12891, NA12892; each FORMAT/FT is DRAGEN's, for that
+    //   sample's segment.
+    //   1. 4063702, SampleFT: a loss all three carry, each FT cnvLength.
+    //   2. 13225212, PASS: a gain all three carry, each FT PASS.
+    //   3. 15823963, PASS: NA12891's loss (FT cnvLength). NA12892 has no CNV; her FT PASS is her
+    //      3.25 Mb normal segment's.
+    //   4. 15825729, PASS: NA12878 and NA12891 carry it (FT cnvLength); NA12892 the same as in 3.
+    //   5. 248647941, PASS: NA12878 (FT cnvLength) and NA12891 (FT PASS) carry it.
+    // - fam2.KID.proband.vcf: a toy proband VCF as JOIN_PROBAND_CNV writes it (samples DAD, KID,
+    //   MOM; FILTER is KID's own call's; FT as add_sample_filter.awk writes it, refined
+    //   genotypes with no FT).
+    //   1. kid_P: KID's call, FT PASS.
+    //   2. kid_L: KID's call fails (cnvLength), DAD's call in the same record passes.
+    //   3. kid_Q: KID's and MOM's calls fail (cnvLength;cnvQual, cnvLength;dinucQual).
+    //      dinucQual has no ##FILTER line.
+    //   4. kid_M: KID's call has no FT (FILTER "." in its VCF).
+    //   5. kid_X: chrX, KID's haploid "1" passes, MOM's 0/1 fails.
+    // - fam2.KID.no_ft.proband.vcf: the same without FORMAT/FT.
+
+    test("NA12878 trio joint VCF, --cnv_pass_only: keeps the records a carrier passes") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1_joint", probands: [] ],
+                    file("\${projectDir}/modules/local/filter_cnv_carriers/tests/data/fam1_joint.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf_tbi.size() == 1
+                assert vcf_tbi.get(0)[0] == [ id: "fam1_joint", probands: [] ]
+                assert file(vcf_tbi.get(0)[1]).name == "fam1_joint.filtered.vcf.gz"
+                assert file(vcf_tbi.get(0)[2]).name == "fam1_joint.filtered.vcf.gz.tbi"
+            }
+
+            def records = path(process.out.vcf_tbi.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            // 3 and 4 are PASS in DRAGEN's FILTER only because NA12892, who doesn't carry them, passes
+            assert records.collect { "${it[1]} ${it[6]}" } == ["13225212 PASS", "248647941 PASS"]
+            // FORMAT untouched
+            assert records[1][9].contains(":cnvLength:") && records[1][10].contains(":PASS:")
+
+            assert path(process.out.versions[0]).text.contains("pysam:")
+        }
+    }
+
+    test("NA12878 trio joint VCF, cnv_pass_only false: keeps every record, FILTER from its carriers") {
+
+        when {
+            params {
+                cnv_pass_only = false
+            }
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1_joint", probands: [] ],
+                    file("\${projectDir}/modules/local/filter_cnv_carriers/tests/data/fam1_joint.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def records = path(process.out.vcf_tbi.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            assert records.collect { "${it[1]} ${it[6]}" } == [
+                "4063702 cnvLength",
+                "13225212 PASS",
+                "15823963 cnvLength",
+                "15825729 cnvLength",
+                "248647941 PASS",
+            ]
+        }
+    }
+
+    test("Toy proband VCF, --cnv_pass_only: a call kept when its own or a matching call in the family passes") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam2", proband: "KID" ],
+                    file("\${projectDir}/modules/local/filter_cnv_carriers/tests/data/fam2.KID.proband.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert file(vcf_tbi.get(0)[1]).name == "fam2.KID.filtered.vcf.gz"
+            }
+            def records = path(process.out.vcf_tbi.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            // kid_L: KID's own FILTER (cnvLength) gives way to DAD's passing call
+            assert records.collect { "${it[2]} ${it[6]}" } == ["kid_P PASS", "kid_L PASS", "kid_X PASS"]
+        }
+    }
+
+    test("Toy proband VCF, cnv_pass_only false: the carriers' filters, or CarrierFT when they name none") {
+
+        when {
+            params {
+                cnv_pass_only = false
+            }
+            process {
+                """
+                input[0] = [
+                    [ id: "fam2", proband: "KID" ],
+                    file("\${projectDir}/modules/local/filter_cnv_carriers/tests/data/fam2.KID.proband.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def lines = path(process.out.vcf_tbi.get(0)[1]).linesGzip
+            def records = lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            assert records.collect { "${it[2]} ${it[6]}" } == [
+                "kid_P PASS",
+                "kid_L PASS",
+                "kid_Q cnvLength;cnvQual;dinucQual",
+                "kid_M CarrierFT",
+                "kid_X PASS",
+            ]
+            // every filter named is declared: the input's, plus the two it lacked
+            def declared = lines.findAll { it.startsWith("##FILTER=<ID=") }.collect { it.split("[=,]")[2] }
+            assert declared.sort() == ["CarrierFT", "PASS", "cnvLength", "cnvQual", "dinucQual"]
+        }
+    }
+
+    test("Toy proband VCF without FORMAT/FT stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam2", proband: "KID" ],
+                    file("\${projectDir}/modules/local/filter_cnv_carriers/tests/data/fam2.KID.no_ft.proband.vcf", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("fam2.KID.no_ft.proband.vcf has no FORMAT/FT")
+        }
+    }
+}

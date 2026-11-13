@@ -1,0 +1,17 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=cnvLength,Description="CNV with length below 10000">
+##FILTER=<ID=cnvQual,Description="CNV with quality below 10">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Estimated copy number">
+##FORMAT=<ID=OID,Number=1,Type=String,Description="ID of the original caller record">
+##contig=<ID=chr1,length=248956422>
+##contig=<ID=chrX,length=156040895>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	DAD	KID	MOM
+chr1	1000000	kid_P	N	<DEL>	.	PASS	SVTYPE=DEL;END=1100000	GT:CN:OID	./.:.:.	0/1:1:kid_P	./.:.:.
+chr1	2000000	kid_L	N	<DEL>	.	cnvLength	SVTYPE=DEL;END=2008000	GT:CN:OID	0/1:1:dad_L	0/1:1:kid_L	0/0:2:.
+chr1	3000000	kid_Q	N	<DUP>	.	cnvLength;cnvQual	SVTYPE=DUP;END=3004000	GT:CN:OID	0/0:2:.	./1:3:kid_Q	./1:3:mom_Q
+chr1	4000000	kid_M	N	<DEL>	.	.	SVTYPE=DEL;END=4100000	GT:CN:OID	0/0:2:.	0/1:1:kid_M	0/0:2:.
+chrX	5000000	kid_X	N	<DEL>	.	PASS	SVTYPE=DEL;END=5100000	GT:CN:OID	0:1:.	1:0:kid_X	0/1:1:mom_X

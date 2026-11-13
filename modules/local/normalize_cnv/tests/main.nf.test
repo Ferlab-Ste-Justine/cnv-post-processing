@@ -18,7 +18,7 @@ nextflow_process {
     // multiallelic <DEL>,<DUP> sites.
     test("DRAGEN per-sample VCF - drops ALT=\".\" ref-blocks, keeps real CNV calls") {
 
-        config "./nextflow_original_id.config"
+        config "./nextflow_persample.config"
 
         when {
             process {
@@ -68,17 +68,20 @@ nextflow_process {
             }
             assert svtypes.every { alt, sv -> sv == ["SVTYPE=" + alt[1..-2]] }
 
-            // ext.original_id (nextflow_original_id.config): every record carries its own ID in
+            // ext.original_id (nextflow_persample.config): every record carries its own ID in
             // FORMAT/OID, with ":" percent-encoded, e.g. DRAGEN:LOSS:chr22:... ->
             // DRAGEN%3ALOSS%3Achr22%3A...
-            def header = path(process.out.vcf.get(0)[1]).linesGzip.findAll { it.startsWith("##FORMAT=<ID=OID,") }
-            assert header.size() == 1
+            // ext.sample_filter: and its FILTER in FORMAT/FT, after OID, e.g. cnvLength;dinucQual
+            def header = path(process.out.vcf.get(0)[1]).linesGzip.findAll { it.startsWith("##FORMAT=<ID=OID,") || it.startsWith("##FORMAT=<ID=FT,") }
+            assert header.size() == 2
             lines.each { line ->
                 def cols = line.split("\t")
-                def keys = cols[8].split(":")
-                assert keys.last() == "OID"
-                assert cols[9].split(":").last() == cols[2].replace(":", "%3A")
+                assert cols[8].split(":").takeRight(2) == ["OID", "FT"]
+                assert cols[9].split(":").takeRight(2) == [cols[2].replace(":", "%3A"), cols[6]]
             }
+            def filters = lines.collect { it.split("\t")[6] }
+            assert filters.count { it == "PASS" } == 11
+            assert filters.contains("cnvLength;cnvQual;dinucQual;cnvLikelihoodRatio")
 
             assert snapshot(process.out.versions).match()
         }
@@ -173,6 +176,12 @@ nextflow_process {
             // record's INFO field carries an SVLEN key at all once this is applied.
             def infos = lines.collect { it.split("\t")[7] }
             assert infos.every { !it.tokenize(';').any { kv -> kv.startsWith("SVLEN=") } }
+
+            // ext.sample_filter off: each sample keeps DRAGEN's own FORMAT/FT, declared once, and
+            // FILTER keeps its joint values (PASS when any sample passes, SampleFT otherwise)
+            def header = path(process.out.vcf.get(0)[1]).linesGzip.findAll { it.startsWith("##FORMAT=<ID=FT,") }
+            assert header == ["##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Sample filter, 'PASS' indicates that all filters have passed for this sample\">"]
+            assert lines.collect { it.split("\t")[6] }.unique().sort() == ["PASS", "SampleFT"]
 
             assert snapshot(process.out.versions).match()
         }

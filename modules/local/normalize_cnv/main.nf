@@ -38,6 +38,10 @@ process NORMALIZE_CNV {
     // one ID per cluster. bcftools can't copy ID into FORMAT itself ("Cannot rename"), hence the
     // awk step, on the plain-text VCF.
     def original_id = task.ext.original_id ? '| add_original_id.awk' : ''
+    // Per-sample path only (task.ext.sample_filter): copy each call's FILTER into FORMAT/FT, the
+    // field a jointly-called DRAGEN VCF already gives each sample, so FILTER_CNV_CARRIERS reads
+    // the carriers' own filters the same way on both routes.
+    def sample_filter = task.ext.sample_filter ? '| add_sample_filter.awk' : ''
 
     // Only DRAGEN's CNV VCF conventions have been validated against this normalization step so
     // far (see /cephfs/jtrembla/projects/bioinfo-214-CNV-post-processing/preprocessing.sh). Fail
@@ -75,6 +79,7 @@ process NORMALIZE_CNV {
         | bcftools view --no-version - \\
         | svtype_from_alt.awk \\
         ${original_id} \\
+        ${sample_filter} \\
         | bcftools view --no-version -O z -o ${prefix}.normalized.vcf.gz -
 
     tabix -p vcf ${prefix}.normalized.vcf.gz

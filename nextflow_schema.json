@@ -324,6 +324,21 @@
                     "fa_icon": "fas fa-exclamation-triangle"
                 }
             }
+        },
+        "filtering_options": {
+            "title": "Filtering options",
+            "type": "object",
+            "fa_icon": "fas fa-filter",
+            "description": "Which CNVs go on to VEP, slivar and Exomiser.",
+            "properties": {
+                "cnv_pass_only": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Keep only the CNVs at least one carrier passes the caller's filters for (FORMAT/FT PASS).",
+                    "help_text": "Before VEP, slivar and Exomiser, each CNV's FILTER is set from its carriers' FORMAT/FT: PASS when at least one carrier's FT is PASS, otherwise the filters they name (e.g. `cnvLength`). On a jointly-called DRAGEN VCF, FT is DRAGEN's own, per sample; on the per-sample route, it's each call's FILTER, copied in NORMALIZE_CNV. With this set, the CNVs that don't pass are dropped; DRAGEN flags every call under 10 kb with `cnvLength` by default, so this drops nearly all of them. Set it to false to keep them, flagged in FILTER (Exomiser still skips them).",
+                    "fa_icon": "fas fa-filter"
+                }
+            }
         }
     },
     "allOf": [
@@ -347,6 +362,9 @@
         },
         {
             "$ref": "#/$defs/slivar_options"
+        },
+        {
+            "$ref": "#/$defs/filtering_options"
         }
     ]
 }

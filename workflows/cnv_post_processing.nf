@@ -29,6 +29,9 @@ include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PROBAND   } from '.
 include { ENSEMBLVEP_DOWNLOAD } from '../modules/nf-core/ensemblvep/download/main.nf'
 include { SLIVAR_EXPR } from '../modules/local/slivar_expr/main.nf'
 include { JOIN_PROBAND_CNV } from '../modules/local/join_proband_cnv/main.nf'
+include { FILTER_CNV_CARRIERS as FILTER_CNV_CARRIERS_SOLO    } from '../modules/local/filter_cnv_carriers/main.nf'
+include { FILTER_CNV_CARRIERS as FILTER_CNV_CARRIERS_FAMILY  } from '../modules/local/filter_cnv_carriers/main.nf'
+include { FILTER_CNV_CARRIERS as FILTER_CNV_CARRIERS_PROBAND } from '../modules/local/filter_cnv_carriers/main.nf'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RUN MAIN WORKFLOW
@@ -172,9 +175,16 @@ workflow CNV_POST_PROCESSING {
     // already gets its individual-level annotation/prioritization needs covered by the
     // family-level route (STAGE 1d, 4+) below, so this route would otherwise be redundant for it.
     //
-    def ch_persample_vep_input = BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
-        .filter { meta, _vcf -> !meta.familyPheno && !meta.familyPed }
-        .map { meta, vcf -> [meta, vcf, []] }
+    // FILTER_CNV_CARRIERS first, as on the family route (STAGE 3c): a solo sample is the only
+    // carrier of its calls, so each keeps its own FILTER, and --cnv_pass_only keeps the PASS ones.
+    //
+    FILTER_CNV_CARRIERS_SOLO(
+        BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
+            .filter { meta, _vcf -> !meta.familyPheno && !meta.familyPed }
+    )
+
+    def ch_persample_vep_input = FILTER_CNV_CARRIERS_SOLO.out.vcf_tbi
+        .map { meta, vcf, _tbi -> [meta, vcf, []] }
 
     VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE(
         ch_persample_vep_input,
@@ -358,18 +368,31 @@ workflow CNV_POST_PROCESSING {
     def ch_joint_vcf = BCFTOOLS_SORT_INDEX_JOINT.out.vcf.join(BCFTOOLS_SORT_INDEX_JOINT.out.tbi)
 
     //
+    // STAGE 3c -- FILTER from the carriers' FORMAT/FT (bin/filter_cnv_carriers.py): PASS when at
+    // least one carrier's FT is PASS, the filters they name otherwise; --cnv_pass_only drops the
+    // records that don't pass. In a joint VCF, FT is DRAGEN's, per sample; on the per-sample
+    // route, each call's FILTER, copied by NORMALIZE_CNV. Run on every family VCF, the
+    // depth-refined and the joint ones: VEP (STAGE 4) and Exomiser on a family VCF (STAGE 7) read
+    // the result. JOIN_PROBAND_CNV (STAGE 5) reads the unfiltered family VCF, since it stops on a
+    // proband call with no family record; a proband's VCF goes through the same step after it.
+    //
+    FILTER_CNV_CARRIERS_FAMILY(
+        BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
+            .mix(ch_joint_vcf)
+            .map { meta, vcf, _tbi -> [meta, vcf] }
+    )
+
+    //
     // The family VCFs split here: a family with a proband (meta.probands) goes on to
     // JOIN_PROBAND_CNV with its probands' VEP VCFs (STAGE 5); the others, with the joint-called
     // ones, are VEP-annotated as a whole (STAGE 4). A family with a proband gets no family-level
     // VEP or slivar VCF: CNVs only its parents carry stay in depth_refined/, unannotated.
     //
-    def ch_family_vcf_refined = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
-        .branch { meta, _vcf, _tbi ->
-            with_proband: meta.probands
-            without_proband: true
-        }
+    def ch_family_vcf_with_proband = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
+        .filter { meta, _vcf, _tbi -> meta.probands }
 
-    def ch_family_vcf_for_vep = ch_family_vcf_refined.without_proband.mix(ch_joint_vcf)
+    def ch_family_vcf_for_vep = FILTER_CNV_CARRIERS_FAMILY.out.vcf_tbi
+        .filter { meta, _vcf, _tbi -> !meta.probands }
 
     //
     // STAGE 4 -- VEP annotation, family-level, for families without a proband (AnnotSV/
@@ -401,7 +424,7 @@ workflow CNV_POST_PROCESSING {
     // truvari-kept record, often a parent's call, would otherwise give the proband's CNVs another
     // interval, ID and INFO. Matched on familyId; meta.proband is the proband's VCF sample name.
     //
-    def ch_join_proband_input = ch_family_vcf_refined.with_proband
+    def ch_join_proband_input = ch_family_vcf_with_proband
         .map { meta, vcf, tbi -> [meta.familyId, meta, vcf, tbi] }
         .combine(
             VCF_ANNOTATE_ENSEMBLVEP_PROBAND.out.vcf_tbi.map { meta, vcf, tbi -> [meta.familyId, meta.vcfSample, vcf, tbi] },
@@ -410,6 +433,10 @@ workflow CNV_POST_PROCESSING {
         .map { _familyId, meta, vcf, tbi, proband, proband_vcf, proband_tbi -> [meta + [proband: proband], vcf, tbi, proband_vcf, proband_tbi] }
 
     JOIN_PROBAND_CNV(ch_join_proband_input)
+
+    // FILTER from the carriers' FORMAT/FT, as for the family VCFs (STAGE 3c). The proband's own
+    // call's FILTER gives way to the family record's carriers: a parent's matching call may pass.
+    FILTER_CNV_CARRIERS_PROBAND(JOIN_PROBAND_CNV.out.vcf_tbi.map { meta, vcf, _tbi -> [meta, vcf] })
 
     //
     // STAGE 6 -- Slivar mode-of-inheritance classification, on each proband VCF (STAGE 5), or on
@@ -425,7 +452,7 @@ workflow CNV_POST_PROCESSING {
     // slivar tags nothing (vcfFormatIds). The checks stay here rather than in a subworkflow, so
     // module and subworkflow tests can still feed slivar deliberately inconsistent PEDs.
     //
-    def ch_slivar_input = JOIN_PROBAND_CNV.out.vcf_tbi
+    def ch_slivar_input = FILTER_CNV_CARRIERS_PROBAND.out.vcf_tbi
         .mix(VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi)
         .filter { meta, _vcf, _tbi ->
             if (!meta.familyPed) {
@@ -456,14 +483,14 @@ workflow CNV_POST_PROCESSING {
     // probands (proband.subject.id) runs on that proband's slivar VCF (STAGE 6): the proband's own
     // calls and intervals, with the family's FORMAT for its pedigree analysis. Any other family
     // (no proband, DRAGEN_JOINT, no familyPed, a phenopacket about another sample) runs on its
-    // family VCF, the depth-refined or the joint one. Families without familyPheno stay in the
-    // family channel, so EXOMISER_WORKFLOW drops them with its warning.
+    // family VCF, the depth-refined or the joint one, through FILTER_CNV_CARRIERS (STAGE 3c).
+    // Families without familyPheno stay in the family channel, so EXOMISER_WORKFLOW drops them
+    // with its warning.
     //
     def ch_exomiser_proband = BCFTOOLS_INDEX_SLIVAR.out.vcf_tbi
         .filter { meta, _vcf, _tbi -> meta.proband && meta.familyPheno && meta.proband == phenopacketProbandId(file(meta.familyPheno)) }
 
-    def ch_exomiser_family = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
-        .mix(ch_joint_vcf)
+    def ch_exomiser_family = FILTER_CNV_CARRIERS_FAMILY.out.vcf_tbi
         .filter { meta, _vcf, _tbi -> !(meta.familyPheno && phenopacketProbandId(file(meta.familyPheno)) in meta.probands) }
 
     EXOMISER_WORKFLOW(
