@@ -1,0 +1,3 @@
+#family_id	individual_id	paternal_id	maternal_id	sex	phenotype
+famC	famC_mom	0	0	2	1
+famC	famC_kid	0	famC_mom	1	2

@@ -1,0 +1,63 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "mosdepth_ratio"
+description: Compute per-region mean depth (mosdepth) at candidate CNV sites for one sample, normalized against that sample's genome-wide mean depth
+keywords:
+  - cnv
+  - depth
+  - mosdepth
+  - genotype refinement
+tools:
+  - "mosdepth":
+      description: "Fast BAM/CRAM depth calculation for WGS, exome, or targeted sequencing"
+      homepage: "https://github.com/brentp/mosdepth"
+      documentation: "https://github.com/brentp/mosdepth"
+      tool_dev_url: "https://github.com/brentp/mosdepth"
+      doi: "10.1093/bioinformatics/btx699"
+      licence: ["MIT"]
+      identifier: biotools:mosdepth
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'NA12878', family:'FAM001' ]
+    - cram:
+        type: file
+        description: Sample alignment file
+        pattern: "*.{cram,bam}"
+    - crai:
+        type: file
+        description: Index of the alignment file
+        pattern: "*.{crai,bai}"
+    - sites_bed:
+        type: file
+        description: This sample's family-level BED of candidate CNV site regions (from VCF_TO_BED) -- varies per family, so it's part of the main tuple rather than a broadcast value
+        pattern: "*.bed"
+  - - fasta:
+        type: file
+        description: Reference genome FASTA
+  - - fasta_fai:
+        type: file
+        description: Reference genome FASTA index
+
+output:
+  - ratio_bed:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.ratio.bed":
+          type: file
+          description: BED of (CHROM, START, END, ratio) where ratio = region mean depth / this sample's genome-wide mean depth ("NA" where undefined)
+          pattern: "*.ratio.bed"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

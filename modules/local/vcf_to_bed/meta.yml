@@ -1,0 +1,50 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "vcf_to_bed"
+description: Extract candidate CNV site regions (CHROM, POS-1, INFO/END) from a family cohort VCF into a BED file for mosdepth --by
+keywords:
+  - cnv
+  - bed
+  - bcftools
+tools:
+  - "bcftools":
+      description: "Utilities for variant calling and manipulating VCF/BCF files"
+      homepage: "https://samtools.github.io/bcftools/"
+      documentation: "https://samtools.github.io/bcftools/bcftools.html"
+      tool_dev_url: "https://github.com/samtools/bcftools"
+      doi: "10.1093/gigascience/giab008"
+      licence: ["MIT/Expat"]
+      identifier: biotools:bcftools
+
+input:
+  - - meta:
+        type: map
+        description: Groovy Map containing family information
+    - vcf:
+        type: file
+        description: Family-level multi-sample cohort CNV VCF
+        pattern: "*.{vcf.gz,vcf}"
+    - tbi:
+        type: file
+        description: Index of the input VCF
+        pattern: "*.{vcf.gz.tbi,vcf.tbi}"
+
+output:
+  - bed:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.sites.bed":
+          type: file
+          description: 0-based BED of candidate CNV site regions (CHROM, START, END, ID)
+          pattern: "*.sites.bed"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

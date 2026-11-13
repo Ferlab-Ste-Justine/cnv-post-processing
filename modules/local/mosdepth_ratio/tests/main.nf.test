@@ -1,0 +1,119 @@
+nextflow_process {
+
+    name "Test Process MOSDEPTH_RATIO"
+    script "../main.nf"
+    process "MOSDEPTH_RATIO"
+
+    tag "modules"
+    tag "modules_"
+    tag "mosdepth_ratio"
+
+    config "./nextflow.config"
+
+    // sites_bed (./data/na12878.sites.bed) is a real, hand-picked 4-row subset of chr22
+    // coordinates, not a synthetic fixture:
+    //   - Its first 3 rows are exactly what VCF_TO_BED itself would emit (POS-1, INFO/END, ID)
+    //     for the first 3 records of the real data-test/vcf/NA12878.chr22.cnv.vcf.gz DRAGEN CNV
+    //     VCF -- i.e. this is the same shape of input MOSDEPTH_RATIO actually receives in
+    //     production (see subworkflows/local/bam_vcf_depth_genotype_refinement/main.nf).
+    //   - Its 4th row (chr22:0-5000) is a real chr22 coordinate range deliberately chosen outside
+    //     any mapped read in the real NA12878 cram (before the first covered region), to exercise
+    //     the module's "ratio=...:NA" branch with a genuine zero-depth region rather than a
+    //     contrived one.
+    //
+    // Verified against real tool output, not just the script's apparent logic: this exact
+    // fixture was run for real through the module's own mosdepth+awk script (verbatim, only
+    // variable values substituted) via `docker run` against quay.io/biocontainers/mosdepth,
+    // using the real NA12878.chr22.cram + hg38_chr22.fna from data-test/ (bypassing an unrelated
+    // Docker bind-mount limitation that keeps `nf-test` itself from executing end to end in the
+    // sandbox this was authored in -- `nf-test test modules/local/mosdepth_ratio` fails there
+    // with empty work dirs and no .command.run, a known pre-existing sandbox limitation; verified
+    // instead directly against /cephfs/jtrembla/build/cnv-post-processing, confirmed byte-identical
+    // to this checkout for every file this test touches). That real run produced, in row order
+    // (mosdepth's --by output is sorted by position, not input row order):
+    //   chr22   0           5000        NA
+    //   chr22   10711934    10742589    2.80448
+    //   chr22   10750357    10784385    1.404
+    //   chr22   10952425    11067599    1.76718
+    // (genome-wide mean depth 25.47x from mosdepth's own summary "total" row; region means 0.00,
+    // 71.43, 35.76, 45.01 respectively from its regions.bed.gz -- e.g. 71.43/25.47 = 2.80448).
+    // The assertions below check both the general "positive number or NA" contract (which the
+    // module's awk logic implies) and these specific real values (which confirm mosdepth/awk
+    // actually behave that way against this real cram, not just that the script reads as if it
+    // would). Re-run `nf-test test modules/local/mosdepth_ratio` for real in an environment
+    // without that bind-mount limitation before merging.
+
+    test("NA12878: real cram, one ratio.bed row per sites_bed row, positive ratios + one real NA") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "NA12878"],
+                    file(params.modules_testdata_base_path + '/cram/NA12878.chr22.cram'),
+                    file(params.modules_testdata_base_path + '/cram/NA12878.chr22.cram.crai'),
+                    file("${projectDir}/modules/local/mosdepth_ratio/tests/data/na12878.sites.bed")
+                ]
+                input[1] = file(params.modules_testdata_base_path + '/reference/genome/hg38_chr22.fna')
+                input[2] = file(params.modules_testdata_base_path + '/reference/genome/hg38_chr22.fna.fai')
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "NA12878"]
+            with(process.out) {
+                assert ratio_bed.size() == 1
+                assert ratio_bed.get(0)[0] == expected_meta
+                assert file(ratio_bed.get(0)[1]).name == "NA12878.ratio.bed"
+
+                def lines = path(ratio_bed.get(0)[1]).readLines()
+                // sites_bed (./data/na12878.sites.bed) has 4 rows -- one ratio.bed row must come
+                // out per input row.
+                assert lines.size() == 4
+
+                def rows = lines.collect { it.split("\t") }
+                // Every row is well-formed CHROM/START/END/RATIO, and every ratio is either a
+                // positive number or literally "NA" -- the module's own contract
+                // (ratio=($5>0 && mean>0) ? $5/mean : "NA").
+                rows.each { cols ->
+                    assert cols.size() == 4
+                    assert cols[0] == "chr22"
+                    def ratio = cols[3]
+                    if (ratio != "NA") {
+                        assert ratio.isDouble()
+                        assert ratio.toDouble() > 0
+                    }
+                }
+
+                // Keyed by real chr22 start/end so lookups don't depend on mosdepth's own
+                // position-sorted output order (which differs from the input sites_bed's row
+                // order -- the 0-5000 region was listed last in the fixture but mosdepth emits it
+                // first, since it sorts by position).
+                def byRegion = rows.collectEntries { cols -> [("${cols[1]}-${cols[2]}".toString()): cols[3]] }
+
+                // The one deliberately-uncovered region (real, verified zero-depth via a real
+                // mosdepth run against this exact cram -- see header comment).
+                assert byRegion["0-5000"] == "NA"
+
+                // The 3 real, covered DRAGEN CNV sites -- exact values confirmed against a real
+                // mosdepth run (see header comment); asserted here to a small tolerance rather
+                // than exact string match, since that's the property that actually matters
+                // (mosdepth's own depth rounding, not this test, owns the exact decimal digits).
+                def expectedRatios = [
+                    "10711934-10742589": 2.80448d,
+                    "10750357-10784385": 1.404d,
+                    "10952425-11067599": 1.76718d,
+                ]
+                expectedRatios.each { region, expected ->
+                    def actual = byRegion[region].toDouble()
+                    assert Math.abs(actual - expected) < 0.001 : "region ${region}: expected ~${expected}, got ${actual}"
+                }
+
+                assert snapshot(versions).match()
+            }
+        }
+    }
+}

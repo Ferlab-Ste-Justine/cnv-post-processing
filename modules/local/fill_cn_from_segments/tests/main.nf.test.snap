@@ -1,0 +1,14 @@
+{
+    "toy fixture: fills a hole from the sample's own segments, hom-ref only at the expected CN": {
+        "content": [
+            [
+                "versions.yml:md5,0becba1de76ed7c233629cdf1f5e8f82"
+            ]
+        ],
+        "timestamp": "2026-11-12T02:39:50.243986354",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

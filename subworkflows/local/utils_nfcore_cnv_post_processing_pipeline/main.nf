@@ -48,10 +48,21 @@ workflow PIPELINE_INITIALISATION {
     //
     // Validate parameters and generate parameter summary to stdout
     //
+    // help/help_full/show_hidden/cli_typecast are new required inputs as of the synced
+    // subworkflow version (2026-09) -- this pipeline has never wired up a --help CLI flag, so
+    // they're passed as false/empty here to keep that unchanged rather than adding the feature
+    // as a side effect of the sync.
     UTILS_NFSCHEMA_PLUGIN (
         workflow,
         validate_params,
-        null
+        null,
+        false,
+        false,
+        false,
+        "",
+        "",
+        "nextflow run . -profile <docker/singularity/...> --input samplesheet.csv --outdir <OUTDIR>",
+        false
     )
 
     //
@@ -64,15 +75,32 @@ workflow PIPELINE_INITIALISATION {
     //
     // Create channel from input file provided through params.input
     //
+    // Samples are grouped by familyId so that downstream cohort-level steps (bcftools merge,
+    // truvari collapse, mosdepth, mendelian2, slivar) know each family's size upfront
+    // (needed for groupKey-based grouping) and so that a family's familyPed/familyPheno are
+    // validated identical across all of its rows before the main workflow body runs.
 
     Channel
         .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
         .map { samplesheet ->
             validateInputSamplesheet(samplesheet)
         }
-        .map {meta, vcf ->
-            def new_meta = meta.plus([id: meta.id.toString()])
-            [new_meta, vcf]
+        .map { meta, vcf, cram ->
+            [meta.familyId, [meta, vcf, cram]]
+        }
+        .tap { ch_sample_simple }
+        .groupTuple()
+        .map { familyId, items ->
+            validatePedFiles(familyId, items)
+            validatePhenopacketFiles(familyId, items)
+            validateJointCallerExclusivity(familyId, items)
+            [familyId, items.size()]
+        }
+        .combine(ch_sample_simple, by: 0)
+        .map { _familyId, sampleSize, item ->
+            def meta = item[0]
+            def new_meta = meta + [sampleSize: sampleSize, id: "${meta.familyId}.${meta.sample}".toString()]
+            [new_meta, item[1], item[2]]
         }
         .set { ch_samplesheet }
 
@@ -136,8 +164,162 @@ workflow PIPELINE_COMPLETION {
 // Validate channels from input samplesheet
 //
 def validateInputSamplesheet(input) {
-    // for now, no validation are needed, but this is where we would put it
+    def (meta, _vcf, _cram) = input
+    // caller='DRAGEN_JOINT' rows skip the per-sample normalize/collapse chain entirely (see
+    // workflows/cnv_post_processing.nf) -- exomiser (single-sample mode) reads its input straight
+    // from that chain's output, so a DRAGEN_JOINT row's 'pheno' would never actually be used by
+    // anything. Fail loudly here rather than silently ignoring it, which would otherwise look
+    // like a missing feature rather than a samplesheet mistake.
+    if (meta.caller == 'DRAGEN_JOINT' && meta.pheno) {
+        error("Sample '${meta.sample}' (family '${meta.familyId}'): caller='DRAGEN_JOINT' rows don't go through the per-sample chain exomiser (single-sample mode) reads from, so 'pheno' would silently never be used. Remove 'pheno' for this row (use 'familyPheno' for exomiser family mode instead).")
+    }
+    // A familyPed means slivar will classify this family, and assets/cnv-slivar-functions.js
+    // decides expected copy number on chrX/chrY from hard-coded GRCh38 PAR coordinates
+    // (CNV_PAR_X / CNV_PAR_Y). On any other build those coordinates are wrong, so every
+    // sex-chromosome call near a PAR would be silently misclassified -- fail before anything
+    // runs instead.
+    if (meta.familyPed && params.vep_genome != 'GRCh38') {
+        error("Family '${meta.familyId}' has a familyPed, so slivar will classify it, but vep_genome is '${params.vep_genome}': slivar's chrX/chrY expected-copy-number model (assets/cnv-slivar-functions.js) only knows the GRCh38 pseudoautosomal regions. Use GRCh38 data, or remove familyPed to skip slivar.")
+    }
     return input
+}
+
+// All rows of the same family must reference the same familyPed value (or all omit it).
+// familyPed is optional overall (families without one skip slivar), but it must not be ambiguous
+// within a family: the family-level steps take it from one row (the first by sample name), while
+// each row's own familyPed decides whether it's a proband. An empty value counts as a value.
+def validatePedFiles(family_id, items) {
+    def ped_files = items.collect { entry -> entry[0].familyPed ?: '' }.unique(false)
+    if (ped_files.size() > 1) {
+        error("Samples in the same family must reference the same familyPed value in the input samplesheet, or all leave it empty. Found ${ped_files.collect { ped -> ped ?: '(empty)' }} in family ${family_id}.")
+    }
+}
+
+// Same rule as validatePedFiles, for familyPheno (required for exomiser family mode).
+def validatePhenopacketFiles(family_id, items) {
+    def pheno_files = items.collect { entry -> entry[0].familyPheno ?: '' }.unique(false)
+    if (pheno_files.size() > 1) {
+        error("Samples in the same family must reference the same familyPheno value in the input samplesheet, or all leave it empty. Found ${pheno_files.collect { pheno -> pheno ?: '(empty)' }} in family ${family_id}.")
+    }
+}
+
+// caller='DRAGEN_JOINT' means 'vcf' is already a family-level, jointly-called, multi-sample VCF
+// -- there's no per-sample VCF to normalize/collapse/merge, so a family using it doesn't fit the
+// one-row-per-sample shape the rest of the samplesheet assumes. Enforce that exactly one row
+// represents the whole family in that case, rather than silently processing only one of several
+// rows or mixing the two input shapes together.
+def validateJointCallerExclusivity(family_id, items) {
+    def callers = items.collect { entry -> entry[0].caller }
+    def joint_count = callers.count { caller -> caller == 'DRAGEN_JOINT' }
+    if (joint_count > 0 && items.size() > 1) {
+        error("Family ${family_id} has caller='DRAGEN_JOINT' but ${items.size()} rows -- a DRAGEN_JOINT family must have exactly one row (the joint VCF already contains every sample), and cannot mix joint and per-sample rows.")
+    }
+}
+
+// Checks a family's PED against the samples of the family VCF slivar is about to read (port of
+// snv-post-processing BIOINFO-240). slivar silently mishandles a PED that doesn't match its VCF
+// and still exits 0: a VCF sample without a PED row is left out of the family (a PED matching no
+// VCF sample gives no tags at all), and a child whose named father isn't in the VCF loses the link
+// to its mother too. The CNV rules need a parent in the family, so those children get no tag.
+// Two rules: every VCF sample has a PED row, and a sequenced sample's named father/mother is in
+// the VCF (an unsequenced parent is written as 0). Rows for relatives not in the VCF are fine.
+// Stops the run, or only warns when warn_only (--skip_ped_validation) is set.
+def validatePedAgainstVcf(family_id, vcf, ped, warn_only = false) {
+    def vcf_samples = vcfSampleNames(vcf)
+    def rows = ped.readLines()
+        .findAll { line -> !line.startsWith('#') }
+        .collect { line -> line.trim().split(/\s+/) }
+        .findAll { cols -> cols.size() >= 4 }
+    def ped_samples = rows.collect { cols -> cols[1] }
+    def problems = []
+
+    def without_row = vcf_samples.findAll { sample -> !(sample in ped_samples) }
+    if (without_row) {
+        problems << "VCF samples without a PED row: ${without_row.join(', ')} (the PED must use the VCF's sample IDs)"
+    }
+    rows.findAll { cols -> cols[1] in vcf_samples }.each { cols ->
+        [father: cols[2], mother: cols[3]].each { role, parent ->
+            if (parent != '0' && !(parent in vcf_samples)) {
+                problems << "${cols[1]}'s ${role} '${parent}' isn't in the VCF (write an unsequenced parent as 0)"
+            }
+        }
+    }
+
+    if (problems) {
+        def message = ["Family '${family_id}': the PED file doesn't match the family VCF (${ped}):"]
+        message += problems.collect { problem -> "  - ${problem}" }
+        message << "Samples in the VCF: ${vcf_samples.join(', ')}."
+        message << "slivar would leave out or misread these family members, so inheritance and parental-origin tags would be missing or wrong."
+        if (warn_only) {
+            message << "--skip_ped_validation is set, so slivar runs anyway."
+            log.warn(message.join('\n'))
+        } else {
+            message << "To run anyway, with this as a warning, set --skip_ped_validation."
+            error(message.join('\n'))
+        }
+    }
+}
+
+// Sample names from the VCF header's #CHROM line (bgzipped or plain).
+def vcfSampleNames(vcf) {
+    def input = vcf.toString().endsWith('.gz') ? new java.util.zip.GZIPInputStream(vcf.newInputStream()) : vcf.newInputStream()
+    return input.withReader { reader ->
+        def line
+        while ((line = reader.readLine()) != null) {
+            if (line.startsWith('#CHROM')) {
+                return line.split('\t').drop(9) as List
+            }
+            if (!line.startsWith('#')) {
+                break
+            }
+        }
+        return []
+    }
+}
+
+// FORMAT IDs the VCF header declares (bgzipped or plain), e.g. ['GT', 'CN']. The workflow checks
+// for CN before SLIVAR_EXPR: with no FORMAT/CN, reading it throws in slivar's JavaScript, and
+// slivar writes every record untagged rather than failing.
+def vcfFormatIds(vcf) {
+    def input = vcf.toString().endsWith('.gz') ? new java.util.zip.GZIPInputStream(vcf.newInputStream()) : vcf.newInputStream()
+    return input.withReader { reader ->
+        def ids = []
+        def line
+        while ((line = reader.readLine()) != null && line.startsWith('##')) {
+            def match = line =~ /^##FORMAT=<ID=([^,>]+)/
+            if (match) {
+                ids << match[0][1]
+            }
+        }
+        return ids
+    }
+}
+
+// The probands of a family for JOIN_PROBAND_CNV: the PED's affected (phenotype 2) samples with a
+// father or mother named. A founder isn't one, even if affected. Several affected sibs are all
+// returned.
+def pedAffectedChildren(ped) {
+    return ped.readLines()
+        .findAll { line -> !line.startsWith('#') }
+        .collect { line -> line.trim().split(/\s+/) }
+        .findAll { cols -> cols.size() >= 6 && cols[5] == '2' && (cols[2] != '0' || cols[3] != '0') }
+        .collect { cols -> cols[1] }
+}
+
+// Is this VCF sample a proband of its family: one of pedAffectedChildren(ped)? False without a
+// PED. The workflow asks it of each per-sample row, with the sample's VCF name (the PED names
+// VCF samples, not the samplesheet's sample column): a proband's calls get their own VEP run
+// and become the family's final VCF (JOIN_PROBAND_CNV).
+def isPedProband(ped, sample) {
+    return ped ? sample in pedAffectedChildren(ped) : false
+}
+
+// The proband a family phenopacket (YAML or JSON) is about: its proband.subject.id, or null when
+// it has none. Family-mode Exomiser runs on this child's JOIN_PROBAND_CNV VCF only: another
+// affected child's VCF would be scored against this child's phenotypes.
+def phenopacketProbandId(pheno) {
+    def doc = new org.yaml.snakeyaml.Yaml().load(pheno.text)
+    return doc instanceof Map ? doc.proband?.subject?.id : null
 }
 
 

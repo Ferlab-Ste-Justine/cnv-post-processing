@@ -1,0 +1,4 @@
+#family_id	individual_id	paternal_id	maternal_id	sex	phenotype
+famXd	famXd_mom	0	0	2	1
+famXd	famXd_dad	0	0	1	1
+famXd	famXd_daughter	famXd_dad	famXd_mom	2	2

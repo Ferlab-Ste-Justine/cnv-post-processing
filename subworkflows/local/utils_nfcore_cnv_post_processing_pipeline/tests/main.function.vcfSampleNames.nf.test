@@ -1,0 +1,43 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE vcfSampleNames function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "vcfSampleNames"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    test("Test Function vcfSampleNames - multi-sample plain VCF") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/ped_vs_vcf.vcf", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ['kid', 'dad', 'mom', 'solo1', 'duokid', 'duomom', 'kid2', 'mom2', 'duokid2', 'duodad', 'sib1', 'sib2'] }
+            )
+        }
+    }
+
+    test("Test Function vcfSampleNames - header spanning several bgzip blocks") {
+        // The data-test trio VCF with ~3,400 padding ##contig lines (about hs38DH's decoy/alt
+        // count): a 269 KB header, so the #CHROM line sits in the fifth 64 KB bgzip block.
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/large_header.vcf.gz", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ['NA12878', 'NA12891', 'NA12892'] }
+            )
+        }
+    }
+}

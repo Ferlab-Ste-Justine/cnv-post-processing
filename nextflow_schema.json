@@ -167,7 +167,7 @@
                     "description": "Path to the  exomiser data directory"
                 },
                 "exomiser_data_version": {
-                    "type": "string",
+                    "type": ["string", "integer"],
                     "description": "Exomiser data version"
                 },
                 "exomiser_genome": {
@@ -203,13 +203,13 @@
                 },
                 "exomiser_local_frequency_path": {
                     "type": "string",
-                    "description": "Path to the local frequency data file",
+                    "description": "Path to the local frequency data file. The `.tbi` index is assumed to live alongside (`<path>.tbi`) unless `exomiser_local_frequency_index_path` is set explicitly.",
                     "format": "file-path",
                     "pattern": "^\\S+\\.tsv.gz$"
                 },
                 "exomiser_local_frequency_index_path": {
                     "type": "string",
-                    "description": "Path to the index of the local frequency data file",
+                    "description": "Optional override for the tabix index of the local frequency data file. Defaults to `<exomiser_local_frequency_path>.tbi`.",
                     "format": "file-path",
                     "pattern": "^\\S+\\.tbi$"
                 },
@@ -218,6 +218,149 @@
                     "description": "When specified, publishes the exomiser output to this folder",
                     "format": "directory-path",
                     "fa_icon": "fas fa-folder-open"
+                }
+            }
+        },
+        "reference_genome_options": {
+            "title": "Reference genome options",
+            "type": "object",
+            "description": "Reference genome FASTA shared by the pipeline steps that need it (mosdepth genotype refinement, VEP).",
+            "required": ["reference_fasta"],
+            "properties": {
+                "reference_fasta": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.fn?a(sta)?(\\.gz)?$",
+                    "description": "Path to the reference genome FASTA file (must match the assembly the input CRAMs/VCFs were aligned/called against, e.g. GRCh38).",
+                    "fa_icon": "fas fa-dna"
+                },
+                "reference_fasta_fai": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.fai$",
+                    "description": "Path to the .fai index of reference_fasta. Defaults to '<reference_fasta>.fai' if not specified.",
+                    "fa_icon": "fas fa-dna"
+                }
+            }
+        },
+        "vep_option": {
+            "title": "VEP options",
+            "type": "object",
+            "description": "Ensembl VEP annotation options.",
+            "required": ["vep_genome", "vep_cache_version"],
+            "properties": {
+                "vep_genome": {
+                    "type": "string",
+                    "description": "Genome assembly to pass to VEP's --assembly (e.g. GRCh38).",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_species": {
+                    "type": "string",
+                    "default": "homo_sapiens",
+                    "description": "Species to pass to VEP's --species.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_cache_version": {
+                    "type": ["string", "integer"],
+                    "description": "VEP cache version to use (e.g. 114).",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_cache": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "exists": true,
+                    "description": "Path to a pre-installed VEP cache directory. Required unless `download_cache` is set to download it instead.",
+                    "fa_icon": "fas fa-folder-open"
+                },
+                "vep_annotation": {
+                    "type": "string",
+                    "enum": ["merged", "refseq"],
+                    "description": "VEP cache flavor: 'merged' (Ensembl+RefSeq, adds --mane --merged and MANE/RefSeq fields) or 'refseq' (adds --refseq). Leave unset to use the plain Ensembl cache.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "vep_outdir": {
+                    "type": "string",
+                    "description": "When specified, publishes the VEP output to this folder",
+                    "format": "directory-path",
+                    "fa_icon": "fas fa-folder-open"
+                },
+                "download_cache": {
+                    "type": "boolean",
+                    "description": "Whether to download the VEP cache (species/flavor/version/genome set via vep_species/vep_annotation/vep_cache_version/vep_genome) instead of using the one at vep_cache.",
+                    "fa_icon": "fas fa-download"
+                },
+                "outdir_cache": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Path where the downloaded VEP cache is published. Defaults to '${outdir}/cache' when unset.",
+                    "fa_icon": "fas fa-folder-open"
+                }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "not": {
+                            "properties": { "download_cache": { "const": true } },
+                            "required": ["download_cache"]
+                        }
+                    },
+                    "then": { "required": ["vep_cache"] }
+                }
+            ]
+        },
+        "slivar_options": {
+            "title": "Slivar options",
+            "type": "object",
+            "fa_icon": "fas fa-sitemap",
+            "description": "Options for the slivar mode-of-inheritance and parental-origin step.",
+            "properties": {
+                "skip_ped_validation": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run slivar even when a family's PED doesn't match its VCF, with warnings instead of stopping the run.",
+                    "help_text": "By default the pipeline stops before slivar if a VCF sample has no row in the family's PED, or if a sequenced sample's father or mother is named in the PED but isn't in the VCF (write an unsequenced parent as `0`). Set this, e.g. for tests or exploratory runs, to report those problems as warnings and continue. slivar's inheritance and parental-origin tags may then be missing or wrong for the affected families.",
+                    "fa_icon": "fas fa-exclamation-triangle"
+                }
+            }
+        },
+        "filtering_options": {
+            "title": "Filtering options",
+            "type": "object",
+            "fa_icon": "fas fa-filter",
+            "description": "Which CNVs go on to VEP, slivar and Exomiser.",
+            "properties": {
+                "cnv_pass_only": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Keep only the CNVs at least one carrier passes the caller's filters for (FORMAT/FT PASS).",
+                    "help_text": "Before VEP, slivar and Exomiser, each CNV's FILTER is set from its carriers' FORMAT/FT: PASS when at least one carrier's FT is PASS, otherwise the filters they name (e.g. `cnvLength`). On a jointly-called DRAGEN VCF, FT is DRAGEN's own, per sample; on the per-sample route, it's each call's FILTER, copied in NORMALIZE_CNV. With this set, the CNVs that don't pass are dropped; DRAGEN flags every call under 10 kb with `cnvLength` by default, so this drops nearly all of them. Set it to false to keep them, flagged in FILTER (Exomiser still skips them).",
+                    "fa_icon": "fas fa-filter"
+                }
+            }
+        },
+        "genotype_fill_options": {
+            "title": "Genotype fill options",
+            "type": "object",
+            "fa_icon": "fas fa-fill-drip",
+            "description": "How a family's missing genotypes are filled after the per-sample VCFs are merged.",
+            "properties": {
+                "get_cn_by_computing_ratio": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Fill the family VCF's missing genotypes from read depth (mosdepth, needs every sample's cram) instead of from each sample's own DRAGEN copy-number segments.",
+                    "help_text": "When a family's per-sample VCFs are merged, a sample with no call in a record gets an empty genotype (`./.`, no FORMAT/CN), which slivar reads as unknown. By default, each sample's original per-sample DRAGEN VCF fills it: its REF blocks and its own calls give the CN that covers at least half of the record, and GT becomes hom-ref when that CN is the expected one. Set this to fill from depth instead: mosdepth's depth ratio over the record, which needs a `cram` for every sample of the family (a family without them is left unfilled). Either way, records under 5 kb are left missing, and `DRAGEN_JOINT` families need no fill.",
+                    "fa_icon": "fas fa-chart-bar"
+                },
+                "cn_from_segment_overlap": {
+                    "type": "number",
+                    "default": 0.5,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of a record one copy number must cover in the sample's own DRAGEN segments for the default fill to write it.",
+                    "help_text": "For each missing genotype on a record of 5 kb or more, the default fill (`FILL_CN_FROM_SEGMENTS`) counts the bases of the record each CN covers in the sample's original per-sample VCF (REF blocks and own calls) and writes the CN covering at least this share of it; below it, or on a tie, the genotype stays missing. `0.5` is the rule measured against the DRAGEN joint caller on 7 trios (see `docs/journal.md`). Higher values fill fewer genotypes, only where the sample's segments agree over most of the record; `0` writes the CN covering the most bases, however little. Not used with `--get_cn_by_computing_ratio`.",
+                    "fa_icon": "fas fa-percent"
                 }
             }
         }
@@ -234,6 +377,21 @@
         },
         {
             "$ref": "#/$defs/exomiser_option"
+        },
+        {
+            "$ref": "#/$defs/reference_genome_options"
+        },
+        {
+            "$ref": "#/$defs/vep_option"
+        },
+        {
+            "$ref": "#/$defs/slivar_options"
+        },
+        {
+            "$ref": "#/$defs/filtering_options"
+        },
+        {
+            "$ref": "#/$defs/genotype_fill_options"
         }
     ]
 }

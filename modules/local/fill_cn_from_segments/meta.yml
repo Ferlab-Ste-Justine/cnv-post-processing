@@ -1,0 +1,58 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "fill_cn_from_segments"
+description: Fill the missing (./.) genotypes of a family CNV VCF with each sample's own copy number, read from its original per-sample DRAGEN VCF (REF blocks and calls)
+keywords:
+  - cnv
+  - genotype refinement
+  - dragen
+  - pysam
+tools:
+  - "pysam":
+      description: "Python bindings for htslib, used here to fill genotypes with bin/fill_cn_from_segments.py"
+      homepage: "https://github.com/pysam-developers/pysam"
+      documentation: "https://pysam.readthedocs.io/"
+      tool_dev_url: "https://github.com/pysam-developers/pysam"
+      licence: ["MIT"]
+      identifier: biotools:pysam
+
+input:
+  - - meta:
+        type: map
+        description: Groovy Map containing family information
+    - vcf:
+        type: file
+        description: Family-level multi-sample cohort CNV VCF
+        pattern: "*.{vcf.gz,vcf}"
+    - tbi:
+        type: file
+        description: Index of the input VCF
+        pattern: "*.{vcf.gz.tbi,vcf.tbi}"
+    - segment_vcfs:
+        type: file
+        description: Each family member's original per-sample CNV VCF, with its REF blocks; matched to the family VCF's columns by the sample name in its own header
+        pattern: "*.{vcf.gz,vcf}"
+    - ped:
+        type: file
+        description: Optional family PED (an empty list when there is none); its sex column gives each VCF sample's expected CN on non-PAR chrX/chrY
+        pattern: "*.ped"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.cn_filled.vcf.gz":
+          type: file
+          description: Family VCF where a missing genotype gets FORMAT/CN from the sample's own segments, and GT hom-ref when that CN is the expected one
+          pattern: "*.cn_filled.vcf.gz"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

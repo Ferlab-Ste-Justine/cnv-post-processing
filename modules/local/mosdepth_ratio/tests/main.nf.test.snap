@@ -1,0 +1,14 @@
+{
+    "NA12878: real cram, one ratio.bed row per sites_bed row, positive ratios + one real NA": {
+        "content": [
+            [
+                "versions.yml:md5,45c66d7cabe0da876e811282070ef922"
+            ]
+        ],
+        "timestamp": "2026-09-23T17:49:29.955581094",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

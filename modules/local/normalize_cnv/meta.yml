@@ -1,0 +1,56 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "normalize_cnv"
+description: Drop non-variant (ALT=".") records, then sort and normalize a per-sample CNV VCF (splitting multiallelic records) ahead of truvari collapse
+keywords:
+  - cnv
+  - normalization
+  - bcftools
+tools:
+  - "bcftools":
+      description: "Utilities for variant calling and manipulating VCF/BCF files"
+      homepage: "https://samtools.github.io/bcftools/"
+      documentation: "https://samtools.github.io/bcftools/bcftools.html"
+      tool_dev_url: "https://github.com/samtools/bcftools"
+      doi: "10.1093/gigascience/giab008"
+      licence: ["MIT/Expat"]
+      identifier: biotools:bcftools
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'FAM001.NA12878', familyId:'FAM001', sample:'NA12878', caller:'DRAGEN' ]
+    - vcf:
+        type: file
+        description: Per-sample CNV VCF file (e.g. "NA12878.cnv.vcf.gz")
+        pattern: "*.{vcf.gz,vcf}"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.normalized.vcf.gz":
+          type: file
+          description: Sorted, multiallelic-split CNV VCF
+          pattern: "*.normalized.vcf.gz"
+  - tbi:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.normalized.vcf.gz.tbi":
+          type: file
+          description: Index of the normalized VCF
+          pattern: "*.normalized.vcf.gz.tbi"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

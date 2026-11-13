@@ -1,0 +1,132 @@
+nextflow_process {
+
+    name "Test Process BCFTOOLS_MERGE"
+    script "../main.nf"
+    process "BCFTOOLS_MERGE"
+
+    tag "modules"
+    tag "modules_"
+    tag "bcftools_merge"
+
+    config "./nextflow.config"
+
+    // Real trio: the same NA12878/NA12891/NA12892 per-sample DRAGEN CNV VCFs (chr22) used
+    // elsewhere in this repo's test fixtures, merged as one family. Real data is preferred here
+    // over hand-crafted fixtures because the module's own logic (merge -> sort -> norm -m -any)
+    // has no family-shape-dependent branches worth isolating with toy edge cases -- unlike
+    // slivar_expr, there's nothing here that needs a specific hand-picked pedigree/genotype
+    // scenario to exercise.
+    test("NA12878/NA12891/NA12892 trio - merge into one family VCF") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "fam1"],
+                    [
+                        file(params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12891.chr22.cnv.vcf.gz'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12892.chr22.cnv.vcf.gz')
+                    ],
+                    [
+                        file(params.modules_testdata_base_path + '/vcf/NA12878.chr22.cnv.vcf.gz.tbi'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12891.chr22.cnv.vcf.gz.tbi'),
+                        file(params.modules_testdata_base_path + '/vcf/NA12892.chr22.cnv.vcf.gz.tbi')
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def expected_meta = [id: "fam1"]
+
+            // vcf channel
+            assert process.out.vcf.size() == 1
+            assert process.out.vcf.get(0)[0] == expected_meta
+            assert file(process.out.vcf.get(0)[1]).name == "fam1.merged.vcf.gz"
+
+            // tbi channel
+            assert process.out.tbi.size() == 1
+            assert process.out.tbi.get(0)[0] == expected_meta
+            assert file(process.out.tbi.get(0)[1]).name == "fam1.merged.vcf.gz.tbi"
+
+            // Real-output content checks -- merge can only add sites via union across samples
+            // (never remove any), so the merged site count must be >= the largest single input's
+            // site count. bcftools norm -m -any afterward can in principle re-split/re-group
+            // multiallelic records, so this is checked against the actual merged output rather
+            // than assumed to equal a simple union count.
+            def mergedLines = path(process.out.vcf.get(0)[1]).linesGzip
+            def mergedHeaderFields = mergedLines.find { it.startsWith("#CHROM") }.tokenize("\t")
+            def mergedSamples = mergedHeaderFields.drop(9)
+            assert mergedSamples.size() == 3
+            assert mergedSamples as Set == ["NA12878", "NA12891", "NA12892"] as Set
+
+            def mergedSiteCount = mergedLines.findAll { !it.startsWith("#") }.size()
+
+            def inputSiteCounts = [
+                'NA12878.chr22.cnv.vcf.gz',
+                'NA12891.chr22.cnv.vcf.gz',
+                'NA12892.chr22.cnv.vcf.gz'
+            ].collect { name ->
+                path("${projectDir}/data-test/vcf/${name}").linesGzip.findAll { !it.startsWith("#") }.size()
+            }
+            assert mergedSiteCount >= inputSiteCounts.max()
+
+            // versions channel
+            assert snapshot(process.out.versions).match()
+        }
+    }
+
+    // Toy per-sample VCFs in ./data/ (DAD, KID, MOM; MOM has no call), on which
+    // RESTORE_COLLAPSED_FORMAT and JOIN_PROBAND_CNV rely: each sample's call stays a column of its
+    // own, with its own FORMAT/OID, and bcftools merge only joins records that are the same call.
+    // 1. chr1:100000, the same deletion in DAD and KID (same POS, END and ALT): one record.
+    // 2. chr1:300000, DAD and KID deletions at the same POS with a different END: two records.
+    // 3. chr1:500000, a DAD deletion and a KID duplication at the same POS: two records, not
+    //    one multiallelic site.
+    test("toy trio - only the same call is merged into one record; a sample with no call gets an empty column") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "toy"],
+                    [
+                        file("\${projectDir}/modules/local/bcftools_merge/tests/data/toy_dad.vcf.gz", checkIfExists: true),
+                        file("\${projectDir}/modules/local/bcftools_merge/tests/data/toy_kid.vcf.gz", checkIfExists: true),
+                        file("\${projectDir}/modules/local/bcftools_merge/tests/data/toy_mom.vcf.gz", checkIfExists: true)
+                    ],
+                    [
+                        file("\${projectDir}/modules/local/bcftools_merge/tests/data/toy_dad.vcf.gz.tbi", checkIfExists: true),
+                        file("\${projectDir}/modules/local/bcftools_merge/tests/data/toy_kid.vcf.gz.tbi", checkIfExists: true),
+                        file("\${projectDir}/modules/local/bcftools_merge/tests/data/toy_mom.vcf.gz.tbi", checkIfExists: true)
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip
+            assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["DAD", "KID", "MOM"]
+            // one line per record: POS, ID, ALT, END, then each sample's GT:CN:OID
+            def records = lines.findAll { !it.startsWith("#") }.collect { line ->
+                def cols = line.split("\t") as List
+                def end = cols[7].split(";").find { it.startsWith("END=") }
+                ([cols[1], cols[2], cols[4], end] + cols.drop(9)).join(" ")
+            }
+            assert records == [
+                "100000 shared_1 <DEL> END=200000 0/1:1:shared_1 0/1:1:shared_1 ./.:.:.",
+                "300000 dad_2 <DEL> END=400000 0/1:1:dad_2 ./.:.:. ./.:.:.",
+                "300000 kid_2 <DEL> END=370000 ./.:.:. 0/1:1:kid_2 ./.:.:.",
+                "500000 dad_3 <DEL> END=600000 0/1:1:dad_3 ./.:.:. ./.:.:.",
+                "500000 kid_3 <DUP> END=550000 ./.:.:. ./1:3:kid_3 ./.:.:.",
+            ]
+        }
+    }
+}

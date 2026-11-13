@@ -1,0 +1,60 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "slivar_expr"
+description: Classify CNV mode of inheritance from each affected child's call (e.g. de novo / inherited from one parent / recessive / unresolved / Mendelian-inconsistent; slivar expr --family-expr) and per-child parent-of-origin (maternal / paternal / both / ambiguous / denovo / possible_denovo; --sample-expr) for any family shape (trios, duos, singletons, sibships)
+keywords:
+  - cnv
+  - inheritance
+  - slivar
+  - mode-of-inheritance
+tools:
+  - "slivar":
+      description: "Variant expressions, annotation, and filtering"
+      homepage: "https://github.com/brentp/slivar"
+      documentation: "https://github.com/brentp/slivar/wiki"
+      tool_dev_url: "https://github.com/brentp/slivar"
+      licence: ["MIT"]
+      identifier: biotools:slivar
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing family information
+          e.g. [ id:'fam1' ]
+    - vcf:
+        type: file
+        description: Family-level, VEP-annotated CNV VCF
+        pattern: "*.{vcf.gz,vcf}"
+    - tbi:
+        type: file
+        description: Index of the VCF
+        pattern: "*.{tbi,csi}"
+    - ped:
+        type: file
+        description: PED file for the family (any shape -- trio, duo, singleton, sibship)
+        pattern: "*.ped"
+  - - js:
+        type: file
+        description: assets/cnv-slivar-functions.js -- the cnv_moi(sample, variant) and cn_po_origin(sample, variant) classifiers
+        pattern: "*.js"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.vcf.gz":
+          type: file
+          description: Input VCF with classification tags added (INFO/<tag>=<samples>; mode-of-inheritance tags list the family's affected members, the po_* tags the children they apply to)
+          pattern: "*.vcf.gz"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

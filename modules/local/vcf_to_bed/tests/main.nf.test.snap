@@ -1,0 +1,14 @@
+{
+    "NA12878.chr22 - one BED row per VCF record, POS-1 start coordinate": {
+        "content": [
+            [
+                "versions.yml:md5,0362925c379f58ce5a6f431fdf7e2074"
+            ]
+        ],
+        "timestamp": "2026-09-23T17:45:47.743111958",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

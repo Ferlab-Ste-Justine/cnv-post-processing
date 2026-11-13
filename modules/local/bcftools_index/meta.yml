@@ -1,0 +1,57 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "bcftools_index"
+description: Tabix-index a VCF that's already coordinate-sorted (no re-sort, unlike BCFTOOLS_SORT_INDEX)
+keywords:
+  - index
+  - bcftools
+  - tabix
+tools:
+  - "bcftools":
+      description: "Utilities for variant calling and manipulating VCF/BCF files"
+      homepage: "https://samtools.github.io/bcftools/"
+      documentation: "https://samtools.github.io/bcftools/bcftools.html"
+      tool_dev_url: "https://github.com/samtools/bcftools"
+      doi: "10.1093/gigascience/giab008"
+      licence: ["MIT/Expat"]
+      identifier: biotools:bcftools
+
+input:
+  - - meta:
+        type: map
+        description: Groovy Map containing sample information
+    - vcf:
+        type: file
+        description: Already-sorted VCF to index (e.g. duphold's output, which preserves input record order)
+        pattern: "*.{vcf.gz,vcf}"
+
+output:
+  - vcf_tbi:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - vcf:
+          type: file
+          description: The input VCF, passed through unchanged
+      - "*.tbi":
+          type: file
+          description: Index of the input VCF
+          pattern: "*.tbi"
+  - tbi:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.tbi":
+          type: file
+          description: Index of the input VCF
+          pattern: "*.tbi"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

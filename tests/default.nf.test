@@ -1,0 +1,214 @@
+nextflow_pipeline {
+
+    name "Test pipeline"
+    script "../main.nf"
+    tag "pipeline"
+
+    test("-profile test") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            // stable_path: All files + folders in ${params.outdir}/ with a stable path (including file name)
+            def stable_path = getAllFilesFromDir(params.outdir, relative: true, includeDir: true, ignore: ['pipeline_info/*.{html,json,txt}'])
+            // No stable_content (full-file MD5) snapshot here, unlike the nf-core template's
+            // default -- confirmed directly that bcftools view/norm/merge/annotate append a
+            // "##bcftools_<cmd>Command=...; Date=<now>" header by default, which broke
+            // byte-for-byte reproducibility across otherwise-identical runs (fixed with
+            // --no-version across this repo's own bcftools modules regardless, since that's
+            // real reproducibility hygiene beyond just this test). VEP's own "##VEP=...
+            // time=..." provenance header and Exomiser's generated-timestamp HTML/VCF reports
+            // have no equivalent suppression flag. The sibling SNV pipeline's own
+            // tests/default.nf.test hit this identical wall and settled on stable_path +
+            // workflow.success; this one also snapshots each published VCF's variant lines
+            // (vcf_md5 below), which those headers don't touch.
+            assert workflow.success
+
+            // nft-vcf's variantsMD5 hashes a VCF's records only, not its header.
+            def vcf_md5 = getAllFilesFromDir("$outputDir", include: ['**/*.vcf.gz']).collect { vcf ->
+                "${file(vcf.toString()).name}:md5,${path(vcf.toString()).vcf.variantsMD5}".toString()
+            }.sort()
+
+            // fam1's final VCF is built around its proband, NA12878: its own calls, each with the
+            // trio's FORMAT and slivar's tags. (No params.* in this block, see CLAUDE.md.)
+            def proband_lines = path("$outputDir/slivar/fam1.NA12878.cnv.slivar.vcf.gz").linesGzip
+            def proband_records = proband_lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            def input_ids = path("${projectDir}/data-test/vcf/NA12878.chr22.cnv.vcf.gz").linesGzip
+                .findAll { !it.startsWith("#") }.collect { it.split("\t")[2] } as Set
+            def info_keys = { cols -> cols[7].split(";").collect { it.split("=", 2)[0] } as Set }
+            def svtype = { cols -> cols[7].split(";").find { it.startsWith("SVTYPE=") } }
+
+            // Exomiser's output VCF repeats its input's header: the proband slivar VCF's COHORT_ID
+            // and slivar tags show it ran on that. (Under -profile test its reports have no variant
+            // rows, on every route.)
+            def exomiser_header = path("$outputDir/exomiser/fam1.NA12878.exomiser.vcf.gz").linesGzip.findAll { it.startsWith("##") }
+
+            // --cnv_pass_only (the default): only the CNVs a carrier passes reach slivar, on the
+            // per-sample route (FORMAT/FT copied from each call's FILTER) and the joint one
+            def slivar_filters = ["fam1.NA12878", "fam1_joint"].collectMany { f ->
+                path("$outputDir/slivar/${f}.cnv.slivar.vcf.gz").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[6] }
+            }
+
+            assertAll(
+                { assert proband_records.size() > 0 },
+                { assert proband_records.every { it[8].split(":").contains("FT") } },
+                { assert slivar_filters.size() > 0 && slivar_filters.every { it == "PASS" } },
+                { assert proband_records.every { it[2] in input_ids } },
+                { assert proband_records.every { svtype(it) in ["SVTYPE=DEL", "SVTYPE=DUP"] } },
+                { assert proband_records.every { info_keys(it).containsAll(["CSQ", "COHORT_ID", "COHORT_POS", "COHORT_END"]) } },
+                { assert proband_lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["NA12878", "NA12891", "NA12892"] },
+                { assert exomiser_header.any { it.startsWith("##INFO=<ID=COHORT_ID,") } },
+                { assert snapshot(
+                    // pipeline versions.yml file, from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
+                    // All stable path name, with a relative path
+                    stable_path,
+                    vcf_md5
+                ).match() }
+            )
+        }
+    }
+
+    // The same trio with a PED where NA12878 is unaffected (tests/data/): no affected child, so no
+    // proband. The family keeps the family-level route: VEP and slivar on the family VCF, and
+    // family-mode Exomiser on the genotype-filled family VCF, under <familyId> names. With
+    // --cnv_pass_only false, the CNVs no carrier passes reach slivar too, flagged in FILTER. Run
+    // with --get_cn_by_computing_ratio, the depth fill (mosdepth, from the trio's CRAMs) instead
+    // of the samples' own segments.
+    test("-profile test, a family without a proband, genotypes filled from depth") {
+
+        when {
+            params {
+                outdir                    = "$outputDir"
+                input                     = "${projectDir}/tests/data/samplesheet_no_proband.csv"
+                cnv_pass_only             = false
+                get_cn_by_computing_ratio = true
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def files = getAllFilesFromDir("$outputDir", relative: true).collect { it.toString() }
+            def family_files = [
+                "ensemblvep/variants.fam1.cnv.vep.vcf.gz",
+                "slivar/fam1.cnv.slivar.vcf.gz",
+                "slivar/fam1.cnv.slivar.vcf.gz.tbi",
+                "exomiser/fam1.exomiser.vcf.gz",
+                "exomiser/fam1.exomiser.variants.tsv"
+            ]
+            def task_names = workflow.trace.tasks().collect { it.name }
+            def slivar_header = path("$outputDir/slivar/fam1.cnv.slivar.vcf.gz").linesGzip.findAll { it.startsWith("#") }
+            def slivar_filters = path("$outputDir/slivar/fam1.cnv.slivar.vcf.gz").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t")[6] }
+            def exomiser_header = path("$outputDir/exomiser/fam1.exomiser.vcf.gz").linesGzip.findAll { it.startsWith("##") }
+            // The depth fill writes a hom-ref GT with the expected CN; no caller or merge step writes one.
+            def refined = path("$outputDir/cn_filled/fam1.refined.vcf.gz").linesGzip.findAll { !it.startsWith("#") }
+                .collect { it.split("\t").drop(9).count { s -> s ==~ /^0(\/0)?:.*/ } }.sum() ?: 0
+
+            assertAll(
+                { assert family_files.every { it in files } },
+                // the depth fill, not the segment one
+                { assert ["MOSDEPTH_RATIO (NA12878)", "MOSDEPTH_RATIO (NA12891)", "MOSDEPTH_RATIO (NA12892)"].every { t -> task_names.any { it.contains(t) } } },
+                { assert !task_names.any { it.contains("FILL_CN_FROM_SEGMENTS") } },
+                { assert !files.any { it.startsWith("cn_filled/fam1.cn_filled") } },
+                { assert refined > 0 },
+                { assert !files.any { it.contains("fam1.NA12878") } },
+                { assert !task_names.any { it.contains("JOIN_PROBAND_CNV") || it.contains("VCF_ANNOTATE_ENSEMBLVEP_PROBAND") } },
+                // the family VCF's own records, not a proband's join
+                { assert slivar_header.find { it.startsWith("#CHROM") }.split("\\t").drop(9) == ["NA12878", "NA12891", "NA12892"] },
+                { assert !slivar_header.any { it.startsWith("##INFO=<ID=COHORT_ID,") } },
+                { assert "PASS" in slivar_filters && slivar_filters.any { it != "PASS" } },
+                // Exomiser repeats its input's header: the genotype-filled family VCF, without VEP's CSQ
+                { assert !exomiser_header.any { it.startsWith("##INFO=<ID=CSQ,") || it.startsWith("##INFO=<ID=COHORT_ID,") } }
+            )
+        }
+    }
+
+    // tests/data/samplesheet_edge_cases.csv: families built from the same chr22 trio, each for a
+    // route the tests above don't take.
+    // - famA: the trio under other samplesheet names (child, father, mother). The genotype fill
+    //   still finds each sample's per-sample VCF, by its VCF name.
+    // - famB: the trio without CRAMs, which the segment fill doesn't need. Its proband, NA12878,
+    //   has no call (a header-only VCF: no segments either), and the phenopacket is about the
+    //   father, so Exomiser runs on the family VCF.
+    // - famD: NA12878 alone with a PED and a family phenopacket, a documented singleton: no merge,
+    //   no proband (a founder), family-level VEP, slivar and Exomiser.
+    // - famF: a quartet without CRAMs whose two daughters are affected (NA12878_sib's VCF is
+    //   NA12878's, renamed): a proband VCF each, Exomiser only on the phenopacket's proband. Its
+    //   genotypes are filled from the samples' own segments all the same.
+    test("-profile test, edge-case families") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+                input  = "${projectDir}/tests/data/samplesheet_edge_cases.csv"
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def stable_path = getAllFilesFromDir("$outputDir", relative: true, includeDir: true, ignore: ['pipeline_info/*.{html,json,txt}'])
+            def vcf_md5 = getAllFilesFromDir("$outputDir", include: ['**/*.vcf.gz']).collect { vcf ->
+                "${file(vcf.toString()).name}:md5,${path(vcf.toString()).vcf.variantsMD5}".toString()
+            }.sort()
+
+            def files = getAllFilesFromDir("$outputDir", relative: true).collect { it.toString() }
+            def task_names = workflow.trace.tasks().collect { it.name }
+            def records = { f -> path("$outputDir/${f}").linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") } }
+            def samples = { f -> path("$outputDir/${f}").linesGzip.find { it.startsWith("#CHROM") }.split("\t").drop(9) as List }
+            // The genotype fill writes a hom-ref GT with the expected CN; no caller or merge step writes one.
+            def filled = { f -> records(f).collect { cols -> cols.drop(9).count { it ==~ /^0(\/0)?:.*/ } }.sum() ?: 0 }
+            def trio = ["NA12878", "NA12891", "NA12892"]
+            def quartet = ["NA12878", "NA12878_sib", "NA12891", "NA12892"]
+
+            assertAll(
+                // famA
+                { assert samples("cn_filled/famA.cn_filled.vcf.gz") == trio },
+                { assert filled("cn_filled/famA.cn_filled.vcf.gz") > 0 },
+                { assert !task_names.any { it.contains("MOSDEPTH_RATIO") } },
+                { assert "slivar/famA.NA12878.cnv.slivar.vcf.gz" in files },
+                // famB
+                { assert filled("cn_filled/famB.cn_filled.vcf.gz") > 0 },
+                { assert samples("slivar/famB.NA12878.cnv.slivar.vcf.gz") == trio },
+                { assert records("slivar/famB.NA12878.cnv.slivar.vcf.gz").size() == 0 },
+                { assert "exomiser/famB.exomiser.vcf.gz" in files },
+                { assert !files.any { it.startsWith("exomiser/famB.NA12878") } },
+                // famD
+                { assert !task_names.any { it.contains("BCFTOOLS_MERGE (famD)") || it.contains("JOIN_PROBAND_CNV (famD") } },
+                { assert ["cn_filled/famD.cn_filled.vcf.gz", "ensemblvep/variants.famD.cnv.vep.vcf.gz", "slivar/famD.cnv.slivar.vcf.gz", "exomiser/famD.exomiser.vcf.gz"].every { it in files } },
+                { assert samples("slivar/famD.cnv.slivar.vcf.gz") == ["NA12878"] },
+                // famF
+                { assert ["NA12878", "NA12878_sib"].every { p -> samples("slivar/famF.${p}.cnv.slivar.vcf.gz") == quartet } },
+                { assert ["NA12878", "NA12878_sib"].every { p -> records("slivar/famF.${p}.cnv.slivar.vcf.gz").size() > 0 } },
+                { assert ["NA12878", "NA12878_sib"].every { p -> filled("slivar/famF.${p}.cnv.slivar.vcf.gz") > 0 } },
+                { assert "exomiser/famF.NA12878.exomiser.vcf.gz" in files },
+                { assert !files.any { it.startsWith("exomiser/famF.NA12878_sib") } },
+                { assert snapshot(stable_path, vcf_md5).match() }
+            )
+        }
+    }
+
+    // assets/cnv-slivar-functions.js models chrX/chrY copy number with hard-coded GRCh38 PAR
+    // coordinates, so PIPELINE_INITIALISATION refuses a non-GRCh38 run whenever a family has a
+    // familyPed (i.e. slivar would run), before any task starts.
+    test("-profile test with vep_genome GRCh37 fails before running slivar on the wrong build") {
+
+        when {
+            params {
+                outdir     = "$outputDir"
+                vep_genome = "GRCh37"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.trace.tasks().size() == 0
+            assert workflow.stdout.any { it.contains("only knows the GRCh38 pseudoautosomal regions") }
+        }
+    }
+}

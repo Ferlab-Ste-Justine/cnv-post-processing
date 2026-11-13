@@ -1,0 +1,92 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE validatePedFiles function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "validatePedFiles"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    // input[1] is a family's samplesheet rows, [meta, vcf, cram] each. Only familyPed is read, so
+    // the paths don't have to exist.
+
+    test("Test Function validatePedFiles - every row with the same PED passes") {
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[familyPed: "fam1.ped"], "kid.vcf.gz", []],
+                    [[familyPed: "fam1.ped"], "dad.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success }
+            )
+        }
+    }
+
+    test("Test Function validatePedFiles - every row without a PED passes") {
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[familyPed: null], "kid.vcf.gz", []],
+                    [[familyPed: []], "dad.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success }
+            )
+        }
+    }
+
+    test("Test Function validatePedFiles - two different PEDs fail") {
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[familyPed: "fam1.ped"], "kid.vcf.gz", []],
+                    [[familyPed: "other.ped"], "dad.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.failed },
+                { assert function.stdout.any { it.contains("must reference the same familyPed value") && it.contains("[fam1.ped, other.ped] in family fam1") } }
+            )
+        }
+    }
+
+    test("Test Function validatePedFiles - a PED on some rows only fails") {
+        // The family-level steps take familyPed from the first row by sample name, so the family
+        // would get slivar or not depending on the sample names.
+        when {
+            function {
+                """
+                input[0] = "fam1"
+                input[1] = [
+                    [[familyPed: "fam1.ped"], "kid.vcf.gz", []],
+                    [[familyPed: null], "dad.vcf.gz", []],
+                ]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.failed },
+                { assert function.stdout.any { it.contains("or all leave it empty") && it.contains("[fam1.ped, (empty)] in family fam1") } }
+            )
+        }
+    }
+}

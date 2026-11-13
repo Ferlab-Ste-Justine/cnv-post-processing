@@ -1,0 +1,58 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE vcfFormatIds function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "vcfFormatIds"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    test("Test Function vcfFormatIds - plain VCF with CN") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/ped_vs_vcf.vcf", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert 'CN' in function.result }
+            )
+        }
+    }
+
+    test("Test Function vcfFormatIds - bgzipped VCF with a header spanning several bgzip blocks") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/large_header.vcf.gz", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert 'CN' in function.result },
+                { assert 'GT' in function.result }
+            )
+        }
+    }
+
+    test("Test Function vcfFormatIds - VCF without FORMAT/CN") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/no_cn.vcf", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ['GT'] }
+            )
+        }
+    }
+}

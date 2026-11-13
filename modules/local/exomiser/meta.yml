@@ -13,7 +13,7 @@ tools:
       documentation: "https://exomiser.readthedocs.io/en/latest/"
       tool_dev_url: "https://github.com/exomiser/Exomiser"
       doi: "10.1038/nprot.2015.124"
-      licence: ['AGPL v3']
+      licence: ["AGPL v3"]
       identifier: biotools:exomiser
 
 input:
@@ -39,11 +39,11 @@ input:
         description: File containing the exomiser analysis configuration (e.g. "exomiser_analysis.yml")
         pattern: "*.{yaml,yml}"
 
-  -  - data_dir:
+  - - data_dir:
         type: directory
         description: Path to the directory containing exomiser reference data (e.g. "data-test/reference/exomiser")
 
-  -  - exomiser_genome:
+  - - exomiser_genome:
         type: string
         description: The genome assembly to use with exomiser ("hg19" or "hg38")
 
@@ -74,7 +74,6 @@ input:
     - cadd_indel_file_name:
         type: string
         description: The name of the CADD INDEL reference file to use (e.g. "gnomad.genomes.r4.0.indel.tsv.gz")
-
 
 output:
   - vcf:

@@ -5,7 +5,35 @@
 */
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { validatePedAgainstVcf  } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { vcfSampleNames         } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { isPedProband           } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { phenopacketProbandId   } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
+include { vcfFormatIds           } from '../subworkflows/local/utils_nfcore_cnv_post_processing_pipeline'
 include { EXOMISER } from '../modules/local/exomiser/main.nf'
+include { EXOMISER as EXOMISER_SINGLE } from '../modules/local/exomiser/main.nf'
+include { NORMALIZE_CNV } from '../modules/local/normalize_cnv/main.nf'
+include { NORMALIZE_CNV as NORMALIZE_CNV_JOINT } from '../modules/local/normalize_cnv/main.nf'
+include { TRUVARI_COLLAPSE as TRUVARI_COLLAPSE_PERSAMPLE } from '../modules/local/truvari_collapse/main.nf'
+include { TRUVARI_COLLAPSE as TRUVARI_COLLAPSE_COHORT    } from '../modules/local/truvari_collapse/main.nf'
+include { RESTORE_COLLAPSED_FORMAT } from '../modules/local/restore_collapsed_format/main.nf'
+include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_PERSAMPLE } from '../modules/local/bcftools_sort_index/main.nf'
+include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_COHORT    } from '../modules/local/bcftools_sort_index/main.nf'
+include { BCFTOOLS_SORT_INDEX as BCFTOOLS_SORT_INDEX_JOINT     } from '../modules/local/bcftools_sort_index/main.nf'
+include { BCFTOOLS_MERGE } from '../modules/local/bcftools_merge/main.nf'
+include { BCFTOOLS_INDEX as BCFTOOLS_INDEX_SLIVAR } from '../modules/local/bcftools_index/main.nf'
+include { BCFTOOLS_INDEX as BCFTOOLS_INDEX_CN_FILLED } from '../modules/local/bcftools_index/main.nf'
+include { FILL_CN_FROM_SEGMENTS } from '../modules/local/fill_cn_from_segments/main.nf'
+include { BAM_VCF_DEPTH_GENOTYPE_REFINEMENT } from '../subworkflows/local/bam_vcf_depth_genotype_refinement/main.nf'
+include { VCF_ANNOTATE_ENSEMBLVEP } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
+include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
+include { VCF_ANNOTATE_ENSEMBLVEP as VCF_ANNOTATE_ENSEMBLVEP_PROBAND   } from '../subworkflows/nf-core/vcf_annotate_ensemblvep/main.nf'
+include { ENSEMBLVEP_DOWNLOAD } from '../modules/nf-core/ensemblvep/download/main.nf'
+include { SLIVAR_EXPR } from '../modules/local/slivar_expr/main.nf'
+include { JOIN_PROBAND_CNV } from '../modules/local/join_proband_cnv/main.nf'
+include { FILTER_CNV_CARRIERS as FILTER_CNV_CARRIERS_SOLO    } from '../modules/local/filter_cnv_carriers/main.nf'
+include { FILTER_CNV_CARRIERS as FILTER_CNV_CARRIERS_FAMILY  } from '../modules/local/filter_cnv_carriers/main.nf'
+include { FILTER_CNV_CARRIERS as FILTER_CNV_CARRIERS_PROBAND } from '../modules/local/filter_cnv_carriers/main.nf'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RUN MAIN WORKFLOW
@@ -29,14 +57,23 @@ workflow EXOMISER_WORKFLOW {
     cadd_indel_filename
 
     main:
-    def ch_versions = Channel.empty()
-    def ch_input_for_exomiser = ch_input.map{
-        meta, vcf ->
-            def tbi = file(vcf + ".tbi")
-            def pheno = file(meta["pheno"])
-            def analysis_file = meta.sequencingType == "WES"? analysis_wes_path : analysis_wgs_path
-            [meta, vcf, tbi.exists() ? tbi : [], pheno, analysis_file]
-    }
+    // Family mode: ch_input is a multi-sample VCF (a proband's slivar VCF or the family VCF, see
+    // STAGE 7)
+    // + the family-level phenopacket, as in the sibling SNV pipeline's EXOMISER wiring
+    // (workflows/postprocessing.nf:308-357), which only ever uses the family VCF.
+    def ch_input_for_exomiser = ch_input
+        .filter { meta, _vcf, _tbi ->
+            if (!meta.familyPheno) {
+                log.warn("Skipping exomiser for family '${meta.id}': no familyPheno (phenopacket) provided in the samplesheet.")
+            }
+            meta.familyPheno
+        }
+        .map{
+            meta, vcf, tbi ->
+                def pheno = file(meta.familyPheno)
+                def analysis_file = meta.sequencingType == "WES"? analysis_wes_path : analysis_wgs_path
+                [meta, vcf, tbi, pheno, analysis_file]
+        }
     EXOMISER(ch_input_for_exomiser,
         exomiser_data_dir,
         exomiser_genome,
@@ -45,10 +82,6 @@ workflow EXOMISER_WORKFLOW {
         remm_version? [remm_version, remm_filename] : ["", ""],
         cadd_version? [cadd_version, cadd_snv_filename, cadd_indel_filename] : ["", "", ""]
     )
-    ch_versions = ch_versions.mix(EXOMISER.out.versions)
-
-    emit:
-    versions=ch_versions
 }
 
 workflow CNV_POST_PROCESSING {
@@ -58,15 +91,452 @@ workflow CNV_POST_PROCESSING {
 
     main:
     def exomiser_local_frequency_file = params.exomiser_local_frequency_path? file(params.exomiser_local_frequency_path) : []
-    def exomiser_local_frequency_index_file = params.exomiser_local_frequency_index_path? file(params.exomiser_local_frequency_index_path) : []
+    def exomiser_local_frequency_index_file = params.exomiser_local_frequency_index_path
+        ? file(params.exomiser_local_frequency_index_path)
+        : (params.exomiser_local_frequency_path ? file("${params.exomiser_local_frequency_path}.tbi") : [])
     def exomiser_data_dir = params.exomiser_data_dir? file(params.exomiser_data_dir) : []
     def exomiser_analysis_wes_path = params.exomiser_analysis_wes? file(params.exomiser_analysis_wes) : []
     def exomiser_analysis_wgs_path = params.exomiser_analysis_wgs? file(params.exomiser_analysis_wgs) : []
 
+    def reference_fasta = file(params.reference_fasta)
+    def reference_fasta_fai = params.reference_fasta_fai? file(params.reference_fasta_fai) : file("${params.reference_fasta}.fai")
+
+    def slivar_js = file("${projectDir}/assets/cnv-slivar-functions.js")
+
+    // Only carries the pinned nf-core components (which predate topic channels); every local
+    // module reports its versions.yml via the `versions` topic instead (collated at the end).
     def ch_versions = Channel.empty()
 
+    //
+    // VEP cache: download it fresh via ENSEMBLVEP_DOWNLOAD when download_cache is set, otherwise
+    // use the pre-installed directory at vep_cache. vep_install's --SPECIES needs the cache
+    // flavor baked into the species name (e.g. "homo_sapiens_merged"), unlike VEP's own --species
+    // at annotation time, which always stays the plain species name (--merged/--refseq select the
+    // flavor there instead, see conf/modules.config's ENSEMBLVEP_VEP block) -- matches the sibling
+    // SNV pipeline's own vep_species_download (workflows/postprocessing.nf:91-100).
+    //
+    def vep_species_download = params.vep_annotation ? "${params.vep_species}_${params.vep_annotation}" : params.vep_species
+
+    def vep_cache
+    if (params.download_cache) {
+        def ch_ensemblvep_info = Channel.of([[id: "${params.vep_cache_version}_${params.vep_genome}"], params.vep_genome, vep_species_download, params.vep_cache_version])
+        ENSEMBLVEP_DOWNLOAD(ch_ensemblvep_info)
+        vep_cache = ENSEMBLVEP_DOWNLOAD.out.cache.collect().map { _meta, cache -> [cache] }.first()
+        ch_versions = ch_versions.mix(ENSEMBLVEP_DOWNLOAD.out.versions.first())
+    } else {
+        vep_cache = file(params.vep_cache)
+    }
+
+    //
+    // caller='DRAGEN_JOINT' rows are already a family-level, jointly-called, multi-sample VCF --
+    // there's no per-sample VCF to normalize/collapse/merge, and joint calling doesn't have the
+    // post-hoc-merge missing-genotype problem the genotype fill (STAGE 3) exists to work around. Those
+    // families skip stages 1-3 entirely (validated to be exactly one row per family in
+    // PIPELINE_INITIALISATION's validateJointCallerExclusivity) and only get the same lightweight
+    // prep (drop non-variant records, split multiallelic sites -- DRAGEN's own joint VCFs do carry
+    // multiallelic <DEL>,<DUP> sites, unlike its per-sample output) before rejoining the regular
+    // families at the "family-level VCF ready for VEP" point below.
+    //
+    def ch_samplesheet_branched = ch_samplesheet
+        .branch { meta, _vcf, _cram ->
+            joint: meta.caller == 'DRAGEN_JOINT'
+            persample: true
+        }
+
+    //
+    // Probands are decided here, from the samplesheet: a per-sample row whose VCF sample is one of
+    // its PED's affected children (isPedProband). The PED names VCF samples, hence vcfSampleNames()
+    // rather than the samplesheet's sample column (meta.vcfSample). A proband's own calls get their
+    // own VEP run (STAGE 1d) and become its family's final VCF (STAGE 5). DRAGEN_JOINT rows have no
+    // per-sample VCF, so no proband.
+    //
+    def ch_persample = ch_samplesheet_branched.persample
+        .map { meta, vcf, cram ->
+            def vcf_sample = vcfSampleNames(vcf)[0]
+            def proband = isPedProband(meta.familyPed ? file(meta.familyPed) : null, vcf_sample)
+            [meta + [vcfSample: vcf_sample, proband: proband], vcf, cram]
+        }
+
+    //
+    // STAGE 1 -- Per-sample normalize + truvari collapse (meta.id = "familyId.sample")
+    //
+    NORMALIZE_CNV(ch_persample.map { meta, vcf, _cram -> [meta, vcf] })
+
+    TRUVARI_COLLAPSE_PERSAMPLE(NORMALIZE_CNV.out.vcf.join(NORMALIZE_CNV.out.tbi))
+
+    // truvari collapse's output isn't guaranteed sorted/indexed -- see BCFTOOLS_SORT_INDEX
+    BCFTOOLS_SORT_INDEX_PERSAMPLE(TRUVARI_COLLAPSE_PERSAMPLE.out.vcf)
+
+    //
+    // STAGE 1b -- VEP annotation, single-sample route (meta.id = "familyId.sample"). Feeds
+    // EXOMISER_SINGLE below with a VEP-annotated VCF, mirroring the family-level VEP+Exomiser
+    // wiring (STAGE 4) but scoped to each sample's own cleaned per-sample VCF rather than the
+    // family-merged one. EXOMISER_SINGLE always starts from VEP.
+    //
+    // Restricted to true solo samples (no familyPheno and no familyPed) -- a sample with either
+    // already gets its individual-level annotation/prioritization needs covered by the
+    // family-level route (STAGE 1d, 4+) below, so this route would otherwise be redundant for it.
+    //
+    // FILTER_CNV_CARRIERS first, as on the family route (STAGE 3c): a solo sample is the only
+    // carrier of its calls, so each keeps its own FILTER, and --cnv_pass_only keeps the PASS ones.
+    //
+    FILTER_CNV_CARRIERS_SOLO(
+        BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
+            .filter { meta, _vcf -> !meta.familyPheno && !meta.familyPed }
+    )
+
+    def ch_persample_vep_input = FILTER_CNV_CARRIERS_SOLO.out.vcf_tbi
+        .map { meta, vcf, _tbi -> [meta, vcf, []] }
+
+    VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE(
+        ch_persample_vep_input,
+        [[id: 'reference'], reference_fasta],
+        params.vep_genome,
+        params.vep_species,
+        params.vep_cache_version,
+        vep_cache,
+        []
+    )
+    ch_versions = ch_versions.mix(VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE.out.versions)
+
+    //
+    // STAGE 1c -- Exomiser (single-sample mode), on each solo sample's own VEP-annotated
+    // per-sample VCF (same solo-only restriction as STAGE 1b above, since ch_exomiser_single_input
+    // derives from its output). Independent of family mode below, for the samples it does cover:
+    // uses its own per-sample `pheno` (distinct from the family-level `familyPheno` exomiser
+    // (family mode) uses).
+    //
+    def ch_exomiser_single_input = VCF_ANNOTATE_ENSEMBLVEP_PERSAMPLE.out.vcf_tbi
+        .filter { meta, _vcf, _tbi ->
+            if (!meta.pheno) {
+                log.warn("Skipping exomiser (single-sample mode) for sample '${meta.id}': no pheno (phenopacket) provided in the samplesheet.")
+                return false
+            }
+            true
+        }
+        .map { meta, vcf, tbi ->
+            def pheno = file(meta.pheno)
+            def analysis_file = meta.sequencingType == "WES" ? exomiser_analysis_wes_path : exomiser_analysis_wgs_path
+            [meta, vcf, tbi, pheno, analysis_file]
+        }
+
+    EXOMISER_SINGLE(
+        ch_exomiser_single_input,
+        exomiser_data_dir,
+        params.exomiser_genome,
+        params.exomiser_data_version,
+        [exomiser_local_frequency_file, exomiser_local_frequency_index_file],
+        params.exomiser_remm_version ? [params.exomiser_remm_version, params.exomiser_remm_filename] : ["", ""],
+        params.exomiser_cadd_version ? [params.exomiser_cadd_version, params.exomiser_cadd_snv_filename, params.exomiser_cadd_indel_filename] : ["", "", ""]
+    )
+
+    //
+    // STAGE 1d -- VEP annotation of each proband's own calls (meta.id = "familyId.sample"), from
+    // the same per-sample VCFs as STAGE 1b: their normalized SVTYPE (DEL/DUP), and a CSQ for each
+    // call's own interval. JOIN_PROBAND_CNV (STAGE 5) then gives them the family's FORMAT. A
+    // proband always has a familyPed, so it never takes STAGE 1b's solo route too. Parents and
+    // unaffected sibs aren't annotated.
+    //
+    VCF_ANNOTATE_ENSEMBLVEP_PROBAND(
+        BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
+            .filter { meta, _vcf -> meta.proband }
+            .map { meta, vcf -> [meta, vcf, []] },
+        [[id: 'reference'], reference_fasta],
+        params.vep_genome,
+        params.vep_species,
+        params.vep_cache_version,
+        vep_cache,
+        []
+    )
+    ch_versions = ch_versions.mix(VCF_ANNOTATE_ENSEMBLVEP_PROBAND.out.versions)
+
+    //
+    // STAGE 2 -- Family merge + cohort truvari collapse (fan-in: meta.id "familyId.sample" -> familyId)
+    //
+    def ch_grouped_by_family = BCFTOOLS_SORT_INDEX_PERSAMPLE.out.vcf
+        .join(BCFTOOLS_SORT_INDEX_PERSAMPLE.out.tbi)
+        .map { meta, vcf, tbi -> tuple(groupKey(meta.familyId, meta.sampleSize), meta, vcf, tbi) }
+        .groupTuple()
+        .map { _familyId, grouped_metas, grouped_vcfs, grouped_tbis ->
+            // groupTuple keeps the order the samples arrive in, which changes from run to run.
+            // Put them in sample-name order: bcftools merge writes its sample columns in input
+            // order, and meta.samples is part of every family-level task's hash, so -resume
+            // would otherwise re-run the merge and everything after it.
+            def by_sample = [grouped_metas as List, grouped_vcfs as List, grouped_tbis as List]
+                .transpose()
+                .sort { entry -> entry[0].sample }
+            def metas = by_sample.collect { entry -> entry[0] }
+            def vcfs = by_sample.collect { entry -> entry[1] }
+            def tbis = by_sample.collect { entry -> entry[2] }
+            // now that samples are grouped together, drop the per-sample-only meta fields and
+            // reset id to the family level. Keep the samples' VCF names (needed to fan back out to
+            // per-sample steps later, e.g. the genotype fill (STAGE 3), whose inputs are
+            // matched to the family VCF's columns by name), and the probands', sorted for the
+            // same reason as the samples.
+            def family_meta = metas[0].findAll { entry -> !["sample", "id", "caller", "cram", "vcfSample", "proband"].contains(entry.key) }
+            family_meta = family_meta + [
+                id: family_meta.familyId,
+                samples: metas.collect { it.vcfSample },
+                probands: metas.findAll { it.proband }.collect { it.vcfSample }.sort()
+            ]
+            [family_meta, vcfs.flatten(), tbis.flatten()]
+        }
+        .filter { meta, _vcfs, _tbis ->
+            // A true family of one (sampleSize==1, no familyPed/familyPheno) has nothing for the
+            // family-level route (merge/cohort-collapse/refine/VEP/exomiser/slivar) to add over
+            // the persample route above (STAGE 1b/1c) -- same gate that route already uses.
+            // Dropped here rather than left to fall out downstream so it doesn't pay for a second
+            // VEP annotation of the same sample's CNVs for no benefit. A documented singleton
+            // (sampleSize==1 but with a real familyPed/familyPheno) still goes through the "solo"
+            // branch below unaffected.
+            !(meta.sampleSize == 1 && !meta.familyPed && !meta.familyPheno)
+        }
+        .branch { meta, vcfs, tbis ->
+            solo: meta.sampleSize == 1
+                return [meta, vcfs[0], tbis[0]]
+            family: meta.sampleSize > 1
+                return [meta, vcfs, tbis]
+        }
+
+    BCFTOOLS_MERGE(ch_grouped_by_family.family)
+
+    def ch_family_vcf = BCFTOOLS_MERGE.out.vcf
+        .join(BCFTOOLS_MERGE.out.tbi)
+        .mix(ch_grouped_by_family.solo)
+
+    TRUVARI_COLLAPSE_COHORT(ch_family_vcf)
+
+    // Copy back the FORMAT of absorbed calls truvari reads as unset (DRAGEN's `./1`, haploid `1`),
+    // which it would otherwise drop with the sample's call -- see RESTORE_COLLAPSED_FORMAT
+    RESTORE_COLLAPSED_FORMAT(TRUVARI_COLLAPSE_COHORT.out.vcf.join(TRUVARI_COLLAPSE_COHORT.out.removed))
+
+    // truvari collapse's output isn't guaranteed sorted/indexed -- see BCFTOOLS_SORT_INDEX
+    BCFTOOLS_SORT_INDEX_COHORT(RESTORE_COLLAPSED_FORMAT.out.vcf)
+
+    //
+    // STAGE 3 -- Fill the family VCF's missing genotypes (./., no CN: a sample with no call in a
+    // record), family-level. Joint families never appear in BCFTOOLS_SORT_INDEX_COHORT.out (they
+    // skipped stages 1-2 above, and joint calling gives every sample a CN), so neither fill runs
+    // for them.
+    //
+    // True solos (sampleSize==1, no familyPed/familyPheno) are excluded from the per-sample
+    // channels here, same predicate as the ch_grouped_by_family filter above: they never reach
+    // BCFTOOLS_SORT_INDEX_COHORT.out (their family route was dropped entirely). Left in, they'd
+    // hand BAM_VCF_DEPTH_GENOTYPE_REFINEMENT a family id with a cram-count but no matching family
+    // VCF -- an orphan its internal `join(..., remainder: true)` doesn't shape-pad correctly, which
+    // crashes downstream with a MissingMethodException instead of a clean skip -- and fail the
+    // segment join below.
+    //
+    def ch_cohort_vcf = BCFTOOLS_SORT_INDEX_COHORT.out.vcf.join(BCFTOOLS_SORT_INDEX_COHORT.out.tbi)
+    def ch_family_samples = ch_persample
+        .filter { meta, _vcf, _cram -> !(meta.sampleSize == 1 && !meta.familyPed && !meta.familyPheno) }
+    def ch_cn_filled
+
+    if (params.get_cn_by_computing_ratio) {
+        //
+        // Depth-based (mosdepth): a hole whose depth ratio reads normal gets GT hom-ref and the
+        // expected CN. Needs every sample's cram; a family without them is left as it is.
+        //
+        BAM_VCF_DEPTH_GENOTYPE_REFINEMENT(
+            ch_cohort_vcf,
+            ch_family_samples
+                .filter { meta, _vcf, cram ->
+                    if (!cram) {
+                        log.warn("Skipping depth-based genotype refinement for sample '${meta.id}': no cram (alignment file) provided in the samplesheet.")
+                    }
+                    cram
+                }
+                .map { meta, _vcf, cram ->
+                    def crai = file("${cram}.crai")
+                    def bai = file("${cram}.bai")
+                    def index = crai.exists() ? crai : (bai.exists() ? bai : [])
+                    // Named after the VCF sample, like meta.samples: DEPTH_GENOTYPE_REFINE matches
+                    // each <name>.ratio.bed to the family VCF's column of that name.
+                    [[id: meta.vcfSample, family: meta.familyId], file(cram), index]
+                },
+            reference_fasta,
+            reference_fasta_fai
+        )
+        ch_cn_filled = BAM_VCF_DEPTH_GENOTYPE_REFINEMENT.out.vcf
+    } else {
+        //
+        // From each sample's own DRAGEN segments (default): its original per-sample VCF, read
+        // before NORMALIZE_CNV drops the REF blocks, gives the CN covering at least half of the
+        // record. GT becomes hom-ref when that CN is the expected one; any other CN (usually the
+        // sample's own call, which the collapse left in another record) is written as CN only.
+        // No cram needed. A family's per-sample VCFs are put in sample-name order: their order is
+        // part of the task's command line, so -resume would otherwise re-run it.
+        //
+        def ch_segment_vcfs = ch_family_samples
+            .map { meta, vcf, _cram -> [meta.familyId, meta.vcfSample, vcf] }
+            .groupTuple()
+            .map { family_id, names, vcfs ->
+                [family_id, [names as List, vcfs as List].transpose().sort { entry -> entry[0] }.collect { entry -> entry[1] }]
+            }
+
+        FILL_CN_FROM_SEGMENTS(
+            ch_cohort_vcf
+                .map { meta, vcf, tbi -> [meta.id, meta, vcf, tbi] }
+                .join(ch_segment_vcfs, failOnMismatch: true, failOnDuplicate: true)
+                .map { _family_id, meta, vcf, tbi, segment_vcfs ->
+                    [meta, vcf, tbi, segment_vcfs, meta.familyPed ? file(meta.familyPed) : []]
+                }
+        )
+
+        // Filling genotypes doesn't reorder records, so this is a plain re-index, not a re-sort.
+        BCFTOOLS_INDEX_CN_FILLED(FILL_CN_FROM_SEGMENTS.out.vcf)
+        ch_cn_filled = BCFTOOLS_INDEX_CN_FILLED.out.vcf_tbi
+    }
+
+    //
+    // STAGE 3b -- Joint-called families: lightweight prep only (drop non-variant records, split
+    // multiallelic sites), no collapse/merge/refinement needed. Rejoins the regular families right
+    // below at the "family-level VCF ready for VEP" point.
+    //
+    def ch_joint_family_meta = ch_samplesheet_branched.joint
+        .map { meta, vcf, _cram ->
+            // Unlike the regular family_meta construction below (which drops 'caller' since it
+            // becomes ambiguous once multiple samples with potentially different callers merge),
+            // NORMALIZE_CNV_JOINT reuses NORMALIZE_CNV's own caller guard, so 'caller' must stay.
+            def family_meta = meta.findAll { entry -> !["sample", "id", "cram"].contains(entry.key) }
+            family_meta = family_meta + [id: family_meta.familyId, samples: vcfSampleNames(vcf), probands: []]
+            [family_meta, vcf]
+        }
+
+    NORMALIZE_CNV_JOINT(ch_joint_family_meta)
+
+    BCFTOOLS_SORT_INDEX_JOINT(NORMALIZE_CNV_JOINT.out.vcf)
+
+    def ch_joint_vcf = BCFTOOLS_SORT_INDEX_JOINT.out.vcf.join(BCFTOOLS_SORT_INDEX_JOINT.out.tbi)
+
+    //
+    // STAGE 3c -- FILTER from the carriers' FORMAT/FT (bin/filter_cnv_carriers.py): PASS when at
+    // least one carrier's FT is PASS, the filters they name otherwise; --cnv_pass_only drops the
+    // records that don't pass. In a joint VCF, FT is DRAGEN's, per sample; on the per-sample
+    // route, each call's FILTER, copied by NORMALIZE_CNV. Run on every family VCF, the
+    // genotype-filled and the joint ones: VEP (STAGE 4) and Exomiser on a family VCF (STAGE 7) read
+    // the result. JOIN_PROBAND_CNV (STAGE 5) reads the unfiltered family VCF, since it stops on a
+    // proband call with no family record; a proband's VCF goes through the same step after it.
+    //
+    FILTER_CNV_CARRIERS_FAMILY(
+        ch_cn_filled
+            .mix(ch_joint_vcf)
+            .map { meta, vcf, _tbi -> [meta, vcf] }
+    )
+
+    //
+    // The family VCFs split here: a family with a proband (meta.probands) goes on to
+    // JOIN_PROBAND_CNV with its probands' VEP VCFs (STAGE 5); the others, with the joint-called
+    // ones, are VEP-annotated as a whole (STAGE 4). A family with a proband gets no family-level
+    // VEP or slivar VCF: CNVs only its parents carry stay in cn_filled/, unannotated.
+    //
+    def ch_family_vcf_with_proband = ch_cn_filled
+        .filter { meta, _vcf, _tbi -> meta.probands }
+
+    def ch_family_vcf_for_vep = FILTER_CNV_CARRIERS_FAMILY.out.vcf_tbi
+        .filter { meta, _vcf, _tbi -> !meta.probands }
+
+    //
+    // STAGE 4 -- VEP annotation, family-level, for families without a proband (AnnotSV/
+    // ClassifyCNV/vcfanno dropped per team update 2026-09-04 -- VEP's own CSQ output is the final
+    // annotated VCF, nothing to merge)
+    //
+    // Pinned to the sibling SNV pipeline's exact vendored commits (vcf_annotate_ensemblvep
+    // cfd937a6, ensemblvep/vep 6e3585d9, tabix/tabix 66665215) rather than nf-core/modules'
+    // current HEAD: the freshly-vendored ensemblvep/vep doesn't compile under Nextflow 24.10.5
+    // ("Variable prefix already defined in the process scope") -- confirmed directly, and
+    // confirmed the sibling's older pinned commit (predating that upstream refactor) doesn't
+    // have the issue. `cache` is a plain path here, not a [meta,cache] tuple (verified directly
+    // against this exact module revision -- the subworkflow's own inline comment for ch_cache is
+    // stale/inaccurate).
+    VCF_ANNOTATE_ENSEMBLVEP(
+        ch_family_vcf_for_vep.map { meta, vcf, _tbi -> [meta, vcf, []] },
+        [[id: 'reference'], reference_fasta],
+        params.vep_genome,
+        params.vep_species,
+        params.vep_cache_version,
+        vep_cache,
+        []
+    )
+    ch_versions = ch_versions.mix(VCF_ANNOTATE_ENSEMBLVEP.out.versions)
+
+    //
+    // STAGE 5 -- One VCF per proband: its own VEP-annotated calls (STAGE 1d), each with the FORMAT
+    // of the family record its FORMAT/OID names (bin/join_proband_cnv.py). The family's
+    // truvari-kept record, often a parent's call, would otherwise give the proband's CNVs another
+    // interval, ID and INFO. Matched on familyId; meta.proband is the proband's VCF sample name.
+    //
+    def ch_join_proband_input = ch_family_vcf_with_proband
+        .map { meta, vcf, tbi -> [meta.familyId, meta, vcf, tbi] }
+        .combine(
+            VCF_ANNOTATE_ENSEMBLVEP_PROBAND.out.vcf_tbi.map { meta, vcf, tbi -> [meta.familyId, meta.vcfSample, vcf, tbi] },
+            by: 0
+        )
+        .map { _familyId, meta, vcf, tbi, proband, proband_vcf, proband_tbi -> [meta + [proband: proband], vcf, tbi, proband_vcf, proband_tbi] }
+
+    JOIN_PROBAND_CNV(ch_join_proband_input)
+
+    // FILTER from the carriers' FORMAT/FT, as for the family VCFs (STAGE 3c). The proband's own
+    // call's FILTER gives way to the family record's carriers: a parent's matching call may pass.
+    FILTER_CNV_CARRIERS_PROBAND(JOIN_PROBAND_CNV.out.vcf_tbi.map { meta, vcf, _tbi -> [meta, vcf] })
+
+    //
+    // STAGE 6 -- Slivar mode-of-inheritance classification, on each proband VCF (STAGE 5), or on
+    // the VEP-annotated family VCF of a family without a proband (STAGE 4).
+    // The rules in assets/cnv-slivar-functions.js decide per child (cnv_moi, cn_po_origin); the
+    // mode-of-inheritance tags go on the family (--family-expr, as in the SNV pipeline) and the
+    // parent-of-origin tags on the child (--sample-expr). They handle any family shape the PED
+    // describes (trios, duos, singletons, sibships): TRIO_TABLE decides what each shape supports,
+    // e.g. the possible_* tags for duos. No family-shape pre-check needed here, matching the
+    // sibling SNV pipeline's convention -- only familyPed presence is required. The PED is checked
+    // against this family VCF's sample names, though (validatePedAgainstVcf): slivar silently
+    // mishandles a PED that doesn't match. So is FORMAT/CN, which the rules read: without it,
+    // slivar tags nothing (vcfFormatIds). The checks stay here rather than in a subworkflow, so
+    // module and subworkflow tests can still feed slivar deliberately inconsistent PEDs.
+    //
+    def ch_slivar_input = FILTER_CNV_CARRIERS_PROBAND.out.vcf_tbi
+        .mix(VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi)
+        .filter { meta, _vcf, _tbi ->
+            if (!meta.familyPed) {
+                log.warn("Skipping slivar inheritance classification for family '${meta.id}': no familyPed (PED file) provided in the samplesheet.")
+                return false
+            }
+            true
+        }
+        .map { meta, vcf, tbi ->
+            if (!('CN' in vcfFormatIds(vcf))) {
+                error("Family '${meta.id}': the family VCF declares no FORMAT/CN (${vcf.name}). The slivar rules read copy number from FORMAT/CN only; without it slivar would write every record with no inheritance or parental-origin tag. Check the caller's VCFs.")
+            }
+            def ped = file(meta.familyPed)
+            validatePedAgainstVcf(meta.id, vcf, ped, params.skip_ped_validation)
+            [meta, vcf, tbi, ped]
+        }
+
+    SLIVAR_EXPR(ch_slivar_input, slivar_js)
+
+    // Slivar's own output isn't indexed -- this is the pipeline's last file, so index it here
+    // rather than leave that as a manual step for whoever consumes it next. Rewriting INFO tags
+    // doesn't reorder records, so this is a plain re-index, not a re-sort (same reasoning as
+    // BCFTOOLS_INDEX's other use after DEPTH_GENOTYPE_REFINE).
+    BCFTOOLS_INDEX_SLIVAR(SLIVAR_EXPR.out.vcf)
+
+    //
+    // STAGE 7 -- Exomiser, family mode. A family whose familyPheno phenopacket is about one of its
+    // probands (proband.subject.id) runs on that proband's slivar VCF (STAGE 6): the proband's own
+    // calls and intervals, with the family's FORMAT for its pedigree analysis. Any other family
+    // (no proband, DRAGEN_JOINT, no familyPed, a phenopacket about another sample) runs on its
+    // family VCF, the genotype-filled or the joint one, through FILTER_CNV_CARRIERS (STAGE 3c).
+    // Families without familyPheno stay in the family channel, so EXOMISER_WORKFLOW drops them
+    // with its warning.
+    //
+    def ch_exomiser_proband = BCFTOOLS_INDEX_SLIVAR.out.vcf_tbi
+        .filter { meta, _vcf, _tbi -> meta.proband && meta.familyPheno && meta.proband == phenopacketProbandId(file(meta.familyPheno)) }
+
+    def ch_exomiser_family = FILTER_CNV_CARRIERS_FAMILY.out.vcf_tbi
+        .filter { meta, _vcf, _tbi -> !(meta.familyPheno && phenopacketProbandId(file(meta.familyPheno)) in meta.probands) }
+
     EXOMISER_WORKFLOW(
-        ch_samplesheet,
+        ch_exomiser_proband.mix(ch_exomiser_family),
         params.exomiser_genome,
         params.exomiser_data_version,
         exomiser_data_dir,
@@ -80,18 +550,34 @@ workflow CNV_POST_PROCESSING {
         params.exomiser_cadd_snv_filename,
         params.exomiser_cadd_indel_filename
     )
-    ch_versions = ch_versions.mix(EXOMISER_WORKFLOW.out.versions)
 
     //
     // Collate and save software versions
     //
-    softwareVersionsToYAML(ch_versions)
+    topic_versions = channel.topic("versions")
+        .distinct()
+        .branch { entry ->
+            versions_file: entry instanceof Path
+            versions_tuple: true
+        }
+
+    def topic_versions_string = topic_versions.versions_tuple
+        .map { process, tool, version ->
+            [ process[process.lastIndexOf(':')+1..-1], "  ${tool}: ${version}" ]
+        }
+        .groupTuple(by:0)
+        .map { process, tool_versions ->
+            tool_versions.unique().sort()
+            "${process}:\n${tool_versions.join('\n')}"
+        }
+    ch_collated_versions = softwareVersionsToYAML(ch_versions.mix(topic_versions.versions_file))
+        .mix(topic_versions_string)
         .collectFile(
             storeDir: "${params.outdir}/pipeline_info",
             name:  'cnv-post-processing_software_'  + 'versions.yml',
             sort: true,
             newLine: true
-        ).set { ch_collated_versions }
+        )
 
 
     emit:

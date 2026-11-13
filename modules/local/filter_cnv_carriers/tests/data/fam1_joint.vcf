@@ -1,0 +1,38 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=248956422>
+##ALT=<ID=CNV,Description="Copy number variant region">
+##ALT=<ID=DEL,Description="Region of lowered copy number relative to the reference, or a deletion breakpoint">
+##ALT=<ID=DUP,Description="Region of elevated copy number relative to the reference, or a tandem duplication breakpoint">
+##INFO=<ID=REFLEN,Number=1,Type=Integer,Description="Number of REF positions included in this record">
+##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS">
+##INFO=<ID=CIEND,Number=2,Type=Integer,Description="Confidence interval around END">
+##INFO=<ID=GCP,Number=1,Type=Float,Description="GC percentage">
+##INFO=<ID=CTP,Number=1,Type=Float,Description="CT percentage">
+##INFO=<ID=ACP,Number=1,Type=Float,Description="AC percentage">
+##FILTER=<ID=SampleFT,Description="No sample passes all the sample-level filters (at the field FORMAT/FT)">
+##FILTER=<ID=cnvLength,Description="CNV with length below 10000">
+##FILTER=<ID=cnvQual,Description="CNV with quality below 10">
+##FILTER=<ID=cnvBinSupportRatio,Description="CNV with low supporting number of bins with respect to event length">
+##FILTER=<ID=cnvCopyRatio,Description="CNV with copy ratio within +/- 0.2 of 1.0">
+##FILTER=<ID=dinucQual,Description="CNV outside confident dinucleotide ranges (gc_lower, gc_upper, ct_lower, ct_upper, ac_lower, ac_upper)=(0.25, 0.65, 0.3, 0.7, 0.3, 0.7)">
+##FILTER=<ID=highCN,Description="CNV with a high CN > 6">
+##FILTER=<ID=cnvLikelihoodRatio,Description="CNV with a log likelihood ratio < 5.0. The filter is applied to CNV with a bin count > 2">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=SM,Number=1,Type=Float,Description="Linear copy ratio of the segment mean">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Estimated copy number">
+##FORMAT=<ID=BC,Number=1,Type=Integer,Description="Number of bins in the region">
+##FORMAT=<ID=PE,Number=2,Type=Integer,Description="Number of improperly paired end reads at start and stop breakpoints">
+##FORMAT=<ID=LR,Number=1,Type=Float,Description="Log10 likelihood ratio of ALT to REF">
+##FORMAT=<ID=QS,Number=1,Type=Integer,Description="Phred-scaled quality score. For a copy neutral genotype this is -10log10(prob(deletion or duplication)). For a deletion genotype this is -10log10(prob(neutral or duplication)). For a duplication genotype this is -10log10(prob(neutral or deletion)).">
+##FORMAT=<ID=FT,Number=1,Type=String,Description="Sample filter, 'PASS' indicates that all filters have passed for this sample">
+##FORMAT=<ID=DQ,Number=1,Type=Float,Description="De novo quality">
+##FORMAT=<ID=DN,Number=1,Type=String,Description="Possible values are 'Inherited', 'DeNovo' or 'LowDQ'. Threshold for a passing de novo call is DQ > 0.125000">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NA12878	NA12891	NA12892
+chr1	4063702	DRAGEN:LOSS:chr1:4063703-4064940	N	<DEL>	.	SampleFT	SVLEN=-1238;SVTYPE=CNV;END=4064940;REFLEN=1238;GCP=0.513;CTP=0.578;ACP=0.614	GT:SM:CN:BC:PE:QS:FT:DN:LR	0/1:0.480586:1:1:3,0:21:cnvLength:Inherited:2.1	0/1:0.35441:1:1:1,0:25:cnvLength:.:2.5	0/1:0.384294:1:1:3,2:22:cnvLength:.:2.2
+chr1	13225212	DRAGEN:GAIN:chr1:13225213-13247040	N	<DUP>	.	PASS	SVLEN=21828;SVTYPE=CNV;END=13247040;REFLEN=21828;GCP=0.469;CTP=0.487;ACP=0.506	GT:SM:CN:BC:PE:QS:FT:DN:LR	./1:2.09695:4:9:7,4:75:PASS:Inherited:43.0	./1:2.03668:4:9:10,3:72:PASS:.:40.0	./1:2.01824:4:9:11,4:66:PASS:.:40.1
+chr1	15823963	DRAGEN:LOSS:chr1:15823964-15825729	N	<DEL>	.	PASS	SVLEN=-1766;SVTYPE=CNV;END=15825729;REFLEN=1766;GCP=0.505;CTP=0.473;ACP=0.502	GT:SM:CN:BC:PE:QS:FT:DN:LR	./.:0.763789:2:1:13,12:6:cnvLength;cnvQual:Inherited:0.0	0/1:0.531615:1:1:42,38:18:cnvLength:.:1.8	./.:1.0274:2:2711:0,2:78:PASS:.:0.0
+chr1	15825729	DRAGEN:LOSS:chr1:15825730-15828479	N	<DEL>	.	PASS	SVLEN=-2750;SVTYPE=CNV;END=15828479;REFLEN=2750;GCP=0.487;CTP=0.535;ACP=0.516	GT:SM:CN:BC:PE:QS:FT:DN:LR	0/1:0.566389:1:2:12,12:19:cnvLength:Inherited:3.1	1/1:1.00097e-09:0:2:38,34:60:cnvLength:.:10.5	./.:1.0274:2:2711:0,2:78:PASS:.:0.0
+chr1	248647941	DRAGEN:LOSS:chr1:248647942-248650157	N	<DEL>	.	PASS	SVLEN=-2216;SVTYPE=CNV;END=248650157;REFLEN=2216;GCP=0.405;CTP=0.502;ACP=0.499	GT:SM:CN:BC:PE:QS:FT:DN:LR	0/1:0.440818:1:1:1,0:23:cnvLength:Inherited:2.3	0/1:0.491542:1:53:0,1:55:PASS:.:102.5	./.:0.902146:2:1:6,2:14:cnvLength:.:0.0

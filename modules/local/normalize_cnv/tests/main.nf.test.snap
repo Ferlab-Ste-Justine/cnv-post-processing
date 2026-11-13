@@ -1,0 +1,26 @@
+{
+    "DRAGEN per-sample VCF - drops ALT=\".\" ref-blocks, keeps real CNV calls": {
+        "content": [
+            [
+                "versions.yml:md5,104198dca2e45b1818225bc83806b7b2"
+            ]
+        ],
+        "timestamp": "2026-09-23T17:40:43.745415496",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    },
+    "DRAGEN_JOINT multi-sample VCF - splits multiallelic sites, strips SVLEN": {
+        "content": [
+            [
+                "versions.yml:md5,104198dca2e45b1818225bc83806b7b2"
+            ]
+        ],
+        "timestamp": "2026-09-23T17:39:39.419924268",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}
