@@ -1,0 +1,20 @@
+{
+    "id": "family1",
+    "proband": {
+        "subject": {
+            "id": "kid",
+            "sex": "MALE"
+        }
+    },
+    "pedigree": {
+        "persons": [
+            {
+                "individualId": "kid",
+                "paternalId": "dad",
+                "maternalId": "mom",
+                "sex": "MALE",
+                "affectedStatus": "AFFECTED"
+            }
+        ]
+    }
+}

@@ -1,0 +1,84 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE validateInputSamplesheet function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "validateInputSamplesheet"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    // input[0] is one samplesheet row, [meta, vcf, cram]. The paths aren't read, so they don't
+    // have to exist.
+
+    test("Test Function validateInputSamplesheet - a valid row is returned unchanged") {
+        when {
+            function {
+                """
+                input[0] = [[familyId: "fam1", sample: "NA12878", caller: "DRAGEN", familyPed: "fam1.ped", pheno: null], "kid.vcf.gz", "kid.cram"]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == [[familyId: "fam1", sample: "NA12878", caller: "DRAGEN", familyPed: "fam1.ped", pheno: null], "kid.vcf.gz", "kid.cram"] }
+            )
+        }
+    }
+
+    test("Test Function validateInputSamplesheet - a DRAGEN_JOINT row with a pheno fails") {
+        // A joint row skips the per-sample chain single-sample Exomiser reads from, so its pheno
+        // would never be used.
+        when {
+            function {
+                """
+                input[0] = [[familyId: "fam1_joint", sample: "trio", caller: "DRAGEN_JOINT", familyPed: null, pheno: "kid.yaml"], "trio.vcf.gz", []]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.failed },
+                { assert function.stdout.any { it.contains("Sample 'trio' (family 'fam1_joint'): caller='DRAGEN_JOINT' rows don't go through the per-sample chain") } }
+            )
+        }
+    }
+
+    test("Test Function validateInputSamplesheet - a familyPed with vep_genome GRCh37 fails") {
+        when {
+            params {
+                vep_genome = "GRCh37"
+            }
+            function {
+                """
+                input[0] = [[familyId: "fam1", sample: "NA12878", caller: "DRAGEN", familyPed: "fam1.ped", pheno: null], "kid.vcf.gz", []]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.failed },
+                { assert function.stdout.any { it.contains("Family 'fam1' has a familyPed, so slivar will classify it, but vep_genome is 'GRCh37'") } }
+            )
+        }
+    }
+
+    test("Test Function validateInputSamplesheet - vep_genome GRCh37 without a familyPed passes") {
+        // No slivar, so the GRCh38 PARs don't matter.
+        when {
+            params {
+                vep_genome = "GRCh37"
+            }
+            function {
+                """
+                input[0] = [[familyId: "ind1", sample: "NA12878", caller: "DRAGEN", familyPed: null, pheno: "kid.yaml"], "kid.vcf.gz", []]
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success }
+            )
+        }
+    }
+}

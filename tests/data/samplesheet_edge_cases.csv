@@ -1,0 +1,12 @@
+familyId,sample,sequencingType,caller,vcf,cram,pheno,familyPheno,familyPed
+famA,child,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+famA,father,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,data-test/cram/NA12891.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+famA,mother,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,data-test/cram/NA12892.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,data-test/ped/trio_NA12878_91_92.ped
+famB,NA12878,WGS,DRAGEN,tests/data/NA12878.empty.chr22.cnv.vcf.gz,,,tests/data/trio_NA12891_proband.yaml,data-test/ped/trio_NA12878_91_92.ped
+famB,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,,,tests/data/trio_NA12891_proband.yaml,data-test/ped/trio_NA12878_91_92.ped
+famB,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,,,tests/data/trio_NA12891_proband.yaml,data-test/ped/trio_NA12878_91_92.ped
+famD,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,,tests/data/NA12878_solo_family.yaml,tests/data/NA12878_solo.ped
+famF,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,,,tests/data/quartet_NA12878.yaml,tests/data/quartet_NA12878.ped
+famF,NA12878_sib,WGS,DRAGEN,tests/data/NA12878_sib.chr22.cnv.vcf.gz,,,tests/data/quartet_NA12878.yaml,tests/data/quartet_NA12878.ped
+famF,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,,,tests/data/quartet_NA12878.yaml,tests/data/quartet_NA12878.ped
+famF,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,,,tests/data/quartet_NA12878.yaml,tests/data/quartet_NA12878.ped

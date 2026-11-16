@@ -1,0 +1,4 @@
+familyId,sample,sequencingType,caller,vcf,cram,pheno,familyPheno,familyPed
+fam1,NA12878,WGS,DRAGEN,data-test/vcf/NA12878.chr22.cnv.vcf.gz,data-test/cram/NA12878.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,tests/data/trio_NA12878_unaffected.ped
+fam1,NA12891,WGS,DRAGEN,data-test/vcf/NA12891.chr22.cnv.vcf.gz,data-test/cram/NA12891.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,tests/data/trio_NA12878_unaffected.ped
+fam1,NA12892,WGS,DRAGEN,data-test/vcf/NA12892.chr22.cnv.vcf.gz,data-test/cram/NA12892.chr22.cram,,data-test/pheno/trio_NA12878_91_92.yaml,tests/data/trio_NA12878_unaffected.ped

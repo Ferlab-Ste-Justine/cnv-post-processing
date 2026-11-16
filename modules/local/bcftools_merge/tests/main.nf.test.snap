@@ -1,0 +1,14 @@
+{
+    "NA12878/NA12891/NA12892 trio - merge into one family VCF": {
+        "content": [
+            [
+                "versions.yml:md5,7845369c80c2935a8858572b1605127f"
+            ]
+        ],
+        "timestamp": "2026-09-23T17:53:52.421781543",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

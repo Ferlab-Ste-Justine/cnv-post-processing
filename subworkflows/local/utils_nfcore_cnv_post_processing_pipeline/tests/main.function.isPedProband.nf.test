@@ -1,0 +1,149 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE isPedProband function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "isPedProband"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    // valid.ped: kid (trio), duokid (mother only) and duokid2 (father only) are affected children;
+    // solo1 is affected but has no parent named, so it's a founder.
+
+    test("Test Function isPedProband - a trio's affected child is a proband") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/valid.ped", checkIfExists: true)
+                input[1] = "kid"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == true }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - a duo's affected child is a proband, mother or father") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/valid.ped", checkIfExists: true)
+                input[1] = "duokid2"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == true }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - an unaffected child isn't") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/modules/local/slivar_expr/tests/data/famD.ped", checkIfExists: true)
+                input[1] = "famD_kid"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == false }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - an affected founder isn't") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/valid.ped", checkIfExists: true)
+                input[1] = "solo1"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == false }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - an affected parent isn't") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/modules/local/slivar_expr/tests/data/famB.ped", checkIfExists: true)
+                input[1] = "famB_mom"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == false }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - a sample the PED doesn't name isn't") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/valid.ped", checkIfExists: true)
+                input[1] = "nobody"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == false }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - each of two affected sibs is a proband") {
+        // famQ_kid and famQ_sib are both affected children of famQ_dad and famQ_mom
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/modules/local/slivar_expr/tests/data/famQ.ped", checkIfExists: true)
+                input[1] = "famQ_sib"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == true }
+            )
+        }
+    }
+
+    test("Test Function isPedProband - no PED, no proband") {
+        when {
+            function {
+                """
+                input[0] = null
+                input[1] = "kid"
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == false }
+            )
+        }
+    }
+}

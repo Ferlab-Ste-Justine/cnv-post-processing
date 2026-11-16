@@ -1,0 +1,259 @@
+{
+    "-profile test": {
+        "content": [
+            {
+                "BCFTOOLS_INDEX_CN_FILLED": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_INDEX_SLIVAR": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_MERGE": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_SORT_INDEX_COHORT": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_SORT_INDEX_JOINT": {
+                    "bcftools": "1.23.1"
+                },
+                "BCFTOOLS_SORT_INDEX_PERSAMPLE": {
+                    "bcftools": "1.23.1"
+                },
+                "ENSEMBLVEP_VEP": {
+                    "ensemblvep": 114.2
+                },
+                "EXOMISER": {
+                    "exomiser": "14.0.0"
+                },
+                "EXOMISER_SINGLE": {
+                    "exomiser": "14.0.0"
+                },
+                "FILL_CN_FROM_SEGMENTS": {
+                    "pysam": "0.24.0"
+                },
+                "FILTER_CNV_CARRIERS_FAMILY": {
+                    "pysam": "0.24.0"
+                },
+                "FILTER_CNV_CARRIERS_PROBAND": {
+                    "pysam": "0.24.0"
+                },
+                "FILTER_CNV_CARRIERS_SOLO": {
+                    "pysam": "0.24.0"
+                },
+                "JOIN_PROBAND_CNV": {
+                    "pysam": "0.24.0"
+                },
+                "NORMALIZE_CNV": {
+                    "bcftools": "1.23.1"
+                },
+                "NORMALIZE_CNV_JOINT": {
+                    "bcftools": "1.23.1"
+                },
+                "RESTORE_COLLAPSED_FORMAT": {
+                    "pysam": "0.24.0"
+                },
+                "SLIVAR_EXPR": {
+                    "slivar": "0.3.1"
+                },
+                "TABIX_TABIX": {
+                    "tabix": 1.2
+                },
+                "TRUVARI_COLLAPSE_COHORT": {
+                    "truvari": "5.4.0"
+                },
+                "TRUVARI_COLLAPSE_PERSAMPLE": {
+                    "truvari": "5.4.0"
+                },
+                "Workflow": {
+                    "Ferlab-Ste-Justine/cnv-post-processing": "v2.0.0"
+                }
+            },
+            [
+                "cn_filled",
+                "cn_filled/fam1.cn_filled.vcf.gz",
+                "cn_filled/fam1.cn_filled.vcf.gz.tbi",
+                "ensemblvep",
+                "ensemblvep/variants.fam1.NA12878.cnv.vep.vcf.gz",
+                "ensemblvep/variants.fam1.NA12878.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.fam1_joint.cnv.vep.vcf.gz",
+                "ensemblvep/variants.fam1_joint.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.ind1.NA12878_ind.cnv.vep.vcf.gz",
+                "ensemblvep/variants.ind1.NA12878_ind.cnv.vep.vcf.gz.tbi",
+                "exomiser",
+                "exomiser/fam1.NA12878.exomiser.genes.tsv",
+                "exomiser/fam1.NA12878.exomiser.html",
+                "exomiser/fam1.NA12878.exomiser.json",
+                "exomiser/fam1.NA12878.exomiser.variants.tsv",
+                "exomiser/fam1.NA12878.exomiser.vcf.gz",
+                "exomiser/fam1.NA12878.exomiser.vcf.gz.tbi",
+                "exomiser/fam1_joint.exomiser.genes.tsv",
+                "exomiser/fam1_joint.exomiser.html",
+                "exomiser/fam1_joint.exomiser.json",
+                "exomiser/fam1_joint.exomiser.variants.tsv",
+                "exomiser/fam1_joint.exomiser.vcf.gz",
+                "exomiser/fam1_joint.exomiser.vcf.gz.tbi",
+                "exomiser/single_sample",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.genes.tsv",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.html",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.json",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.variants.tsv",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.vcf.gz",
+                "exomiser/single_sample/ind1.NA12878_ind.exomiser.vcf.gz.tbi",
+                "joint",
+                "joint/fam1_joint.sorted.vcf.gz",
+                "joint/fam1_joint.sorted.vcf.gz.tbi",
+                "merged",
+                "merged/fam1.merged.vcf.gz",
+                "merged/fam1.merged.vcf.gz.tbi",
+                "pipeline_info",
+                "pipeline_info/cnv-post-processing_software_versions.yml",
+                "pipeline_info/configs",
+                "pipeline_info/configs/nextflow.config",
+                "pipeline_info/nextflow.log",
+                "slivar",
+                "slivar/fam1.NA12878.cnv.slivar.vcf.gz",
+                "slivar/fam1.NA12878.cnv.slivar.vcf.gz.tbi",
+                "slivar/fam1_joint.cnv.slivar.vcf.gz",
+                "slivar/fam1_joint.cnv.slivar.vcf.gz.tbi",
+                "truvari",
+                "truvari/fam1.sorted.vcf.gz",
+                "truvari/fam1.sorted.vcf.gz.tbi"
+            ],
+            [
+                "fam1.NA12878.cnv.slivar.vcf.gz:md5,15fa30fd02838211b97b84829adfb7b3",
+                "fam1.NA12878.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "fam1.cn_filled.vcf.gz:md5,7b12a6caa21a7786a8524bcb41d27099",
+                "fam1.merged.vcf.gz:md5,59658f01b829e3de29069e35705d05d1",
+                "fam1.sorted.vcf.gz:md5,53bc87b6d3972fdd22b1d8dfad0eeba1",
+                "fam1_joint.cnv.slivar.vcf.gz:md5,344a0f265c86588d18156ddcbe4aca5c",
+                "fam1_joint.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "fam1_joint.sorted.vcf.gz:md5,44066ca7c5332a2cc84e9b42b405849c",
+                "ind1.NA12878_ind.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "variants.fam1.NA12878.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b",
+                "variants.fam1_joint.cnv.vep.vcf.gz:md5,b587cb84d1fe909bf6a9624625e52bff",
+                "variants.ind1.NA12878_ind.cnv.vep.vcf.gz:md5,f9fc527083d7037b9b7ec2ea9de22b20"
+            ]
+        ],
+        "timestamp": "2026-11-12T02:46:09.739969887",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    },
+    "-profile test, edge-case families": {
+        "content": [
+            [
+                "cn_filled",
+                "cn_filled/famA.cn_filled.vcf.gz",
+                "cn_filled/famA.cn_filled.vcf.gz.tbi",
+                "cn_filled/famB.cn_filled.vcf.gz",
+                "cn_filled/famB.cn_filled.vcf.gz.tbi",
+                "cn_filled/famD.cn_filled.vcf.gz",
+                "cn_filled/famD.cn_filled.vcf.gz.tbi",
+                "cn_filled/famF.cn_filled.vcf.gz",
+                "cn_filled/famF.cn_filled.vcf.gz.tbi",
+                "ensemblvep",
+                "ensemblvep/variants.famA.child.cnv.vep.vcf.gz",
+                "ensemblvep/variants.famA.child.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.famB.NA12878.cnv.vep.vcf.gz",
+                "ensemblvep/variants.famB.NA12878.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.famD.cnv.vep.vcf.gz",
+                "ensemblvep/variants.famD.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.famF.NA12878.cnv.vep.vcf.gz",
+                "ensemblvep/variants.famF.NA12878.cnv.vep.vcf.gz.tbi",
+                "ensemblvep/variants.famF.NA12878_sib.cnv.vep.vcf.gz",
+                "ensemblvep/variants.famF.NA12878_sib.cnv.vep.vcf.gz.tbi",
+                "exomiser",
+                "exomiser/famA.NA12878.exomiser.genes.tsv",
+                "exomiser/famA.NA12878.exomiser.html",
+                "exomiser/famA.NA12878.exomiser.json",
+                "exomiser/famA.NA12878.exomiser.variants.tsv",
+                "exomiser/famA.NA12878.exomiser.vcf.gz",
+                "exomiser/famA.NA12878.exomiser.vcf.gz.tbi",
+                "exomiser/famB.exomiser.genes.tsv",
+                "exomiser/famB.exomiser.html",
+                "exomiser/famB.exomiser.json",
+                "exomiser/famB.exomiser.variants.tsv",
+                "exomiser/famB.exomiser.vcf.gz",
+                "exomiser/famB.exomiser.vcf.gz.tbi",
+                "exomiser/famD.exomiser.genes.tsv",
+                "exomiser/famD.exomiser.html",
+                "exomiser/famD.exomiser.json",
+                "exomiser/famD.exomiser.variants.tsv",
+                "exomiser/famD.exomiser.vcf.gz",
+                "exomiser/famD.exomiser.vcf.gz.tbi",
+                "exomiser/famF.NA12878.exomiser.genes.tsv",
+                "exomiser/famF.NA12878.exomiser.html",
+                "exomiser/famF.NA12878.exomiser.json",
+                "exomiser/famF.NA12878.exomiser.variants.tsv",
+                "exomiser/famF.NA12878.exomiser.vcf.gz",
+                "exomiser/famF.NA12878.exomiser.vcf.gz.tbi",
+                "merged",
+                "merged/famA.merged.vcf.gz",
+                "merged/famA.merged.vcf.gz.tbi",
+                "merged/famB.merged.vcf.gz",
+                "merged/famB.merged.vcf.gz.tbi",
+                "merged/famF.merged.vcf.gz",
+                "merged/famF.merged.vcf.gz.tbi",
+                "pipeline_info",
+                "pipeline_info/cnv-post-processing_software_versions.yml",
+                "pipeline_info/configs",
+                "pipeline_info/configs/nextflow.config",
+                "pipeline_info/nextflow.log",
+                "slivar",
+                "slivar/famA.NA12878.cnv.slivar.vcf.gz",
+                "slivar/famA.NA12878.cnv.slivar.vcf.gz.tbi",
+                "slivar/famB.NA12878.cnv.slivar.vcf.gz",
+                "slivar/famB.NA12878.cnv.slivar.vcf.gz.tbi",
+                "slivar/famD.cnv.slivar.vcf.gz",
+                "slivar/famD.cnv.slivar.vcf.gz.tbi",
+                "slivar/famF.NA12878.cnv.slivar.vcf.gz",
+                "slivar/famF.NA12878.cnv.slivar.vcf.gz.tbi",
+                "slivar/famF.NA12878_sib.cnv.slivar.vcf.gz",
+                "slivar/famF.NA12878_sib.cnv.slivar.vcf.gz.tbi",
+                "truvari",
+                "truvari/famA.sorted.vcf.gz",
+                "truvari/famA.sorted.vcf.gz.tbi",
+                "truvari/famB.sorted.vcf.gz",
+                "truvari/famB.sorted.vcf.gz.tbi",
+                "truvari/famD.sorted.vcf.gz",
+                "truvari/famD.sorted.vcf.gz.tbi",
+                "truvari/famF.sorted.vcf.gz",
+                "truvari/famF.sorted.vcf.gz.tbi"
+            ],
+            [
+                "famA.NA12878.cnv.slivar.vcf.gz:md5,15fa30fd02838211b97b84829adfb7b3",
+                "famA.NA12878.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "famA.cn_filled.vcf.gz:md5,7b12a6caa21a7786a8524bcb41d27099",
+                "famA.merged.vcf.gz:md5,59658f01b829e3de29069e35705d05d1",
+                "famA.sorted.vcf.gz:md5,53bc87b6d3972fdd22b1d8dfad0eeba1",
+                "famB.NA12878.cnv.slivar.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "famB.cn_filled.vcf.gz:md5,234fb87692bc901704481c316286fab6",
+                "famB.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "famB.merged.vcf.gz:md5,e878fb4dac5c3fcd7647b942e97f3409",
+                "famB.sorted.vcf.gz:md5,b2e6252a78e6003a0a5a2cb0b108b23e",
+                "famD.cn_filled.vcf.gz:md5,31d1ace80b5f5c7abce8ab0c49036fbb",
+                "famD.cnv.slivar.vcf.gz:md5,9c135ed15df092388b1abc66eec1a01f",
+                "famD.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "famD.sorted.vcf.gz:md5,31d1ace80b5f5c7abce8ab0c49036fbb",
+                "famF.NA12878.cnv.slivar.vcf.gz:md5,bb7fa0e77f8a7e6d464c4a13747e86a",
+                "famF.NA12878.exomiser.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "famF.NA12878_sib.cnv.slivar.vcf.gz:md5,bb7fa0e77f8a7e6d464c4a13747e86a",
+                "famF.cn_filled.vcf.gz:md5,ab99d229722d0d4bd168899487a26988",
+                "famF.merged.vcf.gz:md5,daeb82bf5b14104c2172bbf43f86ef01",
+                "famF.sorted.vcf.gz:md5,afdb0af7b0a18ca799d579c59c32ba9f",
+                "variants.famA.child.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b",
+                "variants.famB.NA12878.cnv.vep.vcf.gz:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "variants.famD.cnv.vep.vcf.gz:md5,f9fc527083d7037b9b7ec2ea9de22b20",
+                "variants.famF.NA12878.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b",
+                "variants.famF.NA12878_sib.cnv.vep.vcf.gz:md5,c1991152b5a6acd37edbc0d0405deb0b"
+            ]
+        ],
+        "timestamp": "2026-11-12T02:48:42.047498045",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

@@ -1,0 +1,15 @@
+{
+    "id": "ind1",
+    "subject": {
+        "id": "NA12878_ind",
+        "sex": "FEMALE"
+    },
+    "phenotypicFeatures": [
+        {
+            "type": {
+                "id": "HP:0001159",
+                "label": "Syndactyly"
+            }
+        }
+    ]
+}

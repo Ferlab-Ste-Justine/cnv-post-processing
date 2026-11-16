@@ -1,0 +1,182 @@
+                                   +-----------------------+
+                                   | samplesheet (--input) |
+                                   +-----------+-----------+
+                                               |
+                +------------------------------+------------------------------+
+                v                                                             v
+  +----------------------------+                                +----------------------------+
+  | caller = DRAGEN            |                                | caller = DRAGEN_JOINT      |
+  | (one row per SAMPLE)       |                                | (one row per FAMILY)       |
+  +-------------+--------------+                                +-------------+--------------+
+                v                                                             v
+  +----------------------------+                                +----------------------------+
+  | NORMALIZE_CNV (per sample) |                                | NORMALIZE_CNV_JOINT        |
+  | drop ALT="." (REF blocks)  |                                | (per family, joint VCF)    |
+  | sort, split multiallelic   |                                | same steps as on the left, |
+  | SVTYPE=CNV -> DUP/DEL      |                                | + strip INFO/SVLEN (DRAGEN |
+  | ID -> FORMAT/OID           |                                |  joint Number=. bug); no   |
+  | FILTER -> FORMAT/FT        |                                |  OID, FT is DRAGEN's own   |
+  +-------------+--------------+                                | -> BCFTOOLS_SORT_INDEX_    |
+                v                                               |    JOINT                   |
+  +----------------------------+                                | -> FILTER_CNV_CARRIERS     |
+  | TRUVARI_COLLAPSE_PERSAMPLE |                                +------+--------------+------+
+  | (dedup within one sample)  |                                       |              |
+  | -> BCFTOOLS_SORT_INDEX_    |                                       v              v
+  |    PERSAMPLE               |                          +------------------+  +-----------------+
+  +--+----------+-----------+--+                          | VCF_ANNOTATE_    |  | EXOMISER        |
+     |          |           |                             | ENSEMBLVEP       |  | (family mode,   |
+     |          |           v                             | VEP -> TABIX     |  |  needs          |
+     |          |   +--------------------------------+    +--------+---------+  |  familyPheno)   |
+     |          |   | FILTER_CNV_CARRIERS (solo)     |             v            +-----------------+
+     |          |   | -> VCF_ANNOTATE_ENSEMBLVEP_    |    +------------------+
+     |          |   |    PERSAMPLE   VEP -> TABIX    |    | SLIVAR           |
+     |          |   +---------------+----------------+    +------------------+
+     |          |                   v
+     |          |   +--------------------------------+
+     |          |   | EXOMISER_SINGLE                |
+     |          |   | (single-sample mode: gene /    |
+     |          |   |  phenotype match)              |
+     |          |   +--------------------------------+
+     |          |
+     |          |  [ group all of a family's samples together ]
+     |          v
+     |   +--------------------------------------------+
+     |   | BCFTOOLS_MERGE                             |
+     |   | (family-level union of per-sample calls)   |
+     |   +---------------------+----------------------+
+     |                         v
+     |   +--------------------------------------------+
+     |   | TRUVARI_COLLAPSE_COHORT                    |
+     |   | (merge near-dupes across samples)          |
+     |   | -> RESTORE_COLLAPSED_FORMAT (see below)    |
+     |   | -> BCFTOOLS_SORT_INDEX_COHORT              |
+     |   +---------------------+----------------------+
+     |                         v
+     |   +--------------------------------------------+
+     |   | FILL_CN_FROM_SEGMENTS -> BCFTOOLS_INDEX    |
+     |   | ./. gets the CN of the sample's own DRAGEN |
+     |   | segments (original VCF, REF blocks), GT    |
+     |   | 0/0 when it's the expected CN; or, with    |
+     |   | --get_cn_by_computing_ratio, from depth:   |
+     |   | BAM_VCF_DEPTH_GENOTYPE_REFINEMENT (CRAMs)  |
+     |   +--------------------+-------------------+---+
+     |                        | (proband)         | (no proband)
+     v                        |                   |
+ +-----------------------+    |     . . . . . . . v . . . . . . . . . . . . . . . . . . . .
+ | VCF_ANNOTATE_         |    |     .  Run if no proband, after FILTER_CNV_CARRIERS      .
+ | ENSEMBLVEP_PROBAND    |    |     .  +----------------------+   +----------------------+ .
+ | VEP -> TABIX          |    |     .  | VCF_ANNOTATE_        |   | EXOMISER             | .
+ +-----------+-----------+    |     .  | ENSEMBLVEP           |   | (family mode, needs  | .
+             |                |     .  | VEP -> TABIX         |   |  familyPheno)        | .
+             v                |     .  +----------+-----------+   +----------------------+ .
+ +-----------------------+    |     .             v                                       .
+ | JOIN_PROBAND_CNV      <----+     .  +----------------------+                           .
+ | force each CNV ID to  |          .  | SLIVAR               |                           .
+ | come from the proband |          .  +----------------------+                           .
+ | (for Radiant)         |          . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ +-----------+-----------+
+             v
+ +-----------------------+
+ | FILTER_CNV_CARRIERS   |
+ +-----------+-----------+
+             v
+ +-----------------------+
+ | SLIVAR                |
+ +-----------+-----------+
+             v
+ +-----------------------+
+ | EXOMISER (family mode,|
+ | needs familyPheno)    |
+ +-----------------------+
+
+ EXOMISER (family mode) is skipped when familyPheno is not provided, SLIVAR when familyPed is not.
+ A proband is a PED affected child (affected, with a parent in the PED) that has its own
+ per-sample row, decided from the samplesheet (isPedProband). A family with a proband gets no
+ family-level VEP or SLIVAR: its CNVs that only the parents carry stay in cn_filled/.
+ Family-mode EXOMISER runs on a proband's SLIVAR VCF when the familyPheno phenopacket is about
+ that proband (proband.subject.id), and on the family (or joint) VCF otherwise.
+ FILTER_CNV_CARRIERS sets each record's FILTER from its carriers' FORMAT/FT (PASS when one
+ passes) and, under --cnv_pass_only (the default), drops the records no carrier passes. On the
+ left, FT is each call's FILTER, copied by NORMALIZE_CNV; in a joint VCF, DRAGEN's own.
+ JOIN_PROBAND_CNV reads the unfiltered family VCF; cn_filled/ keeps every CNV.
+
+
+RESTORE_COLLAPSED_FORMAT in detail (bin/restore_collapsed_format.py)
+════════════════════════════════════════════════════════════════════
+
+truvari collapse copies an absorbed call's FORMAT into the kept record only when it reads that
+call's GT as set: DRAGEN's ./1 (gain of unknown zygosity) and haploid 1 (a male's chrX) read as
+unset, so they were dropped. Example: a real chr10 cluster of the NA12878 trio.
+
+ INPUT 1: truvari collapse -o  (kept records)                INPUT 2: truvari collapse -c  (removed = absorbed calls)
+ ─────────────────────────────────────────────               ───────────────────────────────────────────────────────
+ chr10:38954276  NA12891's gain                               NA12892's gain   MatchId=1.0  TruScore=60
+ INFO  CollapseId=1.0  NumConsolidated=0                        NA12878 ./.        NA12891 ./.     NA12892 ./1:CN3:OID_C
+ FORMAT                                                       NA12878's gain   MatchId=1.0  TruScore=56
+   NA12878  ./.:.:.          <- empty                           NA12878 ./1:CN3:OID_A  NA12891 ./.     NA12892 ./.
+   NA12891  ./1:3:OID_B      (truvari's kept call)
+   NA12892  ./.:.:.          <- empty                         (truvari left both out: it reads ./1 as unset)
+            │                                                            │
+            │                                                            ▼
+            │                                ┌────────────────────────────────────────────────────┐
+            │                                │ 1. index the absorbed calls by MatchId             │
+            │                                │    keep only samples with a GT allele set          │
+            │                                │    (./1, 0/1, 1/1, haploid 1 ... not ./.)          │
+            │                                │    sort each list: TruScore high -> low            │
+            │                                │                                                    │
+            │                                │    "1.0" -> [ (60, {NA12892: FORMAT_C}),           │
+            │                                │               (56, {NA12878: FORMAT_A}) ]          │
+            │                                └─────────────────────────┬──────────────────────────┘
+            │                                                          │
+            ▼                                                          │
+ ┌──────────────────────────────────────────────────────────┐          │
+ │ 2. for each kept record: CollapseId "1.0" ─── lookup ────┼──────────┘
+ │                                                          │
+ │    for each sample:                                      │
+ │      has a GT allele set? ──yes──> keep as is (NA12891)  │
+ │            │no                                          │
+ │            ▼                                             │
+ │      first absorbed call (highest TruScore) that has     │
+ │      this sample? ──none──> stays ./. (no call there)    │
+ │            │found                                       │
+ │            ▼                                             │
+ │      copy its whole FORMAT (GT, CN, OID, ...) + phase    │
+ │      NA12878 <- FORMAT_A    NA12892 <- FORMAT_C          │
+ │                                                          │
+ │    NumConsolidated += number of samples restored (2)     │
+ └──────────────────────────┬───────────────────────────────┘
+                            ▼
+ OUTPUT: <id>.restored.vcf.gz  (same records, same order, + step 3's; unsorted -> BCFTOOLS_SORT_INDEX_COHORT)
+ ─────────────────────────────────────────────
+ chr10:38954276  NA12891's gain
+ INFO  CollapseId=1.0  NumConsolidated=2
+ FORMAT
+   NA12878  ./1:3:OID_A      <- restored
+   NA12891  ./1:3:OID_B
+   NA12892  ./1:3:OID_C      <- restored
+
+ OID_A = DRAGEN%3AGAIN%3Achr10%3A38956085-38966576   (NA12878's own call)
+ OID_B = DRAGEN%3AGAIN%3Achr10%3A38954277-38966576   (NA12891's, the kept one)
+ OID_C = DRAGEN%3AGAIN%3Achr10%3A38956085-38968564   (NA12892's own call)
+
+ - TruScore only decides when one sample has several absorbed calls in the cluster.
+ - A sample that already has a call (incl. one truvari copied in itself) is never overwritten.
+ - ID, POS, END and the rest of INFO stay the kept call's; only NumConsolidated changes.
+
+ 3. Two calls of one sample folded into one record (toy trio, the module test's fam2 fixtures).
+    A record has one column per sample, so it holds one of them; the other is in no record.
+    truvari keeps the leftmost call and compares the others with it, so with --pctsize 0.7 and
+    --pctovl 0.3 this only happens at the edge: A starts at K's start, at exactly 70% of K's
+    length, and B starts where A ends, overlapping K by exactly 30%.
+
+      DAD  |================= K =================|        chr2:1,000,000-1,100,000
+      KID  |============ A ============|============ B ============|   A ends 1,070,000, B to 1,140,000
+
+    kept K:   DAD K   KID A   MOM ./.        (B's MatchId = K's CollapseId, KID's OID is B, not A)
+              │
+              ▼  after K, written as a record of its own, as truvari writes a call it leaves alone:
+    record B: B's site and INFO (no TruScore, MatchId...)   DAD ./.   KID B   MOM ./.
+
+    Any absorbed call of a sample (an ALT allele in its GT) whose OID isn't that sample's in the
+    kept record, once restored, gets one. Another sample's copy of B (identical, one merged
+    record) that truvari copied into K stays only there: ./. in record B.

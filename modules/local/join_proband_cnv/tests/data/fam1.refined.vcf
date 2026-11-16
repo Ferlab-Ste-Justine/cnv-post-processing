@@ -1,0 +1,22 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000000>
+##contig=<ID=chr2,length=1000000>
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=DUP,Description="Duplication">
+##FILTER=<ID=PASS,Description="All filters passed">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##INFO=<ID=NumCollapsed,Number=1,Type=Integer,Description="Number of calls collapsed into this call by truvari">
+##INFO=<ID=NumConsolidated,Number=1,Type=Integer,Description="Number of samples consolidated into this call by truvari">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Estimated copy number">
+##FORMAT=<ID=OID,Number=1,Type=String,Description="ID of the original caller record">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	DAD	KID	MOM
+chr1	10000	DRAGEN:GAIN:chr1:10001-20000	N	<DUP>	50	PASS	SVTYPE=DUP;SVLEN=10000;END=20000;NumCollapsed=1;NumConsolidated=2	GT:CN:OID	0/0:2:.	0/1:3:DRAGEN%3AGAIN%3Achr1%3A10501-21900	0/1:3:DRAGEN%3AGAIN%3Achr1%3A10001-20000
+chr1	50000	DRAGEN:GAIN:chr1:50001-60000	N	<DUP>	50	PASS	SVTYPE=DUP;SVLEN=10000;END=60000;NumCollapsed=0;NumConsolidated=0	GT:CN:OID	0/1:3:DRAGEN%3AGAIN%3Achr1%3A50001-60000	0/0:2:.	0/0:2:.
+chr1	70000	DRAGEN:LOSS:chr1:70001-75000	N	<DEL>	40	PASS	SVTYPE=DEL;SVLEN=-5000;END=75000	GT:CN:OID	0/1:1:DRAGEN%3ALOSS%3Achr1%3A70001-75000	./.	0/0:2:.
+chr1	80000	toy%call:80001	N	<DEL>	30	PASS	SVTYPE=DEL;SVLEN=-5000;END=85000;NumCollapsed=0;NumConsolidated=0	GT:CN:OID	0/0:2:.	0/1:1:toy%25call%3A80001	0/0:2:.
+chr1	90000	multi:90001	N	<DEL>	20	PASS	SVTYPE=DEL;SVLEN=-5000;END=95000	GT:CN:OID	0/0:2:.	0/1:1:multi%3A90001	0/1:1:DRAGEN%3ALOSS%3Achr1%3A90001-95000
+chr1	90000	multi:90001	N	<DUP>	20	PASS	SVTYPE=DUP;SVLEN=5000;END=95000	GT:CN:OID	0/0:2:.	0/1:3:multi%3A90001	0/0:2:.
+chr2	1000	DRAGEN:LOSS:chr2:1001-9000	N	<DEL>	25	PASS	SVTYPE=DEL;SVLEN=-8000;END=9000	GT:CN:OID	0/0:2:.	0/1:1:DRAGEN%3ALOSS%3Achr2%3A1001-9000	0/0:2:.

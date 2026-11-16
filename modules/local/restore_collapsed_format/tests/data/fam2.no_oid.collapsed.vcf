@@ -1,0 +1,22 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##contig=<ID=chr1,length=10000000>
+##contig=<ID=chr2,length=10000000>
+##contig=<ID=chr3,length=10000000>
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=DUP,Description="Duplication">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant">
+##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Estimated copy number">
+##bcftools_viewVersion=1.23.1+htslib-1.23
+##bcftools_viewCommand=view -O z -o dad.vcf.gz dad.vcf; Date=Mon Nov  2 18:30:05 2026
+##INFO=<ID=NumCollapsed,Number=1,Type=Integer,Description="Number of calls collapsed into this call by truvari">
+##INFO=<ID=CollapseId,Number=1,Type=String,Description="Truvari uid to help tie output.vcf and output.collapsed.vcf entries together">
+##INFO=<ID=NumConsolidated,Number=1,Type=Integer,Description="Number of samples consolidated into this call by truvari">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	DAD	KID	MOM
+chr1	960000	kid_A1	N	<DEL>	.	PASS	SVTYPE=DEL;END=1040000;SVLEN=-80000;NumCollapsed=1;NumConsolidated=1;CollapseId=1.0	GT:CN	0/1:1	0/1:1	./.:.
+chr1	1060000	kid_B1	N	<DEL>	.	PASS	SVTYPE=DEL;END=1140000;SVLEN=-80000	GT:CN	./.:.	0/1:1	./.:.
+chr2	1000000	dad_K2	N	<DEL>	.	PASS	SVTYPE=DEL;END=1100000;SVLEN=-100000;NumCollapsed=2;NumConsolidated=1;CollapseId=2.0	GT:CN	0/1:1	0/1:1	./.:.
+chr3	1000000	dad_K3	N	<DUP>	.	PASS	SVTYPE=DUP;END=1100000;SVLEN=100000;NumCollapsed=2;NumConsolidated=1;CollapseId=3.0	GT:CN	./1:3	./.:.	0/1:3

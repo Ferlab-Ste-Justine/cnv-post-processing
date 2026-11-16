@@ -1,0 +1,523 @@
+nextflow_process {
+
+    name "Test Process SLIVAR_EXPR"
+    script "../main.nf"
+    process "SLIVAR_EXPR"
+
+    tag "modules"
+    tag "modules_"
+    tag "slivar_expr"
+
+    // Runs real slivar with assets/cnv-slivar-functions.js and the --family-expr / --sample-expr lines from
+    // conf/modules.config, on toy, synthetic fixtures checked into ./data/ (no S3 data-test/
+    // dataset needed), plus one test on the real joint trio VCF from data-test/ (fam1_joint, the
+    // last one). The rules themselves are tested much more thoroughly, in plain
+    // node, by assets/cnv-slivar-moi-harness.js; this test checks that slivar runs them as the
+    // harness expects (slivar's own VCF/PED parsing, the expression wiring, its JS engine). Each
+    // row ID names the harness scenario it reproduces (e.g. famA_T6_recessive is harness T6), so
+    // its expected result is that scenario's line in assets/moi_scenarios.md.
+    //
+    // Each toy family has its OWN dedicated VCF+PED pair (never sharing a VCF with another
+    // family): slivar evaluates every expression for every sample in the PED at every variant
+    // row, using whatever genotype data exists for that sample's own column at that row, so a
+    // family sharing a VCF with another one sees "missing CN" on rows that aren't its own. Scenarios sharing an identical pedigree shape (same affected-status
+    // pattern) are combined as multiple rows of the same family, which is safe.
+    //
+    // Each toy .vcf is plain, uncompressed VCF text (no bgzip step needed). famA-famD and famQ carry no
+    // INFO/END, so the rules must read the CNV end from variant.stop (reading a missing INFO
+    // field throws in slivar); famXs/famXd do, which the chrX/chrY PAR checks depend on. Each .vcf.tbi is an inert placeholder: SLIVAR_EXPR never reads the
+    // `tbi` input, it only satisfies the process's 4-element input tuple.
+    //
+    // Tags are checked by parsing each row's INFO field into exact key=value pairs, not by
+    // substring search (e.g. "denovo" is a substring of "possible_denovo"). Each expected tag is
+    // checked with the exact sample IDs slivar writes, and every other mode-of-inheritance or
+    // parent-of-origin tag must be absent. Mode-of-inheritance tags are --family-expr, valued
+    // with the family's affected members (an affected parent too, famB); parent-of-origin tags
+    // are --sample-expr, valued with exactly the children they resolve. The same helper is repeated in each
+    // test() block rather than factored out, since nf-test's documented way to share Groovy code
+    // across test() blocks is a class under a repo-level lib/ folder, which this repo doesn't have.
+
+    test("famA: de novo / recessive / Mendelian-inconsistent / unknown CN / father without CN (unaffected parents, affected son)") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famA"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 6
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famA_T2_denovo"], [denovo: ["famA_kid"], po_denovo: ["famA_kid"]])
+            check(byId["famA_T6_recessive"], [recessive: ["famA_kid"], po_both: ["famA_kid"]])
+            check(byId["famA_T19_mendelian_inconsistent"], [mendelian_inconsistent: ["famA_kid"]])
+            check(byId["famA_T20_unknown_cn"], [unknown_cn: ["famA_kid"]])
+            // a father in the VCF without CN counts as absent, as in a duo
+            check(byId["famA_T11_possible_denovo"], [possible_denovo: ["famA_kid"], po_possible_denovo: ["famA_kid"]])
+            // a mother with no intact copy and a carrier father: one deleted copy each
+            check(byId["famA_T27_recessive"], [recessive: ["famA_kid"], po_both: ["famA_kid"]])
+
+            assert snapshot(process.out.versions).match()
+        }
+    }
+
+    test("famB: duplication inherited from an affected mother -- inherited_maternal (affected status isn't looked at)") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famB"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famB.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famB.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famB.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 1
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            // a family tag lists the family's affected members: the affected mother as well as the kid
+            check(byId["famB_T18_inherited_maternal"], [inherited_maternal: ["famB_mom", "famB_kid"], po_mother: ["famB_kid"]])
+        }
+    }
+
+    test("famC: duo, no father in the pedigree -- recessive low confidence, possible inherited / de novo") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famC"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famC.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famC.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famC.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 6
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            // No father: an autosomal origin needs both parents, so only "possibly de novo" can be said (D3).
+            check(byId["famC_D2_recessive_lowconf"], [recessive_lowconf: ["famC_kid"], po_mother: ["famC_kid"]])
+            check(byId["famC_D1_possible_inherited_maternal"], [possible_inherited_maternal: ["famC_kid"], po_possible_mother: ["famC_kid"]])
+            check(byId["famC_D3_possible_denovo"], [possible_denovo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
+            // a mother with no intact copy: her deleted copy, and a normal one from the father (D5) or a deleted one (D6)
+            check(byId["famC_D5_inherited_maternal"], [inherited_maternal: ["famC_kid"], po_mother: ["famC_kid"]])
+            check(byId["famC_D6_recessive_lowconf"], [recessive_lowconf: ["famC_kid"], po_mother: ["famC_kid"]])
+            // a mother with a duplication who passed her normal copy: the deletion is new or from the father
+            check(byId["famC_D7_possible_denovo"], [possible_denovo: ["famC_kid"], po_possible_denovo: ["famC_kid"]])
+        }
+    }
+
+    test("famD: parent of origin maternal / paternal / ambiguous (all unaffected -- no MoI tag)") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famD"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famD.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famD.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famD.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 3
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            // Nobody is affected, so no mode of inheritance; parent of origin is per sample and
+            // doesn't depend on affected status.
+            check(byId["famD_T13_po_mother"], [po_mother: ["famD_kid"]])
+            check(byId["famD_T21_po_father"], [po_father: ["famD_kid"]])
+            check(byId["famD_T22_po_ambiguous"], [po_ambiguous: ["famD_kid"]])
+        }
+    }
+
+    // Two affected children, unaffected parents: every child's call tags the family, so one
+    // record can carry the same call for both (Q5) or one call per child (Q9). Both MoI tags are
+    // valued with the family's affected members; the po_* tags say which child is which.
+    test("famQ: two affected children -- the same call for both (Q5), a different call per child (Q9)") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famQ"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famQ.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famQ.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famQ.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 2
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famQ_Q5_denovo_both_sibs"], [denovo: ["famQ_kid", "famQ_sib"], po_denovo: ["famQ_kid", "famQ_sib"]])
+            check(byId["famQ_Q9_maternal_kid_paternal_sib"], [
+                inherited_maternal: ["famQ_kid", "famQ_sib"], inherited_paternal: ["famQ_kid", "famQ_sib"],
+                po_mother: ["famQ_kid"], po_father: ["famQ_sib"]
+            ])
+        }
+    }
+
+    // Sex chromosomes and chrM, on records that carry INFO/END (famXs: affected son, famXd:
+    // affected daughter). Expected copy number depends on the chromosome, the record's whole
+    // start..END interval against the GRCh38 PARs, and the PED sex, so these rows exercise
+    // slivar's own variant interval and sample sex end to end.
+    test("famXs: son on chrX (PAR, straddling, normal, maternal, de novo), chrY (father's Y, de novo) and chrM") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famXs"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXs.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXs.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXs.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 8
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famXs_X6_par_denovo"], [denovo: ["famXs_son"], po_denovo: ["famXs_son"]])  // inside PAR1: autosomal rules
+            check(byId["famXs_X4_straddle"])                                      // crosses the PAR1 end: not modelled
+            check(byId["famXs_X1_normal_boy"])                                    // CN 1 is normal for a male
+            check(byId["famXs_X2_inherited_maternal"], [inherited_maternal: ["famXs_son"], po_mother: ["famXs_son"]])  // his only X is his mother's
+            check(byId["famXs_X3_denovo"], [x_linked_denovo: ["famXs_son"], po_denovo: ["famXs_son"]])
+            // chrY: his Y is his father's; the mother (no CN on Y) passes none and is read as normal
+            check(byId["famXs_Y2_paternal_y_dup"], [inherited_paternal: ["famXs_son"], po_father: ["famXs_son"]])
+            check(byId["famXs_Y3_denovo_y_dup"], [denovo: ["famXs_son"], po_denovo: ["famXs_son"]])
+            check(byId["famXs_M1_chrM"])
+        }
+    }
+
+    test("famXd: daughter on chrX (de novo, father's X, mother's deletion, both copies hit) and chrY") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famXd"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXd.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXd.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famXd.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            assert lines.size() == 5
+            def byId = lines.collectEntries { line -> def c = line.split("\t"); [(c[2]): c[7]] }
+
+            check(byId["famXd_X7_denovo"], [x_linked_denovo: ["famXd_daughter"], po_denovo: ["famXd_daughter"]])
+            check(byId["famXd_X8_inherited_paternal"], [inherited_paternal: ["famXd_daughter"], po_father: ["famXd_daughter"]])
+            check(byId["famXd_X9_inherited_maternal"], [inherited_maternal: ["famXd_daughter"], po_mother: ["famXd_daughter"]])  // one copy: keeps inherited_*
+            check(byId["famXd_X10_x_linked_recessive"], [x_linked_recessive: ["famXd_daughter"], po_both: ["famXd_daughter"]])  // both of her X copies hit
+            check(byId["famXd_Y1_female_y"])
+        }
+    }
+
+    // Real data: the whole-genome joint NA12878/NA12891/NA12892 DRAGEN VCF from the S3-synced
+    // data-test/ dataset (daughter NA12878 affected; NA12891 father, NA12892 mother), with its
+    // real PED. It's the only file in data-test/ with chrX/chrY calls, and in the pipeline test
+    // VEP drops those (its test cache and FASTA only know chr22), so this is where real
+    // sex-chromosome calls reach slivar. NORMALIZE_CNV runs first, exactly as NORMALIZE_CNV_JOINT
+    // does in the pipeline (drops ALT="." reference blocks, splits multiallelic sites): slivar on
+    // the raw file gives different results.
+    test("fam1_joint: real DRAGEN joint trio VCF, chrX/chrY classification") {
+
+        config "./nextflow_joint.config"
+
+        setup {
+            run("NORMALIZE_CNV") {
+                script "../../normalize_cnv/main.nf"
+                process {
+                    """
+                    input[0] = [
+                        [id: "fam1_joint", caller: "DRAGEN_JOINT"],
+                        file("${projectDir}/data-test/vcf/1463_NA12878_NA12891_NA12892.cnv.vcf.gz")
+                    ]
+                    """
+                }
+            }
+        }
+
+        when {
+            process {
+                """
+                input[0] = NORMALIZE_CNV.out.vcf
+                    .join(NORMALIZE_CNV.out.tbi)
+                    .map { meta, vcf, tbi -> [meta, vcf, tbi, file("${projectDir}/data-test/ped/trio_NA12878_91_92.ped")] }
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def MOI_TAGS = [
+                "denovo", "denovo_suspect", "inherited_maternal", "inherited_paternal",
+                "recessive", "recessive_lowconf", "possible_denovo", "possible_inherited_maternal",
+                "possible_inherited_paternal", "inheritance_unresolved", "mendelian_inconsistent", "unknown_cn",
+                "x_linked_denovo", "x_linked_recessive"
+            ]
+            def PO_TAGS = ["po_mother", "po_father", "po_both", "po_ambiguous", "po_denovo", "po_possible_denovo", "po_possible_mother", "po_possible_father"]
+            def infoOf = { String info -> info.tokenize(';').findAll { it.contains('=') }.collectEntries { def kv = it.split('=', 2); [(kv[0]): kv[1]] } }
+            // want: every tag expected on the record -> the exact sample IDs it must name; any other
+            // mode-of-inheritance or parent-of-origin tag must be absent.
+            def check = { String info, Map want = [:] ->
+                assert (MOI_TAGS + PO_TAGS).containsAll(want.keySet()) : "unknown tag in ${want}"
+                def fields = infoOf(info)
+                (MOI_TAGS + PO_TAGS).each { tag ->
+                    def exp = want.containsKey(tag) ? (want[tag] as List).sort().join(',') : null
+                    def got = fields.containsKey(tag) ? fields[tag].tokenize(',').sort().join(',') : null
+                    assert got == exp : "expected ${tag}=${exp} but INFO was: ${info}"
+                }
+            }
+
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }
+            def sexChrom = lines.collect { it.split("\t") }.findAll { it[0] in ["chrX", "chrY"] }
+            assert sexChrom.count { it[0] == "chrX" } == 50
+            assert sexChrom.count { it[0] == "chrY" } == 5
+            def byPos = sexChrom.collectEntries { c -> [("${c[0]}:${c[1]}".toString()): c[7]] }
+
+            // Real records, CN given as daughter,father,mother; a normal male has CN 1 on non-PAR chrX.
+            check(byPos["chrX:57696089"], [x_linked_denovo: ["NA12878"], po_denovo: ["NA12878"]])          // 1,1,2: both parents normal
+            check(byPos["chrX:101800269"], [inherited_paternal: ["NA12878"], po_father: ["NA12878"]])      // 3,2,2: father's duplicated X
+            check(byPos["chrX:12415722"], [inherited_maternal: ["NA12878"], po_mother: ["NA12878"]])       // 1,1,1: father's X is normal
+            check(byPos["chrX:26792085"], [inherited_maternal: ["NA12878"], po_mother: ["NA12878"]])       // 3,1,3: mother's duplication
+            check(byPos["chrX:942027"], [recessive: ["NA12878"], po_both: ["NA12878"]])                    // inside PAR1: autosomal rules
+            sexChrom.findAll { it[0] == "chrY" }.each { c -> check(c[7]) }                                 // the daughter has no Y
+
+            // Every chrX/chrY record's tags (parent of origin with the samples it names), as a
+            // regression snapshot.
+            def summary = sexChrom.collect { c ->
+                def fields = infoOf(c[7])
+                def tags = MOI_TAGS.findAll { fields.containsKey(it) } + PO_TAGS.findAll { fields.containsKey(it) }.collect { "${it}=${fields[it]}" }
+                "${c[0]}:${c[1]}:${c[4]} ${tags.sort().join(',') ?: '-'}".toString()
+            }
+            assert snapshot(summary).match("fam1_joint_sex_chromosome_tags")
+        }
+    }
+
+    // famA.empty.vcf: famA.vcf's header only, as for a proband with no call left after VEP
+    // (JOIN_PROBAND_CNV then writes a header-only VCF).
+    test("famA, a VCF with no record: slivar writes a header-only VCF") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: "famA"],
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.empty.vcf"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.empty.vcf.tbi"),
+                    file("${projectDir}/modules/local/slivar_expr/tests/data/famA.ped")
+                ]
+                input[1] = file("${projectDir}/assets/cnv-slivar-functions.js")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def lines = path(process.out.vcf.get(0)[1]).linesGzip
+            assert lines.every { it.startsWith("#") }
+            assert lines.find { it.startsWith("#CHROM") } == path("${projectDir}/modules/local/slivar_expr/tests/data/famA.empty.vcf").readLines().find { it.startsWith("#CHROM") }
+        }
+    }
+}

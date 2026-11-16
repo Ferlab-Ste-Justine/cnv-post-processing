@@ -1,0 +1,60 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "bcftools_merge"
+description: Merge per-sample collapsed CNV VCFs of the same family into one multi-sample family-level VCF
+keywords:
+  - cnv
+  - merge
+  - bcftools
+tools:
+  - "bcftools":
+      description: "Utilities for variant calling and manipulating VCF/BCF files"
+      homepage: "https://samtools.github.io/bcftools/"
+      documentation: "https://samtools.github.io/bcftools/bcftools.html"
+      tool_dev_url: "https://github.com/samtools/bcftools"
+      doi: "10.1093/gigascience/giab008"
+      licence: ["MIT/Expat"]
+      identifier: biotools:bcftools
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing family information
+          e.g. [ id:'FAM001', familyId:'FAM001', sampleSize:3 ]
+    - vcfs:
+        type: file
+        description: List of per-sample collapsed CNV VCFs belonging to the same family
+        pattern: "*.{vcf.gz,vcf}"
+    - tbis:
+        type: file
+        description: List of indexes for the input VCFs
+        pattern: "*.{vcf.gz.tbi,vcf.tbi}"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.merged.vcf.gz":
+          type: file
+          description: Multi-sample family-level VCF, sorted, multiallelics split
+          pattern: "*.merged.vcf.gz"
+  - tbi:
+      - meta:
+          type: map
+          description: Groovy Map containing family information
+      - "*.merged.vcf.gz.tbi":
+          type: file
+          description: Index of the merged VCF
+          pattern: "*.merged.vcf.gz.tbi"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

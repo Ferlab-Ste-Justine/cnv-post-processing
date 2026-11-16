@@ -1,0 +1,57 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "bcftools_sort_index"
+description: Coordinate-sort a VCF and tabix-index it
+keywords:
+  - sort
+  - index
+  - bcftools
+tools:
+  - "bcftools":
+      description: "Utilities for variant calling and manipulating VCF/BCF files"
+      homepage: "https://samtools.github.io/bcftools/"
+      documentation: "https://samtools.github.io/bcftools/bcftools.html"
+      tool_dev_url: "https://github.com/samtools/bcftools"
+      doi: "10.1093/gigascience/giab008"
+      licence: ["MIT/Expat"]
+      identifier: biotools:bcftools
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample or family information (reused at multiple points in the
+          pipeline wherever a VCF needs to be sorted/indexed, e.g. after TRUVARI_COLLAPSE, which
+          doesn't guarantee sorted output)
+    - vcf:
+        type: file
+        description: VCF to sort and index
+        pattern: "*.{vcf.gz,vcf}"
+
+output:
+  - vcf:
+      - meta:
+          type: map
+          description: Groovy Map containing sample or family information
+      - "*.sorted.vcf.gz":
+          type: file
+          description: Coordinate-sorted VCF
+          pattern: "*.sorted.vcf.gz"
+  - tbi:
+      - meta:
+          type: map
+          description: Groovy Map containing sample or family information
+      - "*.sorted.vcf.gz.tbi":
+          type: file
+          description: Index of the sorted VCF
+          pattern: "*.sorted.vcf.gz.tbi"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@ferlab"
+maintainers:
+  - "@ferlab"

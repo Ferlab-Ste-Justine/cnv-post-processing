@@ -1,0 +1,14 @@
+{
+    "toy fixture: resolves in-band missing GT, leaves out-of-band/NA missing GT alone, never touches an already-resolved GT": {
+        "content": [
+            [
+                "versions.yml:md5,64f2533c531d9297d3c0f53bb728a574"
+            ]
+        ],
+        "timestamp": "2026-09-23T20:15:02.492230238",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "24.10.5"
+        }
+    }
+}

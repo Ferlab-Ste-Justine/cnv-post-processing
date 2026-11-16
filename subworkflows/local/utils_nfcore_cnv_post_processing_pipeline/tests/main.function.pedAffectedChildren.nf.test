@@ -1,0 +1,76 @@
+nextflow_function {
+
+    name "Test Subworkflow UTILS_NFCORE_CNV_POST_PROCESSING_PIPELINE pedAffectedChildren function"
+    script "subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/main.nf"
+    function "pedAffectedChildren"
+
+    tag "subworkflows"
+    tag "utils_nfcore_cnv_post_processing_pipeline"
+
+    test("Test Function pedAffectedChildren - trios, duos and an affected sibship") {
+        // valid.ped: affected children kid (trio), duokid (mother only), kid2 (mother only),
+        // duokid2 (father only) and notsequenced (not in any VCF, still a PED child). solo1 and
+        // sib1 are affected but have no parent named, so they're founders, not probands.
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/subworkflows/local/utils_nfcore_cnv_post_processing_pipeline/tests/data/valid.ped", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ["kid", "duokid", "kid2", "duokid2", "notsequenced"] }
+            )
+        }
+    }
+
+    test("Test Function pedAffectedChildren - two affected sibs are both returned") {
+        when {
+            function {
+                """
+                input[0] = file("\${projectDir}/modules/local/slivar_expr/tests/data/famQ.ped", checkIfExists: true)
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ["famQ_kid", "famQ_sib"] }
+            )
+        }
+    }
+
+    test("Test Function pedAffectedChildren - PED formats: header, tabs or spaces, CRLF, blank line, missing phenotype") {
+        // Written here, with Windows line endings, rather than committed (pre-commit would
+        // rewrite them). Only phenotype 2 is affected: 1, 0 and -9 aren't, and a row with fewer
+        // than 6 columns has no phenotype.
+        when {
+            function {
+                """
+                def ped = java.nio.file.Files.createTempFile("ped_formats", ".ped")
+                ped.text = [
+                    "#family\\tid\\tfather\\tmother\\tsex\\tphenotype",
+                    "fam\\tkid_tabs\\tdad\\tmom\\t1\\t2",
+                    "fam   kid_spaces   dad   mom   2   2   ",
+                    "",
+                    "fam\\tkid_unaffected\\tdad\\tmom\\t1\\t1",
+                    "fam\\tkid_unknown\\tdad\\tmom\\t1\\t0",
+                    "fam\\tkid_missing\\tdad\\tmom\\t1\\t-9",
+                    "fam\\tkid_short\\tdad\\tmom\\t1",
+                    "fam\\tdad\\t0\\t0\\t1\\t2",
+                    "fam\\tmom\\t0\\t0\\t2\\t1",
+                ].join("\\r\\n") + "\\r\\n"
+                input[0] = ped
+                """
+            }
+        }
+        then {
+            assertAll(
+                { assert function.success },
+                { assert function.result == ["kid_tabs", "kid_spaces"] }
+            )
+        }
+    }
+}

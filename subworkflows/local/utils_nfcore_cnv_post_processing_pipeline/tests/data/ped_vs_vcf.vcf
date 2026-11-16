@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+##contig=<ID=chr22,length=50818468>
+##ALT=<ID=DEL,Description="Deletion">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	kid	dad	mom	solo1	duokid	duomom	kid2	mom2	duokid2	duodad	sib1	sib2
+chr22	20000000	DEL1	N	<DEL>	.	PASS	END=20050000;SVTYPE=DEL	GT:CN	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1	0/1:1

@@ -1,0 +1,297 @@
+nextflow_process {
+
+    name "Test Process JOIN_PROBAND_CNV"
+    script "../main.nf"
+    process "JOIN_PROBAND_CNV"
+
+    tag "modules"
+    tag "modules_"
+    tag "join_proband_cnv"
+
+    // Toy fixtures in ./data/, plain-text VCFs (bin/join_proband_cnv.py reads plain or bgzipped):
+    // - fam1.refined.vcf: a trio (DAD, KID, MOM) after the cohort collapse, with FORMAT/OID.
+    //   1. chr1:10000, MOM's call kept (10001-20000); KID's own call is 10501-21900.
+    //   2. chr1:50000, DAD only (KID OID "."): left out.
+    //   3. chr1:70000, DAD only, KID's FORMAT column short ("./."): left out.
+    //   4. chr1:80000, KID's own call, with an ID holding "%" and ":" (OID toy%25call%3A80001).
+    //   5-6. chr1:90000, a split multiallelic site: KID's OID multi%3A90001 on <DEL> and <DUP>.
+    //   7. chr2:1000, a KID call that isn't in KID.vep.vcf (as when VEP drops a contig): a warning.
+    // - KID.vep.vcf: KID's VEP-annotated per-sample VCF: SVTYPE DEL/DUP, CSQ, its own
+    //   NumCollapsed, a FILTER and INFO keys the family VCF doesn't have; the two alleles at 90000.
+    // - fam1.twice.refined.vcf: KID's call 10501-21900 in a second family record (chr1:30000).
+    // - KID.extra.vep.vcf: KID.vep.vcf plus a call no family record has (chr1:30000).
+    // - MOM.vep.vcf: MOM's VEP VCF, passed as the proband's.
+    // - KID.empty.vep.vcf: KID.vep.vcf's header only, as when VEP drops every call of a proband.
+    // - fam1.no_oid.refined.vcf: fam1.refined.vcf without FORMAT/OID.
+    // The .tbi files are empty placeholders: the script never reads them.
+
+    test("toy trio: each KID call keeps its own coordinates, INFO and CSQ, with the family's FORMAT") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf_tbi.size() == 1
+                assert vcf_tbi.get(0)[0] == [ id: "fam1", familyId: "fam1", proband: "KID" ]
+                assert file(vcf_tbi.get(0)[1]).name == "fam1.KID.cnv.proband.vcf.gz"
+                assert file(vcf_tbi.get(0)[2]).name == "fam1.KID.cnv.proband.vcf.gz.tbi"
+            }
+
+            def lines = path(process.out.vcf_tbi.get(0)[1]).linesGzip
+            def header = lines.findAll { it.startsWith("##") }
+            // KID's header, with the family's FORMAT lines instead of its own
+            assert header.any { it.startsWith("##INFO=<ID=CSQ,") }
+            assert header.any { it.startsWith("##FILTER=<ID=cnvBinSupportRatio,") }
+            assert header.findAll { it.startsWith("##FORMAT=") }.collect { (it =~ /ID=([^,]+)/)[0][1] } == ["GT", "CN", "OID"]
+            ["COHORT_ID", "COHORT_POS", "COHORT_END", "COHORT_NumCollapsed", "COHORT_NumConsolidated"].each { key ->
+                assert header.any { it.startsWith("##INFO=<ID=${key},") }
+            }
+            assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["DAD", "KID", "MOM"]
+
+            def records = lines.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            assert records.collect { "${it[0]}:${it[1]}:${it[4]}".toString() } == ["chr1:10500:<DUP>", "chr1:80000:<DEL>", "chr1:90000:<DEL>", "chr1:90000:<DUP>"]
+            def info = { cols -> cols[7].split(";").collectEntries { kv -> def p = kv.split("=", 2); [p[0], p.size() > 1 ? p[1] : true] } }
+
+            // 1. KID's own call, not MOM's kept one; the family record's FORMAT and COHORT_*
+            def first = records[0]
+            assert first[0..6] == ["chr1", "10500", "DRAGEN:GAIN:chr1:10501-21900", "N", "<DUP>", "77", "cnvBinSupportRatio"]
+            def first_info = info(first)
+            assert first_info.SVTYPE == "DUP"
+            assert first_info.END == "21900"
+            assert first_info.GCP == "0.41"
+            assert first_info.CSQ == "duplication|transcript_amplification|HIGH|GENE1"
+            assert first_info.NumCollapsed == "0"            // KID's own, from the per-sample collapse
+            assert first_info.COHORT_NumCollapsed == "1"     // the family record's
+            assert first_info.COHORT_NumConsolidated == "2"
+            assert first_info.COHORT_ID == "DRAGEN%3AGAIN%3Achr1%3A10001-20000"
+            assert first_info.COHORT_POS == "10000"
+            assert first_info.COHORT_END == "20000"
+            assert first_info.SVLEN == "11400"               // KID's, not the family record's 10000
+            assert first.drop(8) == ["GT:CN:OID", "0/0:2:.", "0/1:3:DRAGEN%3AGAIN%3Achr1%3A10501-21900", "0/1:3:DRAGEN%3AGAIN%3Achr1%3A10001-20000"]
+
+            // 4. OID decoded in one pass: toy%25call%3A80001 -> toy%call:80001
+            def second = records[1]
+            assert second[0..6] == ["chr1", "80000", "toy%call:80001", "N", "<DEL>", "12", "PASS"]
+            assert info(second).COHORT_ID == "toy%25call%3A80001"
+
+            // 5-6. each allele of the split site matched to its own family record (MOM carries the deletion only)
+            assert records[2][2] == "multi:90001" && records[3][2] == "multi:90001"
+            assert records[2][11] == "0/1:1:DRAGEN%3ALOSS%3Achr1%3A90001-95000"
+            assert records[3][11] == "0/0:2:."
+            assert info(records[2]).CSQ.startsWith("deletion|")
+            assert info(records[3]).CSQ.startsWith("duplication|")
+            assert !info(records[2]).containsKey("COHORT_NumCollapsed")  // the family record has none
+
+            // 7. a warning, not an error, in the task's stderr (process.stderr is Nextflow's own)
+            def task_err = path("${file(process.out.vcf_tbi.get(0)[1]).parent}/.command.err").text
+            assert task_err.contains("WARNING: 1 family record(s) name a KID call")
+
+            assert path(process.out.versions[0]).text.contains("pysam:")
+        }
+    }
+
+    // Real data: one `-profile test,docker --publish_all` run (2026-11-02) of the NA12878 trio's
+    // chr22 VCFs. NA12878_trio.chr22.refined.vcf.gz is depth_refined/fam1.refined.vcf.gz (35
+    // records), NA12878.chr22.vep.vcf.gz is ensemblvep/variants.fam1.NA12878.cnv.vep.vcf.gz (22
+    // calls).
+    test("NA12878 trio, chr22: every proband call is joined, with its own interval where truvari kept a parent's") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "NA12878" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878_trio.chr22.refined.vcf.gz", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878_trio.chr22.refined.vcf.gz.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878.chr22.vep.vcf.gz", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878.chr22.vep.vcf.gz.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def records = path(process.out.vcf_tbi.get(0)[1]).linesGzip.findAll { !it.startsWith("#") }.collect { it.split("\t") }
+            def proband_ids = path("${projectDir}/modules/local/join_proband_cnv/tests/data/NA12878.chr22.vep.vcf.gz").linesGzip
+                .findAll { !it.startsWith("#") }.collect { it.split("\t")[2] }
+            assert records.collect { it[2] } == proband_ids
+            def info = { cols -> cols[7].split(";").collectEntries { kv -> def p = kv.split("=", 2); [p[0], p.size() > 1 ? p[1] : true] } }
+            records.each { cols ->
+                assert info(cols).SVTYPE in ["DEL", "DUP"]
+                assert info(cols).containsKey("CSQ")
+                assert ["COHORT_ID", "COHORT_POS", "COHORT_END"].every { info(cols).containsKey(it) }
+            }
+
+            // where truvari kept a parent's call, the record keeps NA12878's own interval
+            def kept_other = records.find { it[1] == "17288729" }
+            assert kept_other[2] == "DRAGEN:LOSS:chr22:17288730-17294633"
+            assert info(kept_other).COHORT_ID == "DRAGEN%3ALOSS%3Achr22%3A17287644-17294633"
+            assert info(kept_other).COHORT_POS == "17287643"
+            assert records.count { info(it).COHORT_ID != it[2].replace("%", "%25").replace(":", "%3A") } == 2
+
+            def task_err = path("${file(process.out.vcf_tbi.get(0)[1]).parent}/.command.err").text
+            assert task_err.contains("Joined 22 NA12878 call(s) to the family's FORMAT; 13 family record(s) without a NA12878 call left out.")
+            assert !task_err.contains("WARNING")
+        }
+    }
+
+    test("a KID call no family record has stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.extra.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("KID's call DRAGEN:LOSS:chr1:30001-31000 (<DEL>) at chr1:30000 is in no record of fam1.refined.vcf")
+        }
+    }
+
+    test("a KID call in two family records stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.twice.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("KID's call DRAGEN:GAIN:chr1:10501-21900 (<DUP>) is in two records of fam1.twice.refined.vcf, at chr1:10000 and chr1:30000")
+        }
+    }
+
+    test("another sample's VEP VCF as the proband's stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/MOM.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("MOM.vep.vcf should hold KID's calls only, but its samples are MOM")
+        }
+    }
+
+    test("a KID with no calls: a header-only VCF, indexed") {
+        // VEP drops records on contigs its cache doesn't have, so a proband's VEP VCF can be empty
+        // (every call on a contig the test cache lacks, or a proband with no CNV at all).
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.empty.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            with(process.out) {
+                assert vcf_tbi.size() == 1
+                assert file(vcf_tbi.get(0)[1]).name == "fam1.KID.cnv.proband.vcf.gz"
+                assert file(vcf_tbi.get(0)[2]).name == "fam1.KID.cnv.proband.vcf.gz.tbi"
+            }
+
+            def lines = path(process.out.vcf_tbi.get(0)[1]).linesGzip
+            assert lines.every { it.startsWith("#") }
+            assert lines.find { it.startsWith("#CHROM") }.split("\t").drop(9) == ["DAD", "KID", "MOM"]
+            assert lines.any { it.startsWith("##INFO=<ID=COHORT_ID,") }
+            assert lines.any { it.startsWith("##FORMAT=<ID=OID,") }
+            assert path("${file(process.out.vcf_tbi.get(0)[1]).parent}/.command.err").text.contains("Joined 0 KID call(s) to the family's FORMAT")
+        }
+    }
+
+    test("a family VCF without FORMAT/OID stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "KID" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.no_oid.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("fam1.no_oid.refined.vcf has no FORMAT/OID (set by NORMALIZE_CNV's ext.original_id)")
+        }
+    }
+
+    test("a proband who isn't a sample of the family VCF stops the task") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: "fam1", familyId: "fam1", proband: "SIB" ],
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/fam1.refined.vcf.tbi", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf", checkIfExists: true),
+                    file("\${projectDir}/modules/local/join_proband_cnv/tests/data/KID.vep.vcf.tbi", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("proband 'SIB' isn't a sample of fam1.refined.vcf (DAD, KID, MOM)")
+        }
+    }
+}
