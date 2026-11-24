@@ -93,12 +93,13 @@ process EXOMISER {
 
 
     // Exomiser provides multiple ways to configure the output filename, which can
-    // differ between Exomiser versions. Implementing a fully realistic stub to
-    // account for these variations would be complex and significantly increase
-    // the stub's implementation effort. To keep things simple, the stub uses a
-    // fixed output filename prefix. The chosen prefix aligns with the default
-    // behavior of the pipeline.
-    def output_filename_prefix = meta.id + ".exomiser"
+    // differ between Exomiser versions. The stub only follows the one this pipeline
+    // uses, --output-filename in ext.args (conf/modules.config: <family>.<proband>.exomiser
+    // on a proband VCF), so a stub run publishes the same names as a real one
+    // (tests/stub.nf.test). Without it, <meta.id>.exomiser.
+    def stub_args = task.ext.args ?: ''
+    def output_filename_match = stub_args =~ /--output-filename[= ](\S+)/
+    def output_filename_prefix = output_filename_match.find() ? output_filename_match.group(1) : "${meta.id}.exomiser"
 
     """
     #!/bin/bash -eo pipefail
