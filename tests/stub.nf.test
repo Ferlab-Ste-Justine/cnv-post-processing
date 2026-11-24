@@ -1,0 +1,207 @@
+nextflow_pipeline {
+
+    name "Test pipeline routes (stub)"
+    script "../main.nf"
+    tag "pipeline"
+    tag "stub"
+
+    // Every test runs the whole pipeline with -stub: each process runs its stub: block instead of
+    // the real tool, so a run takes about a minute. Every local module's stub is covered by its
+    // own module test; this checks they wire up together, route by route. The checks that run
+    // before any task still read the inputs for real (samplesheet validation, which samples are
+    // probands, phenopacket probands), so data-test/ must be present, as for the other tests. The
+    // two checks before slivar that read a task's output (FORMAT/CN, PED against the VCF's
+    // samples) are skipped under -stub (workflows/cnv_post_processing.nf).
+    //
+    // Each test compares how many tasks each process ran with the route its samplesheet and
+    // parameters should take, the same counts as a real run: a stage that silently gets no input
+    // (and doesn't run), or runs when it shouldn't, fails the test. tasksPerProcess maps each
+    // process's short name to its task count. Each test also snapshots the software versions
+    // report, so a route whose tools go missing from it shows up, and the published file names
+    // (not their content, which is fake), so a route's outputs going missing or moving shows up.
+    //
+    // Inputs:
+    //   data-test/samplesheet.csv (-profile test): fam1, a trio with a proband (NA12878); fam1_joint,
+    //     the same trio as one DRAGEN_JOINT VCF; ind1, a standalone sample with a pheno
+    //   tests/data/samplesheet_no_proband.csv: fam1 with NA12878 unaffected (no proband)
+    //   tests/data/samplesheet_edge_cases.csv: famA (samplesheet names that aren't the VCF's),
+    //     famB (no CRAMs, a proband with no call, a phenopacket about the father), famD (a
+    //     documented singleton: family route, no merge), famF (two affected sibs: two probands)
+
+    options "-stub"
+
+    test("-profile test: proband route, DRAGEN_JOINT, standalone sample") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            def tasksPerProcess = workflow.trace.tasks().collect { it.name.replaceAll(/ \(.*\)$/, '').tokenize(':')[-1] }.countBy { it }
+            def published = getAllFilesFromDir(params.outdir, relative: true, includeDir: false, ignore: ['pipeline_info/**'])
+            assertAll(
+                { assert workflow.success },
+                { assert tasksPerProcess == [
+                    // 4 per-sample rows: fam1's trio and ind1
+                    NORMALIZE_CNV: 4, TRUVARI_COLLAPSE_PERSAMPLE: 4, BCFTOOLS_SORT_INDEX_PERSAMPLE: 4,
+                    // fam1: merge, collapse, segment fill
+                    BCFTOOLS_MERGE: 1, TRUVARI_COLLAPSE_COHORT: 1, RESTORE_COLLAPSED_FORMAT: 1, BCFTOOLS_SORT_INDEX_COHORT: 1,
+                    FILL_CN_FROM_SEGMENTS: 1, BCFTOOLS_INDEX_CN_FILLED: 1,
+                    // fam1_joint: lightweight prep only
+                    NORMALIZE_CNV_JOINT: 1, BCFTOOLS_SORT_INDEX_JOINT: 1,
+                    // fam1 and fam1_joint
+                    FILTER_CNV_CARRIERS_FAMILY: 2,
+                    // fam1's proband
+                    JOIN_PROBAND_CNV: 1, FILTER_CNV_CARRIERS_PROBAND: 1,
+                    // ind1
+                    FILTER_CNV_CARRIERS_SOLO: 1,
+                    // fam1's proband, fam1_joint's family VCF, ind1
+                    ENSEMBLVEP_VEP: 3, TABIX_TABIX: 3,
+                    // fam1's proband, fam1_joint
+                    SLIVAR_EXPR: 2, BCFTOOLS_INDEX_SLIVAR: 2, EXOMISER: 2,
+                    EXOMISER_SINGLE: 1
+                ] },
+                { assert snapshot(
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
+                    published
+                ).match() }
+            )
+        }
+    }
+
+    test("a family without a proband, genotypes filled from depth") {
+
+        when {
+            params {
+                outdir                    = "$outputDir"
+                input                     = "${projectDir}/tests/data/samplesheet_no_proband.csv"
+                cnv_pass_only             = false
+                get_cn_by_computing_ratio = true
+            }
+        }
+
+        then {
+            def tasksPerProcess = workflow.trace.tasks().collect { it.name.replaceAll(/ \(.*\)$/, '').tokenize(':')[-1] }.countBy { it }
+            def published = getAllFilesFromDir(params.outdir, relative: true, includeDir: false, ignore: ['pipeline_info/**'])
+            assertAll(
+                { assert workflow.success },
+                { assert tasksPerProcess == [
+                    NORMALIZE_CNV: 3, TRUVARI_COLLAPSE_PERSAMPLE: 3, BCFTOOLS_SORT_INDEX_PERSAMPLE: 3,
+                    BCFTOOLS_MERGE: 1, TRUVARI_COLLAPSE_COHORT: 1, RESTORE_COLLAPSED_FORMAT: 1, BCFTOOLS_SORT_INDEX_COHORT: 1,
+                    // depth fill: one mosdepth per sample, no segment fill
+                    VCF_TO_BED: 1, MOSDEPTH_RATIO: 3, DEPTH_GENOTYPE_REFINE: 1, BCFTOOLS_INDEX: 1,
+                    FILTER_CNV_CARRIERS_FAMILY: 1,
+                    // no proband: family-level VEP and slivar, no join
+                    ENSEMBLVEP_VEP: 1, TABIX_TABIX: 1,
+                    SLIVAR_EXPR: 1, BCFTOOLS_INDEX_SLIVAR: 1, EXOMISER: 1
+                ] },
+                { assert snapshot(
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
+                    published
+                ).match() }
+            )
+        }
+    }
+
+    test("edge-case families") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+                input  = "${projectDir}/tests/data/samplesheet_edge_cases.csv"
+            }
+        }
+
+        then {
+            def tasksPerProcess = workflow.trace.tasks().collect { it.name.replaceAll(/ \(.*\)$/, '').tokenize(':')[-1] }.countBy { it }
+            def published = getAllFilesFromDir(params.outdir, relative: true, includeDir: false, ignore: ['pipeline_info/**'])
+            assertAll(
+                { assert workflow.success },
+                { assert tasksPerProcess == [
+                    // 11 per-sample rows
+                    NORMALIZE_CNV: 11, TRUVARI_COLLAPSE_PERSAMPLE: 11, BCFTOOLS_SORT_INDEX_PERSAMPLE: 11,
+                    // famA, famB, famF merge; famD, a single sample, doesn't
+                    BCFTOOLS_MERGE: 3,
+                    TRUVARI_COLLAPSE_COHORT: 4, RESTORE_COLLAPSED_FORMAT: 4, BCFTOOLS_SORT_INDEX_COHORT: 4,
+                    FILL_CN_FROM_SEGMENTS: 4, BCFTOOLS_INDEX_CN_FILLED: 4,
+                    FILTER_CNV_CARRIERS_FAMILY: 4,
+                    // probands: famA's and famB's NA12878, famF's two affected sibs
+                    JOIN_PROBAND_CNV: 4, FILTER_CNV_CARRIERS_PROBAND: 4,
+                    // the 4 probands' own calls, and famD's family VCF (no proband: no parent in its PED)
+                    ENSEMBLVEP_VEP: 5, TABIX_TABIX: 5,
+                    SLIVAR_EXPR: 5, BCFTOOLS_INDEX_SLIVAR: 5,
+                    // one per family with a familyPheno: famB's phenopacket is about the father,
+                    // so its Exomiser runs on the family VCF
+                    EXOMISER: 4
+                ] },
+                { assert snapshot(
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
+                    published
+                ).match() }
+            )
+        }
+    }
+
+    test("edge-case families, genotypes filled from depth: families without CRAMs skipped") {
+
+        // famB and famF have no CRAMs: the depth fill skips them (with a warning) and they go on
+        // unfilled. The samples' cram channel has to drop them before the fill's join, or it
+        // hands BAM_VCF_DEPTH_GENOTYPE_REFINEMENT a family with no family VCF (see CLAUDE.md).
+        when {
+            params {
+                outdir                    = "$outputDir"
+                input                     = "${projectDir}/tests/data/samplesheet_edge_cases.csv"
+                get_cn_by_computing_ratio = true
+            }
+        }
+
+        then {
+            def tasksPerProcess = workflow.trace.tasks().collect { it.name.replaceAll(/ \(.*\)$/, '').tokenize(':')[-1] }.countBy { it }
+            def published = getAllFilesFromDir(params.outdir, relative: true, includeDir: false, ignore: ['pipeline_info/**'])
+            assertAll(
+                { assert workflow.success },
+                { assert tasksPerProcess == [
+                    NORMALIZE_CNV: 11, TRUVARI_COLLAPSE_PERSAMPLE: 11, BCFTOOLS_SORT_INDEX_PERSAMPLE: 11,
+                    BCFTOOLS_MERGE: 3,
+                    TRUVARI_COLLAPSE_COHORT: 4, RESTORE_COLLAPSED_FORMAT: 4, BCFTOOLS_SORT_INDEX_COHORT: 4,
+                    // famA (3 CRAMs) and famD (1): filled from depth; famB and famF: not filled
+                    VCF_TO_BED: 2, MOSDEPTH_RATIO: 4, DEPTH_GENOTYPE_REFINE: 2, BCFTOOLS_INDEX: 2,
+                    FILTER_CNV_CARRIERS_FAMILY: 4,
+                    JOIN_PROBAND_CNV: 4, FILTER_CNV_CARRIERS_PROBAND: 4,
+                    ENSEMBLVEP_VEP: 5, TABIX_TABIX: 5,
+                    SLIVAR_EXPR: 5, BCFTOOLS_INDEX_SLIVAR: 5,
+                    EXOMISER: 4
+                ] },
+                { assert snapshot(
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml"),
+                    published
+                ).match() }
+            )
+        }
+    }
+
+    test("-profile test, VEP cache downloaded") {
+
+        // --download_cache: ENSEMBLVEP_DOWNLOAD runs once, and every VEP task gets its cache
+        when {
+            params {
+                outdir         = "$outputDir"
+                download_cache = true
+            }
+        }
+
+        then {
+            def tasksPerProcess = workflow.trace.tasks().collect { it.name.replaceAll(/ \(.*\)$/, '').tokenize(':')[-1] }.countBy { it }
+            assertAll(
+                { assert workflow.success },
+                { assert tasksPerProcess['ENSEMBLVEP_DOWNLOAD'] == 1 },
+                { assert tasksPerProcess['ENSEMBLVEP_VEP'] == 3 },
+                { assert snapshot(
+                    removeNextflowVersion("$outputDir/pipeline_info/cnv-post-processing_software_versions.yml")
+                ).match() }
+            )
+        }
+    }
+}
