@@ -197,6 +197,14 @@ the family-level route, with `--cnv_pass_only false` and the depth fill (`--get_
 chr22 data for the routes the other two don't take (samplesheet names that aren't the VCF's, no
 CRAMs, a proband with no call, a phenopacket about the father, a documented singleton, two
 affected sibs).
+`tests/stub.nf.test` runs the same routes under `-stub` (about a minute each), plus the depth fill on
+the edge-case families (families without CRAMs skipped) and `--download_cache`. Each test asserts how
+many tasks each process ran, the same counts as a real run, so a stage that silently gets no input
+fails it, and snapshots the versions report and the published file names. Under `-stub`, the
+workflow skips the two pre-slivar checks that read a task's output (`vcfFormatIds()`,
+`validatePedAgainstVcf`): a stub's VCF has no header. A stub that names its outputs differently from
+the real tool shows up in that file-name snapshot; `EXOMISER`'s stub reads `--output-filename` from
+`ext.args` for that reason.
 `scripts/run-test-suite.sh` bundles the pre-push gate, harmonized with Post-processing-Pipeline's:
 nf-core CLI version pin check, pre-commit, the slivar rules harness, a `-preview` launch under the
 declared Nextflow floor, nf-test dry-run, full nf-test suite, and `nf-core pipelines lint --release`. All 14 local modules (`modules/local/*`) have their own module

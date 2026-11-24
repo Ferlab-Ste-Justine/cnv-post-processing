@@ -3,6 +3,16 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### `Added`
+
+- [#15](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/15) BIOINFO-251: a pipeline-level stub test, `tests/stub.nf.test`: every route (the test profile's proband route, `DRAGEN_JOINT` family and standalone sample; a family without a proband filled from depth; the edge-case families, with the segment fill and with the depth fill; `--download_cache`) runs under `-stub`, checked by how many tasks each process ran, the versions report and the published file names. Every local module had a stub, but nothing ran them together
+
+### `Fixed`
+
+- [#15](https://github.com/Ferlab-Ste-Justine/cnv-post-processing/pull/15) BIOINFO-251: a `-stub` run no longer stops before slivar: the `FORMAT/CN` and PED-against-VCF checks, which read the family VCF's header, are skipped under `-stub`, where that VCF is a stub's empty file. `EXOMISER`'s stub now names its reports from `--output-filename`, as the real run does (`<familyId>.<proband>.exomiser.*` on a proband VCF), instead of always `<meta.id>.exomiser.*`
+
 ## v2.0.0 - 2026-11-13
 
 Family-level CNV post-processing: per-family merge and collapse (or a DRAGEN joint-called VCF), missing genotypes filled from each sample's own DRAGEN segments, a carrier-based PASS filter, proband-centric VEP annotation, slivar mode-of-inheritance and parent-of-origin tags, and Exomiser on the proband or family VCF. Standalone samples keep a per-sample VEP + Exomiser route.

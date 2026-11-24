@@ -492,7 +492,9 @@ workflow CNV_POST_PROCESSING {
     // against this family VCF's sample names, though (validatePedAgainstVcf): slivar silently
     // mishandles a PED that doesn't match. So is FORMAT/CN, which the rules read: without it,
     // slivar tags nothing (vcfFormatIds). The checks stay here rather than in a subworkflow, so
-    // module and subworkflow tests can still feed slivar deliberately inconsistent PEDs.
+    // module and subworkflow tests can still feed slivar deliberately inconsistent PEDs. Under
+    // -stub they're skipped: the family VCF is a stub's empty file, with no header to check
+    // (tests/stub.nf.test).
     //
     def ch_slivar_input = FILTER_CNV_CARRIERS_PROBAND.out.vcf_tbi
         .mix(VCF_ANNOTATE_ENSEMBLVEP.out.vcf_tbi)
@@ -504,11 +506,13 @@ workflow CNV_POST_PROCESSING {
             true
         }
         .map { meta, vcf, tbi ->
-            if (!('CN' in vcfFormatIds(vcf))) {
-                error("Family '${meta.id}': the family VCF declares no FORMAT/CN (${vcf.name}). The slivar rules read copy number from FORMAT/CN only; without it slivar would write every record with no inheritance or parental-origin tag. Check the caller's VCFs.")
-            }
             def ped = file(meta.familyPed)
-            validatePedAgainstVcf(meta.id, vcf, ped, params.skip_ped_validation)
+            if (!workflow.stubRun) {
+                if (!('CN' in vcfFormatIds(vcf))) {
+                    error("Family '${meta.id}': the family VCF declares no FORMAT/CN (${vcf.name}). The slivar rules read copy number from FORMAT/CN only; without it slivar would write every record with no inheritance or parental-origin tag. Check the caller's VCFs.")
+                }
+                validatePedAgainstVcf(meta.id, vcf, ped, params.skip_ped_validation)
+            }
             [meta, vcf, tbi, ped]
         }
 
